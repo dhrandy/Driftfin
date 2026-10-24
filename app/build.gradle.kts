@@ -34,8 +34,8 @@ android {
     }
 
     lint {
-        // lint's vital check crashes on this Kotlin version (tool bug); unit tests still gate the build
-        checkReleaseBuilds = false
+        // NullSafeMutableLiveData detector crashes on Kotlin 2.0.x (lint tool bug; app has no LiveData)
+        disable += "NullSafeMutableLiveData"
     }
 
     buildTypes {
