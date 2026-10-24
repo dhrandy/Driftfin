@@ -1,0 +1,70 @@
+name: Build Jetflix
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write   # lets the job attach the APK to a release with the built-in token
+
+jobs:
+  build:
+    runs-on: ubuntu-latest   # standard runner: free for public repositories
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.10.2"
+
+      - name: Android SDK packages
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Require signing secrets
+        env:
+          B64: ${{ secrets.JETFLIX_KEYSTORE_B64 }}
+        run: |
+          if [ -z "$B64" ]; then echo "JETFLIX_KEYSTORE_B64 is not set; refusing to build with a throwaway key." >&2; exit 1; fi
+          echo "$B64" | base64 -d > "$RUNNER_TEMP/jetflix-release.jks"
+
+      - name: Unit tests
+        run: gradle --no-daemon testDebugUnitTest
+
+      - name: Build signed release APK
+        env:
+          JETFLIX_KEYSTORE_FILE: ${{ runner.temp }}/jetflix-release.jks
+          JETFLIX_KEYSTORE_PASSWORD: ${{ secrets.JETFLIX_KEYSTORE_PASSWORD }}
+          JETFLIX_KEY_ALIAS: ${{ secrets.JETFLIX_KEY_ALIAS }}
+          JETFLIX_KEY_PASSWORD: ${{ secrets.JETFLIX_KEY_PASSWORD }}
+        run: gradle --no-daemon assembleRelease
+
+      - name: Show APK hash and signer
+        run: |
+          APK=$(ls app/build/outputs/apk/release/*.apk | head -1)
+          cp "$APK" jetflix-release.apk
+          sha256sum jetflix-release.apk | tee jetflix-release.apk.sha256
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs jetflix-release.apk
+
+      - name: Attach to release (only for tag builds)
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" jetflix-release.apk jetflix-release.apk.sha256 \
+            --title "Jetflix ${GITHUB_REF_NAME}" \
+            --notes "Untested on a TV at release time. See README for limits."
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: jetflix-release
+          path: |
+            jetflix-release.apk
+            jetflix-release.apk.sha256

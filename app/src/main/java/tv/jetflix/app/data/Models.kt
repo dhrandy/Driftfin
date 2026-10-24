@@ -1,0 +1,186 @@
+package tv.jetflix.app.data
+
+import kotlinx.serialization.Serializable
+
+@Serializable
+data class AuthenticateUserByName(
+    val Username: String,
+    val Pw: String,
+)
+
+@Serializable
+data class AuthenticationResult(
+    val User: UserDto? = null,
+    val SessionInfo: SessionInfoDto? = null,
+    val AccessToken: String? = null,
+    val ServerId: String? = null,
+)
+
+@Serializable
+data class SessionInfoDto(val Id: String? = null)
+
+@Serializable
+data class UserDto(
+    val Name: String? = null,
+    val ServerId: String? = null,
+    val Id: String = "",
+)
+
+@Serializable
+data class PublicSystemInfo(
+    val LocalAddress: String? = null,
+    val ServerName: String? = null,
+    val Version: String? = null,
+    val ProductName: String? = null,
+    val Id: String? = null,
+    val StartupWizardCompleted: Boolean? = null,
+)
+
+@Serializable
+data class BaseItemDtoQueryResult(
+    val Items: List<BaseItemDto> = emptyList(),
+    val TotalRecordCount: Int = 0,
+    val StartIndex: Int = 0,
+)
+
+@Serializable
+data class UserItemDataDto(
+    val PlaybackPositionTicks: Long = 0,
+    val PlayedPercentage: Double? = null,
+    val Played: Boolean = false,
+    val UnplayedItemCount: Int? = null,
+    val LastPlayedDate: String? = null,
+    val IsFavorite: Boolean = false,
+)
+
+@Serializable
+data class NameGuidPair(val Name: String? = null, val Id: String? = null)
+
+@Serializable
+data class BaseItemPerson(
+    val Name: String? = null,
+    val Id: String? = null,
+    val Role: String? = null,
+    val Type: String? = null,
+    val PrimaryImageTag: String? = null,
+)
+
+@Serializable
+data class MediaSourceInfo(
+    val Id: String? = null,
+    val Container: String? = null,
+    val Size: Long? = null,
+    val SupportsDirectPlay: Boolean? = null,
+    val SupportsDirectStream: Boolean? = null,
+    val SupportsTranscoding: Boolean? = null,
+    val TranscodingUrl: String? = null,
+    val TranscodingSubProtocol: String? = null,
+    val DefaultAudioStreamIndex: Int? = null,
+    val MediaStreams: List<MediaStreamInfo> = emptyList(),
+)
+
+@Serializable
+data class MediaStreamInfo(
+    val Index: Int? = null,
+    val Type: String? = null,
+    val Codec: String? = null,
+    val DeliveryMethod: String? = null,
+    val DeliveryUrl: String? = null,
+    val IsExternal: Boolean? = null,
+    val Language: String? = null,
+    val DisplayTitle: String? = null,
+)
+
+@Serializable
+data class PlaybackInfoResponse(
+    val MediaSources: List<MediaSourceInfo> = emptyList(),
+    val PlaySessionId: String? = null,
+)
+
+@Serializable
+data class BaseItemDto(
+    val Id: String = "",
+    val Name: String? = null,
+    val OriginalTitle: String? = null,
+    val Type: String? = null,
+    val MediaType: String? = null,
+    val CollectionType: String? = null,
+    val IsFolder: Boolean? = null,
+    val Overview: String? = null,
+    val ProductionYear: Int? = null,
+    val PremiereDate: String? = null,
+    val EndDate: String? = null,
+    val CommunityRating: Float? = null,
+    val OfficialRating: String? = null,
+    val RunTimeTicks: Long? = null,
+    val SeriesName: String? = null,
+    val SeriesId: String? = null,
+    val SeriesPrimaryImageTag: String? = null,
+    val SeasonId: String? = null,
+    val SeasonName: String? = null,
+    val ParentIndexNumber: Int? = null,
+    val IndexNumber: Int? = null,
+    val ChildCount: Int? = null,
+    val RecursiveItemCount: Int? = null,
+    val Genres: List<String> = emptyList(),
+    val GenreItems: List<NameGuidPair> = emptyList(),
+    val Studios: List<NameGuidPair> = emptyList(),
+    val People: List<BaseItemPerson> = emptyList(),
+    val ImageTags: Map<String, String> = emptyMap(),
+    val BackdropImageTags: List<String> = emptyList(),
+    val ParentBackdropItemId: String? = null,
+    val ParentBackdropImageTags: List<String> = emptyList(),
+    val ParentThumbItemId: String? = null,
+    val ParentThumbImageTag: String? = null,
+    val SeriesStatus: String? = null,
+    val UserData: UserItemDataDto? = null,
+) {
+    val isMovie get() = Type == "Movie"
+    val isSeries get() = Type == "Series"
+    val isEpisode get() = Type == "Episode"
+    val isResumeable get() = (UserData?.PlaybackPositionTicks ?: 0) > 0
+
+    fun displayTitle(): String = when {
+        isEpisode && SeriesName != null -> SeriesName
+        else -> Name ?: "Untitled"
+    }
+
+    fun episodeLabel(): String? {
+        if (!isEpisode) return null
+        val s = ParentIndexNumber ?: return null
+        val e = IndexNumber ?: return null
+        return "S${s}:E${e}"
+    }
+
+    fun runtimeLabel(): String? {
+        val ticks = RunTimeTicks ?: return null
+        val totalMinutes = ticks / 600_000_000
+        if (totalMinutes <= 0) return null
+        val h = totalMinutes / 60
+        val m = totalMinutes % 60
+        return if (h > 0) "${h}h ${m}m" else "${m}m"
+    }
+}
+
+fun Long.ticksToHms(): String {
+    var total = this / 10_000_000
+    val h = total / 3600
+    total %= 3600
+    val m = total / 60
+    val s = total % 60
+    return if (h > 0) "%d:%02d:%02d".format(h, m, s) else "%d:%02d".format(m, s)
+}
+
+fun Long.ticksToMs(): Long = this / 10_000L
+fun Long.msToTicks(): Long = this * 10_000L
+
+@Serializable
+data class PublicUser(val Name: String? = null, val Id: String? = null)
+
+/** Picks the episode that follows [currentId] in a series episode list (server order). */
+object NextEpisode {
+    fun pick(episodes: List<BaseItemDto>, currentId: String): BaseItemDto? {
+        val i = episodes.indexOfFirst { it.Id == currentId }
+        return if (i >= 0) episodes.getOrNull(i + 1) else null
+    }
+}
