@@ -53,13 +53,15 @@ jobs:
           sha256sum jetflix-release.apk | tee jetflix-release.apk.sha256
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs jetflix-release.apk
 
-      - name: Attach to release (only for tag builds)
-        if: startsWith(github.ref, 'refs/tags/')
+      - name: Publish release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "${GITHUB_REF_NAME}" jetflix-release.apk jetflix-release.apk.sha256 \
-            --title "Jetflix ${GITHUB_REF_NAME}" \
+          TAG="${GITHUB_REF_NAME}"
+          if [ "${GITHUB_REF_TYPE}" != "tag" ]; then TAG="build-${GITHUB_RUN_NUMBER}"; fi
+          gh release create "$TAG" jetflix-release.apk jetflix-release.apk.sha256 \
+            --target "${GITHUB_SHA}" \
+            --title "Jetflix $TAG" \
             --notes "Untested on a TV at release time. See README for limits."
 
       - uses: actions/upload-artifact@v4
