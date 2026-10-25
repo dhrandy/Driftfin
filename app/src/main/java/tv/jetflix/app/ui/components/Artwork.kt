@@ -55,11 +55,13 @@ fun ArtImage(
  */
 fun blurSource(url: String): String {
     // A blurred image never needs full resolution: decode 320 px (live blur, API 31+) or 48 px (older, scaled up) instead of 1280-1920.
-    val w = if (android.os.Build.VERSION.SDK_INT >= 31) 320 else 48
+    val w = if (liveBlurActive()) 320 else 48
     return if (url.contains("maxWidth=")) url.replace(Regex("maxWidth=\\d+"), "maxWidth=$w")
     else url + (if (url.contains("?")) "&" else "?") + "maxWidth=$w"
 }
 
 /** Live blur only where the platform supports it; the pre-shrunk source covers the rest. */
 fun androidx.compose.ui.Modifier.blurIfSupported(radius: androidx.compose.ui.unit.Dp): androidx.compose.ui.Modifier =
-    if (android.os.Build.VERSION.SDK_INT >= 31) this.blur(radius) else this
+    if (liveBlurActive()) this.blur(radius) else this
+
+private fun liveBlurActive() = android.os.Build.VERSION.SDK_INT >= 31 && tv.jetflix.app.data.AppSettings.liveBlur.value

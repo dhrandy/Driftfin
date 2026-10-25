@@ -29,3 +29,31 @@ class FrameStatsTest {
         assertEquals(67, s.overDoubleBudget) // 34 ms to 100 ms
     }
 }
+
+class FrameStageMathTest {
+    // total, delay, input, anim, layout, draw, sync, issue, swap, gpu (ms)
+    private fun row(vararg ms: Double) = LongArray(ms.size) { (ms[it] * 1_000_000).toLong() }
+
+    @Test fun averagesAllFramesAndOnlySlowOnes() {
+        val rows = listOf(
+            row(10.0, 0.0, 0.0, 1.0, 2.0, 3.0, 1.0, 1.0, 1.0, 2.0),
+            row(50.0, 0.0, 0.0, 5.0, 20.0, 10.0, 4.0, 5.0, 5.0, 30.0),
+        )
+        val all = tv.jetflix.app.ui.components.FrameStageMath.averages(rows)
+        assertEquals(3.0, all[2], 0.001) // anim: (1 + 5) / 2
+        assertEquals(11.0, all[3], 0.001) // layout: (2 + 20) / 2
+        val slow = tv.jetflix.app.ui.components.FrameStageMath.averages(rows, 16.7)
+        assertEquals(20.0, slow[3], 0.001) // only the 50 ms frame
+        assertEquals(30.0, slow[8], 0.001) // gpu
+    }
+
+    @Test fun noFramesGivesZeros() {
+        assertEquals(0.0, tv.jetflix.app.ui.components.FrameStageMath.averages(emptyList()).sum(), 0.0)
+    }
+
+    @Test fun lineOmitsGpuBeforeApi31() {
+        val l = tv.jetflix.app.ui.components.FrameStageMath.line("x", List(9) { 1.0 }, withGpu = false)
+        assertEquals(false, l.contains("gpu"))
+        assertEquals(true, tv.jetflix.app.ui.components.FrameStageMath.line("x", List(9) { 1.0 }, withGpu = true).contains("gpu 1.0"))
+    }
+}

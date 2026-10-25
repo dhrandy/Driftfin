@@ -77,6 +77,12 @@ interface JellyfinApi {
         @Query("userId") userId: String,
     ): Response<BaseItemDto>
 
+    @GET("Items/{itemId}/LocalTrailers")
+    suspend fun getLocalTrailers(
+        @Path("itemId") itemId: String,
+        @Query("userId") userId: String,
+    ): Response<List<BaseItemDto>>
+
     @GET("Shows/{seriesId}/Episodes")
     suspend fun getEpisodes(
         @Path("seriesId") seriesId: String,

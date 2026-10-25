@@ -46,6 +46,7 @@ private sealed class Screen {
     data object Settings : Screen()
     data class Details(val itemId: String, val focusEpisodeId: String? = null) : Screen()
     data class Player(val item: BaseItemDto) : Screen()
+    data class Trailer(val videoId: String, val title: String) : Screen()
 }
 
 class MainActivity : ComponentActivity() {
@@ -213,7 +214,16 @@ fun JetflixRoot() {
                 onPlay = { push(Screen.Player(it)) },
                 onItemClick = { push(Screen.Details(it.seriesOrSelfId())) },
                 onBack = { pop() },
+                onTrailer = { t ->
+                    when (t) {
+                        is tv.jetflix.app.data.TrailerSource.Local -> push(Screen.Player(t.item))
+                        is tv.jetflix.app.data.TrailerSource.YouTube -> push(Screen.Trailer(t.videoId, t.title))
+                    }
+                },
             )
+        }
+        is Screen.Trailer -> {
+            tv.jetflix.app.ui.player.YouTubeTrailerScreen(videoId = screen.videoId, title = screen.title, onClose = { pop() })
         }
         is Screen.Player -> {
             PlayerScreen(

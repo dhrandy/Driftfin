@@ -49,6 +49,26 @@ object FrameStatsMath {
     }
 }
 
+/**
+ * Where frame time goes, from the platform's own per-stage numbers. Stages in order: unknown delay, input, animation,
+ * layout/measure, draw (these run on the UI thread), then sync, command issue, swap buffers (render thread) and GPU (API 31+).
+ * Averages are shown for all frames and for frames over budget, so a slow frame's main cost stands out.
+ */
+object FrameStageMath {
+    val names = listOf("delay", "input", "anim", "layout", "draw", "sync", "issue", "swap", "gpu")
+
+    /** Each row is [total, then the nine stages in the order of [names]], all nanoseconds. */
+    fun averages(rows: List<LongArray>, onlyOverMs: Double? = null): List<Double> {
+        val sel = if (onlyOverMs == null) rows else rows.filter { it[0] / 1_000_000.0 > onlyOverMs }
+        if (sel.isEmpty()) return List(names.size) { 0.0 }
+        return names.indices.map { i -> sel.sumOf { it[i + 1] } / sel.size / 1_000_000.0 }
+    }
+
+    fun line(label: String, avgs: List<Double>, withGpu: Boolean): String =
+        label + " " + names.indices.filter { withGpu || names[it] != "gpu" }
+            .joinToString(" ") { "${names[it]} %.1f".format(avgs[it]) }
+}
+
 sealed interface FrameTest {
     object Idle : FrameTest
     data class Recording(val secondsLeft: Int) : FrameTest
@@ -64,6 +84,7 @@ object FrameStats {
     const val SECONDS = 20
     private const val MAX_FRAMES = 20_000
     private val frames = ArrayList<Long>()
+    private val stages = ArrayList<LongArray>()
     private var thread: HandlerThread? = null
     private var listener: android.view.Window.OnFrameMetricsAvailableListener? = null
     private var window: android.view.Window? = null
@@ -72,8 +93,20 @@ object FrameStats {
     private val _state = kotlinx.coroutines.flow.MutableStateFlow<FrameTest>(FrameTest.Idle)
     val state: kotlinx.coroutines.flow.StateFlow<FrameTest> = _state
 
-    @Synchronized private fun add(ns: Long) { if (frames.size < MAX_FRAMES) frames.add(ns) }
+    @Synchronized private fun add(m: FrameMetrics) {
+        if (frames.size >= MAX_FRAMES) return
+        val gpu = if (android.os.Build.VERSION.SDK_INT >= 31) m.getMetric(FrameMetrics.GPU_DURATION) else 0L
+        frames.add(m.getMetric(FrameMetrics.TOTAL_DURATION))
+        stages.add(longArrayOf(
+            m.getMetric(FrameMetrics.TOTAL_DURATION),
+            m.getMetric(FrameMetrics.UNKNOWN_DELAY_DURATION), m.getMetric(FrameMetrics.INPUT_HANDLING_DURATION),
+            m.getMetric(FrameMetrics.ANIMATION_DURATION), m.getMetric(FrameMetrics.LAYOUT_MEASURE_DURATION),
+            m.getMetric(FrameMetrics.DRAW_DURATION), m.getMetric(FrameMetrics.SYNC_DURATION),
+            m.getMetric(FrameMetrics.COMMAND_ISSUE_DURATION), m.getMetric(FrameMetrics.SWAP_BUFFERS_DURATION), gpu,
+        ))
+    }
     @Synchronized private fun copy(): List<Long> = ArrayList(frames)
+    @Synchronized private fun copyStages(): List<LongArray> = ArrayList(stages)
 
     /** The display's current refresh rate, so the budget is right on 30, 50, 60 or 120 Hz screens. */
     private fun refreshHz(activity: Activity): Double {
@@ -85,9 +118,9 @@ object FrameStats {
     fun start(activity: Activity) {
         if (_state.value is FrameTest.Recording) return
         stopListening()
-        synchronized(this) { frames.clear() }
+        synchronized(this) { frames.clear(); stages.clear() }
         val t = HandlerThread("frame-stats").also { it.start() }
-        val l = android.view.Window.OnFrameMetricsAvailableListener { _, m, _ -> add(m.getMetric(FrameMetrics.TOTAL_DURATION)) }
+        val l = android.view.Window.OnFrameMetricsAvailableListener { _, m, _ -> add(m) }
         activity.window.addOnFrameMetricsAvailableListener(l, Handler(t.looper))
         thread = t; listener = l; window = activity.window
         _state.value = FrameTest.Recording(SECONDS)
@@ -100,7 +133,14 @@ object FrameStats {
             if (left <= 1) {
                 stopListening()
                 val summary = FrameStatsMath.summarize(copy(), refreshHz(activity))
-                _state.value = FrameTest.Result(listOf("Frame timing, last $SECONDS seconds") + summary.lines())
+                val rows = copyStages()
+                val gpu = android.os.Build.VERSION.SDK_INT >= 31
+                val stageLines = if (rows.isEmpty()) emptyList() else listOf(
+                    FrameStageMath.line("all frames ms:", FrameStageMath.averages(rows), gpu),
+                    FrameStageMath.line("slow frames ms:", FrameStageMath.averages(rows, summary.budgetMs), gpu),
+                    "blur " + (if (tv.jetflix.app.data.AppSettings.liveBlur.value) "on" else "off"),
+                )
+                _state.value = FrameTest.Result(listOf("Frame timing, last $SECONDS seconds") + summary.lines() + stageLines)
             } else {
                 _state.value = FrameTest.Recording(left - 1)
                 tick(activity, left - 1)

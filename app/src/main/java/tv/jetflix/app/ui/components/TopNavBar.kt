@@ -26,6 +26,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.layout.height
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.draw.drawWithContent
@@ -39,11 +40,11 @@ enum class JetflixTab(val label: String) { HOME("Home"), SHOWS("Shows"), MOVIES(
 
 @Composable
 fun Wordmark(modifier: Modifier = Modifier) {
-    Text(
-        text = "DRIFTFIN",
-        style = JetflixType.wordmark,
-        color = JetflixColors.Red,
-        modifier = modifier,
+    // The approved squared DRIFTFIN lettering, same footprint as the old text (about 143 x 18 dp).
+    androidx.compose.foundation.Image(
+        painter = androidx.compose.ui.res.painterResource(tv.jetflix.app.R.drawable.wordmark_driftfin),
+        contentDescription = "Driftfin",
+        modifier = modifier.height(18.dp),
     )
 }
 

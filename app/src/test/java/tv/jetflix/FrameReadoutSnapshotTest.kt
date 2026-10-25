@@ -10,6 +10,7 @@ import org.junit.Rule
 import org.junit.Test
 import tv.jetflix.app.ui.components.FrameStatsMath
 import tv.jetflix.app.ui.components.FrameResultCard
+import tv.jetflix.app.ui.components.FrameStageMath
 import tv.jetflix.app.ui.settings.SettingsContent
 import tv.jetflix.app.ui.theme.JetflixTheme
 
@@ -36,4 +37,18 @@ class FrameReadoutSnapshotTest {
 
     @Test fun settingsRow() = render("frame_test_settings", false)
     @Test fun resultCard() = render("frame_test_result", true)
+
+    @Test fun resultCardStages() {
+        // Synthetic values for layout only, worst-case widths. Not measured.
+        val rows = List(10) { longArrayOf(670_000_000L, 120_000_000L, 110_000_000L, 130_000_000L, 140_000_000L, 150_000_000L, 160_000_000L, 170_000_000L, 180_000_000L, 190_000_000L) }
+        val s = FrameStatsMath.summarize(listOf(120, 559, 670, 34, 95).map { it * 1_000_000L }, 60.0)
+        val lines = listOf("Frame timing, last 20 seconds") + s.lines() + listOf(
+            FrameStageMath.line("all frames ms:", FrameStageMath.averages(rows), true),
+            FrameStageMath.line("slow frames ms:", FrameStageMath.averages(rows, 16.7), true),
+            "blur off",
+        )
+        paparazzi.snapshot(name = "frame_test_stages") {
+            JetflixTheme { Box(Modifier.fillMaxSize()) { SettingsContent(true, true, false, "demo", "http://demo.test", {}, {}, {}, {}, {}); FrameResultCard(lines) } }
+        }
+    }
 }

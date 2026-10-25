@@ -49,6 +49,8 @@ fun SettingsScreen(
         onTabSelected, onSignOut,
         posterSize = AppSettings.posterSize.collectAsState().value,
         onCyclePosterSize = { AppSettings.setPosterSize(AppSettings.posterSize.value.next()) },
+        liveBlur = AppSettings.liveBlur.collectAsState().value,
+        onToggleLiveBlur = { AppSettings.setLiveBlur(!AppSettings.liveBlur.value) },
         onStartFrameTest = { (context as? android.app.Activity)?.let { tv.jetflix.app.ui.components.FrameStats.start(it) } },
         buttonSound = AppSettings.buttonSound.collectAsState().value,
         onCycleButtonSound = {
@@ -76,6 +78,8 @@ fun SettingsContent(
     buttonSound: tv.jetflix.app.ui.components.ButtonSound = tv.jetflix.app.ui.components.ButtonSound.Off,
     onCycleButtonSound: () -> Unit = {},
     onStartFrameTest: () -> Unit = {},
+    liveBlur: Boolean = true,
+    onToggleLiveBlur: () -> Unit = {},
 ) {
     val menuBack = tv.jetflix.app.ui.components.rememberMenuBack()
     val first = remember { FocusRequester() }
@@ -90,6 +94,7 @@ fun SettingsContent(
             SettingRow("Show My List on Home", "My List uses your Jellyfin favorites for this user.", showMyList, onToggleMyList)
             SettingRow("Poster size", "Small, Medium or Large cards on Home and in libraries. Press OK to change.", true, onCyclePosterSize, valueText = posterSize.label)
             SettingRow("Button sound", "A quiet sound when you move and when you select. Press OK to try the next one.", true, onCycleButtonSound, valueText = buttonSound.label)
+            SettingRow("Live blur", "On is the normal look. Off swaps the live blur for a pre-softened picture, to see whether blur is what slows scrolling. Takes effect when you open the next screen.", liveBlur, onToggleLiveBlur)
             SettingRow("Frame timing test", "Press OK, then move around for 20 seconds (tiny REC counter in the corner). A result card shows afterward. Nothing is saved or sent.", true, onStartFrameTest, valueText = "Start")
             SettingRow("Show Next Up on Home", "Jellyfin's next unwatched episode of series you follow.", showNextUp, onToggleNextUp)
             Spacer(Modifier.padding(top = 8.dp))

@@ -33,9 +33,15 @@ class BrandIconsSnapshotTest {
     }
 
     @Test fun brand_icon() {
+        // Adaptive icon: foreground on #171717, shown through a circle mask (Google TV round) and a rounded-square mask.
         paparazzi.snapshot {
-            Box(Modifier.size(200.dp).background(Color.Black)) {
-                Image(painterResource(tv.jetflix.app.R.drawable.ic_launcher_foreground), null, Modifier.size(200.dp))
+            Row {
+                listOf(androidx.compose.foundation.shape.CircleShape, RoundedCornerShape(22.dp)).forEach { shape ->
+                    Box(Modifier.padding(8.dp).size(120.dp).clip(shape).background(Color(0xFF171717))) {
+                        // Adaptive foreground is 108dp wide with a 66dp safe zone: scaled here to 200dp.
+                        Image(painterResource(tv.jetflix.app.R.drawable.ic_launcher_fg), null, Modifier.size(120.dp))
+                    }
+                }
             }
         }
     }

@@ -72,6 +72,7 @@ data class DetailsUiState(
     val seasons: List<BaseItemDto> = emptyList(),
     val selectedSeasonId: String? = null,
     val similar: List<BaseItemDto> = emptyList(),
+    val trailer: tv.jetflix.app.data.TrailerSource? = null,
 )
 
 class DetailsViewModel(val repo: JellyfinRepository) : ViewModel() {
@@ -97,12 +98,21 @@ class DetailsViewModel(val repo: JellyfinRepository) : ViewModel() {
                     _state.value = DetailsUiState(loading = false, error = "Title not found")
                     return@launch
                 }
+                val trailerDef = async {
+                    // Jellyfin's own list of trailer files, then the YouTube links on the item. A failed lookup just hides the button.
+                    val local = if ((item.LocalTrailerCount ?: 0) > 0) {
+                        try { api.getLocalTrailers(itemId, session.userId).body() ?: emptyList() } catch (_: Exception) { emptyList() }
+                    } else emptyList()
+                    tv.jetflix.app.data.Trailers.pick(item, local)
+                }
                 val similarDef = async {
                     tv.jetflix.app.data.RelatedItems.filter(item, api.getSimilar(itemId, session.userId).body()?.Items ?: emptyList())
                 }
                 if (!item.isSeries) {
                     // Movies show the page as soon as the title itself arrives; "More like this" fills in when ready.
                     _state.value = DetailsUiState(loading = false, item = item, playTarget = item)
+                    val trailer = trailerDef.await()
+                    if (_state.value.item?.Id == item.Id) _state.value = _state.value.copy(trailer = trailer)
                     val similar = similarDef.await()
                     if (_state.value.item?.Id == item.Id) _state.value = _state.value.copy(similar = similar)
                     return@launch
@@ -134,6 +144,8 @@ class DetailsViewModel(val repo: JellyfinRepository) : ViewModel() {
                     selectedSeasonId = selectedSeasonId,
                     similar = emptyList(),
                 )
+                val trailer = trailerDef.await()
+                if (_state.value.item?.Id == item.Id) _state.value = _state.value.copy(trailer = trailer)
                 val similar = similarDef.await()
                 if (_state.value.item?.Id == item.Id) _state.value = _state.value.copy(similar = similar)
             } catch (e: Exception) {
@@ -193,6 +205,7 @@ fun DetailsScreen(
     onPlay: (BaseItemDto) -> Unit,
     onItemClick: (BaseItemDto) -> Unit,
     onBack: () -> Unit,
+    onTrailer: (tv.jetflix.app.data.TrailerSource) -> Unit = {},
 ) {
     val state by viewModel.state.collectAsState()
     DetailsContent(
@@ -204,6 +217,7 @@ fun DetailsScreen(
         onPlay = onPlay,
         onItemClick = onItemClick,
         onBack = onBack,
+        onTrailer = onTrailer,
     )
 }
 
@@ -217,6 +231,7 @@ fun DetailsContent(
     onItemClick: (BaseItemDto) -> Unit,
     onBack: () -> Unit,
     onToggleFavorite: () -> Unit = {},
+    onTrailer: (tv.jetflix.app.data.TrailerSource) -> Unit = {},
 ) {
     val item = state.item
     val playFocus = remember { FocusRequester() }
@@ -301,6 +316,19 @@ fun DetailsContent(
                                     ),
                                 ) {
                                     Text("Play from start")
+                                }
+                            }
+                            state.trailer?.let { trailer ->
+                                Button(
+                                    onClick = { onTrailer(trailer) },
+                                    colors = ButtonDefaults.colors(
+                                        containerColor = JetflixColors.SurfaceLight.copy(alpha = 0.7f),
+                                        contentColor = Color.White,
+                                        focusedContainerColor = JetflixColors.SurfaceLight,
+                                        focusedContentColor = Color.White,
+                                    ),
+                                ) {
+                                    Text("Trailer")
                                 }
                             }
                             Button(

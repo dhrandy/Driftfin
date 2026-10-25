@@ -16,6 +16,11 @@ object AppSettings {
     val posterSize: StateFlow<PosterSize> = _posterSize
     fun setPosterSize(v: PosterSize) { _posterSize.value = v; prefs?.edit()?.putString("poster_size", v.name)?.apply() }
 
+    /** Live blur behind the menu and Home backdrop. On by default; off falls back to the small pre-scaled copy (a measurement switch). */
+    private val _liveBlur = MutableStateFlow(true)
+    val liveBlur: StateFlow<Boolean> = _liveBlur
+    fun setLiveBlur(v: Boolean) { _liveBlur.value = v; prefs?.edit()?.putBoolean("live_blur", v)?.apply() }
+
     private val _buttonSound = MutableStateFlow(tv.jetflix.app.ui.components.ButtonSound.Off)
     val buttonSound: StateFlow<tv.jetflix.app.ui.components.ButtonSound> = _buttonSound
     fun setButtonSound(v: tv.jetflix.app.ui.components.ButtonSound) {
@@ -43,6 +48,7 @@ object AppSettings {
         _autoplayNext.value = p.getBoolean("autoplay_next", true)
         _showMyList.value = p.getBoolean("show_my_list", true)
         _showNextUp.value = p.getBoolean("show_next_up", true)
+        _liveBlur.value = p.getBoolean("live_blur", true)
         _buttonSound.value = tv.jetflix.app.ui.components.ButtonSound.values().firstOrNull { it.name == p.getString("button_sound", null) } ?: tv.jetflix.app.ui.components.ButtonSound.Off
         tv.jetflix.app.ui.components.ButtonSounds.style = _buttonSound.value
         _posterSize.value = PosterSize.values().firstOrNull { it.name == p.getString("poster_size", null) } ?: PosterSize.Medium

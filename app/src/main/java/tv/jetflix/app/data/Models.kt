@@ -134,6 +134,8 @@ data class BaseItemDto(
     val ParentThumbImageTag: String? = null,
     val SeriesStatus: String? = null,
     val UserData: UserItemDataDto? = null,
+    val RemoteTrailers: List<MediaUrl> = emptyList(),
+    val LocalTrailerCount: Int? = null,
 ) {
     val isMovie get() = Type == "Movie"
     val isSeries get() = Type == "Series"
