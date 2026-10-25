@@ -85,8 +85,19 @@ data class LibraryUiState(
 /** Libraries that can hold movies or shows. Mixed, untyped and custom-typed libraries count too; music, books, photos and live TV do not. */
 fun isVideoLibrary(view: BaseItemDto) = view.CollectionType?.lowercase() !in setOf("music", "musicvideos", "books", "livetv", "playlists", "photos", "boxsets", "trailers")
 
+/** Where Library sort and filter choices are saved. Keys already carry the user and section. */
+interface LibraryPrefsStore {
+    fun get(key: String): String?
+    fun put(key: String, value: String?)
+}
+
+object AppSettingsLibraryStore : LibraryPrefsStore {
+    override fun get(key: String) = tv.jetflix.app.data.AppSettings.libraryPrefGet(key)
+    override fun put(key: String, value: String?) = tv.jetflix.app.data.AppSettings.libraryPrefPut(key, value)
+}
+
 /** Grid of every Movie (or Series) across all libraries of that type. */
-class LibraryViewModel(val repo: JellyfinRepository) : ViewModel() {
+class LibraryViewModel(val repo: JellyfinRepository, private val store: LibraryPrefsStore = AppSettingsLibraryStore) : ViewModel() {
 
     private val _state = MutableStateFlow(LibraryUiState())
     val state = _state.asStateFlow()
@@ -104,6 +115,37 @@ class LibraryViewModel(val repo: JellyfinRepository) : ViewModel() {
     private var knownGenres = emptyList<String>()
     private var knownYears = emptyList<Int>()
 
+    private var restored = false
+
+    private fun key(userId: String, tab: JetflixTab, name: String) = "lib.$userId.${tab.name}.$name"
+
+    /** Saves the current sort and filters for this user and section. Collections (box set contents) are not saved. */
+    internal fun persistPrefs(userId: String, tab: JetflixTab) {
+        if (collectionId != null) return
+        store.put(key(userId, tab, "sort"), sort.name)
+        store.put(key(userId, tab, "reversed"), reversed.toString())
+        store.put(key(userId, tab, "watch"), watch.name)
+        store.put(key(userId, tab, "genre"), genre)
+        store.put(key(userId, tab, "year"), year?.toString())
+        store.put(key(userId, tab, "library"), libraryId)
+    }
+
+    /** Brings back what this user last chose in this section. Runs once, before the first load. */
+    internal fun restorePrefs(userId: String, tab: JetflixTab) {
+        if (restored || collectionId != null) return
+        restored = true
+        sort = LibrarySort.values().firstOrNull { it.name == store.get(key(userId, tab, "sort")) } ?: sort
+        reversed = store.get(key(userId, tab, "reversed")) == "true"
+        watch = WatchFilter.values().firstOrNull { it.name == store.get(key(userId, tab, "watch")) } ?: watch
+        genre = store.get(key(userId, tab, "genre"))
+        year = store.get(key(userId, tab, "year"))?.toIntOrNull()
+        libraryId = store.get(key(userId, tab, "library"))
+        if (tab != JetflixTab.MY_LIST) bannerTab = tab // keeps the restored library choice on the first load
+        _state.value = _state.value.copy(sort = sort, reversed = reversed, watch = watch, genre = genre, year = year, libraryId = libraryId)
+    }
+
+    private fun save(tab: JetflixTab) { SessionManager.session.value?.let { persistPrefs(it.userId, tab) } }
+
     private fun filterString(extra: String? = null) = listOfNotNull(extra, watch.jellyfin).joinToString(",").ifEmpty { null }
 
     /** Genre and year choices come from the server's own list for the whole library, never from the filtered items. */
@@ -114,20 +156,29 @@ class LibraryViewModel(val repo: JellyfinRepository) : ViewModel() {
         knownYears = all.flatMap { it.Years }.distinct().sortedDescending()
     }
 
+    /** A saved genre or year the server no longer lists would hide everything, so it is cleared. */
+    private fun dropStaleFilters(): Boolean {
+        var changed = false
+        if (genre != null && knownGenres.isNotEmpty() && genre !in knownGenres) { genre = null; changed = true }
+        if (year != null && knownYears.isNotEmpty() && year !in knownYears) { year = null; changed = true }
+        return changed
+    }
+
     private fun order(): String = if (reversed) (if (sort.order == "Ascending") "Descending" else "Ascending") else sort.order
 
     private fun fresh(loading: Boolean = false, error: String? = null, items: List<BaseItemDto> = emptyList(), banner: BaseItemDto? = null) =
         LibraryUiState(sort = sort, reversed = reversed, section = section, loading = loading, error = error, items = items, banner = banner, watch = watch, genre = genre, year = year, genres = knownGenres, years = knownYears, libraries = knownLibraries, libraryId = libraryId)
 
-    fun cycleWatch(tab: JetflixTab) { watch = watch.next(); _state.value = _state.value.copy(watch = watch); load(tab) }
-    fun setLibrary(tab: JetflixTab, id: String?) { libraryId = id; _state.value = _state.value.copy(libraryId = id); load(tab) }
-    fun setGenre(tab: JetflixTab, value: String?) { genre = value; _state.value = _state.value.copy(genre = value); load(tab) }
-    fun setYear(tab: JetflixTab, value: Int?) { year = value; _state.value = _state.value.copy(year = value); load(tab) }
+    fun cycleWatch(tab: JetflixTab) { watch = watch.next(); _state.value = _state.value.copy(watch = watch); save(tab); load(tab) }
+    fun setLibrary(tab: JetflixTab, id: String?) { libraryId = id; _state.value = _state.value.copy(libraryId = id); save(tab); load(tab) }
+    fun setGenre(tab: JetflixTab, value: String?) { genre = value; _state.value = _state.value.copy(genre = value); save(tab); load(tab) }
+    fun setYear(tab: JetflixTab, value: Int?) { year = value; _state.value = _state.value.copy(year = value); save(tab); load(tab) }
 
     fun setReversed(tab: JetflixTab, value: Boolean) {
         if (value == reversed) return
         reversed = value
         _state.value = _state.value.copy(reversed = value)
+        save(tab)
         load(tab)
     }
 
@@ -148,12 +199,14 @@ class LibraryViewModel(val repo: JellyfinRepository) : ViewModel() {
         if (newSort == sort) return
         sort = newSort
         _state.value = _state.value.copy(sort = newSort)
+        save(tab)
         load(tab)
     }
 
     fun load(tab: JetflixTab) {
         val session = SessionManager.session.value ?: return
         val api = repo.apiFor(session.serverUrl)
+        restorePrefs(session.userId, tab)
         val includeTypes = if (tab == JetflixTab.MOVIES) "Movie" else "Series"
         viewModelScope.launch {
             if (_state.value.items.isEmpty()) _state.value = fresh(loading = true)
@@ -195,6 +248,7 @@ class LibraryViewModel(val repo: JellyfinRepository) : ViewModel() {
                         )
                     }.body()?.Items ?: emptyList()
                     loadOptions(tab, api, session.userId, listOf(null), "Movie,Series")
+                    if (dropStaleFilters()) { save(tab); load(tab); return@launch }
                     _state.value = fresh(items = mine)
                     return@launch
                 }
@@ -221,6 +275,7 @@ class LibraryViewModel(val repo: JellyfinRepository) : ViewModel() {
                     knownLibraries = perView.filter { it.second.isNotEmpty() }.map { it.first.Id to (it.first.Name ?: "Library") }
                 }
                 loadOptions(tab, api, session.userId, wanted.map { it.Id }, includeTypes)
+                if (dropStaleFilters()) { save(tab); load(tab); return@launch }
                 _state.value = fresh(items = merged)
             } catch (e: Exception) {
                 _state.value = fresh(error = "Couldn't load (${e.javaClass.simpleName})")

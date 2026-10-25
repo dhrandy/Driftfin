@@ -281,7 +281,8 @@ fun HomeContent(
     val navSolid by androidx.compose.runtime.remember {
         androidx.compose.runtime.derivedStateOf { listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 200 }
     }
-    var focusedItem by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<BaseItemDto?>(previewFocusedItem) }
+    val focusedItemState = androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<BaseItemDto?>(previewFocusedItem) }
+    var focusedItem by focusedItemState
     var heroHasFocus by androidx.compose.runtime.mutableStateOf(false)
     // Coming back up to the banner (or the menu) shows the whole banner again, title and synopsis included.
     // The focus scroll for the Play button would otherwise stop with the banner's title above the screen, so the banner
@@ -329,6 +330,13 @@ fun HomeContent(
         }
     }
     // The details strip takes its own space under the rows so it never covers the focused row.
+    // Only changes (and so only recomposes Home) when the nav bar is solid and the art really differs.
+    val navArtUrl by androidx.compose.runtime.remember(repo, heroes, state.hero) {
+        androidx.compose.runtime.derivedStateOf {
+            (if (navSolid) focusedItemState.value?.let { repo.backdropUrl(it, 960) } else null)
+                ?: (heroes.getOrNull(heroIndex) ?: state.hero)?.let { repo.backdropUrl(it, 960) }
+        }
+    }
     val showStrip = false // Randy: no description under the rows; the synopsis lives in More Info
     val stripSpace by androidx.compose.animation.core.animateDpAsState(
         targetValue = if (showStrip) 112.dp else 0.dp,
@@ -422,7 +430,8 @@ fun HomeContent(
         }
         }
         if (showStrip) {
-            focusedItem?.let { FocusedDetails(it, Modifier.align(Alignment.BottomStart)) }
+            // Read inside its own scope so a focus move does not recompose all of Home.
+            FocusedStripHost(focusedItemState, Modifier.align(Alignment.BottomStart))
         }
         TopNavBar(
             selected = JetflixTab.HOME,
@@ -433,10 +442,14 @@ fun HomeContent(
             downFocus = if (state.hero != null) heroPlayFocus else if (state.sections.isNotEmpty()) firstRowFocus else null,
             selectedFocus = navFocus,
             solid = navSolid,
-            blurArtUrl = (if (navSolid) focusedItem?.let { repo.backdropUrl(it, 960) } else null)
-                ?: (heroes.getOrNull(heroIndex) ?: state.hero)?.let { repo.backdropUrl(it, 960) },
+            blurArtUrl = navArtUrl,
         )
     }
+}
+
+@Composable
+private fun FocusedStripHost(item: androidx.compose.runtime.State<BaseItemDto?>, modifier: Modifier) {
+    item.value?.let { FocusedDetails(it, modifier) }
 }
 
 @Composable

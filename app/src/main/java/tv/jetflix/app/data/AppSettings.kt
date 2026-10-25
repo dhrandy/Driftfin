@@ -23,6 +23,12 @@ object AppSettings {
         prefs?.edit()?.putString("button_sound", v.name)?.apply()
     }
 
+    /** Per-user, per-section Library choices (sort, filters) live in the same preferences file. */
+    fun libraryPrefGet(key: String): String? = prefs?.getString(key, null)
+    fun libraryPrefPut(key: String, value: String?) {
+        prefs?.edit()?.apply { if (value == null) remove(key) else putString(key, value) }?.apply()
+    }
+
     private var prefs: android.content.SharedPreferences? = null
     private val _autoplayNext = MutableStateFlow(true)
     private val _showMyList = MutableStateFlow(true)

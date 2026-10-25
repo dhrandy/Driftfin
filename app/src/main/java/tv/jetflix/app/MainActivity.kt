@@ -62,11 +62,19 @@ class MainActivity : ComponentActivity() {
         return super.dispatchKeyEvent(event)
     }
 
+    override fun onDestroy() {
+        tv.jetflix.app.ui.components.FrameStats.cancel()
+        super.onDestroy()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
             JetflixTheme {
-                JetflixRoot()
+                androidx.compose.foundation.layout.Box {
+                    JetflixRoot()
+                    tv.jetflix.app.ui.components.FrameTestHost(Modifier.align(androidx.compose.ui.Alignment.BottomEnd))
+                }
             }
         }
     }

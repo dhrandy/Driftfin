@@ -104,7 +104,12 @@ fun TopNavBar(
         Wordmark()
         Spacer(Modifier.weight(1f))
         // Search is a magnifier icon at the start of the menu, as on the current Netflix TV menu.
-        SearchIconTab(selected = selected == JetflixTab.SEARCH, onClick = { onTabSelected(JetflixTab.SEARCH) })
+        SearchIconTab(
+            selected = selected == JetflixTab.SEARCH,
+            onClick = { onTabSelected(JetflixTab.SEARCH) },
+            // On the Search page the magnifier is the selected tab, so Back from the page lands here.
+            modifier = if (selected == JetflixTab.SEARCH && selectedFocus != null) Modifier.focusRequester(selectedFocus) else Modifier,
+        )
         JetflixTab.entries.filter { it != JetflixTab.SEARCH }.forEach { tab ->
             NavTab(
                 label = tab.label,
@@ -132,9 +137,10 @@ fun TopNavBar(
 }
 
 @Composable
-private fun SearchIconTab(selected: Boolean, onClick: () -> Unit) {
+private fun SearchIconTab(selected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
     Surface(
         onClick = onClick,
+        modifier = modifier,
         colors = ClickableSurfaceDefaults.colors(
             containerColor = if (selected) Color.White else Color.Transparent,
             contentColor = if (selected) Color.Black else JetflixColors.TextPrimary,
