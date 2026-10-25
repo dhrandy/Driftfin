@@ -39,11 +39,11 @@ fun MediaRow(
             text = title,
             style = JetflixType.sectionTitle,
             color = JetflixColors.TextPrimary,
-            modifier = Modifier.padding(start = 48.dp, bottom = 10.dp),
+            modifier = Modifier.padding(start = 32.dp, bottom = 22.dp),
         )
         LazyRow(
             modifier = if (upFocus != null) Modifier.focusProperties { up = upFocus } else Modifier,
-            contentPadding = PaddingValues(horizontal = 48.dp),
+            contentPadding = PaddingValues(horizontal = 32.dp, vertical = 6.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             itemsIndexed(items, key = { _, it -> it.Id }) { index, item ->

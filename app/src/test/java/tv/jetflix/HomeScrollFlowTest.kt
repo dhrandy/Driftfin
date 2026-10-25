@@ -94,4 +94,26 @@ class HomeScrollFlowTest {
             tv.jetflix.app.data.AppSettings.setPosterSize(tv.jetflix.app.data.PosterSize.Medium)
         }
     }
+
+    @Test fun bannerScrollsAwayWhenFocusMovesBelowIt() {
+        rule.setContent {
+            JetflixTheme {
+                tv.jetflix.app.ui.library.LibraryContent(
+                    tv.jetflix.app.ui.library.LibraryUiState(loading = false, items = (0 until 5).flatMap { r -> items.map { it.copy(Id = it.Id + "b$r") } }, banner = items.first()),
+                    JellyfinRepository().apply { apiFor("http://demo.test") }, tv.jetflix.app.ui.components.JetflixTab.MOVIES, "demo", {}, {}, {},
+                )
+            }
+        }
+        rule.waitForIdle(); rule.mainClock.advanceTimeBy(800)
+        fun moreInfoBottom() = rule.onAllNodes(androidx.compose.ui.test.hasText("More Info"), useUnmergedTree = true).fetchSemanticsNodes().firstOrNull()?.boundsInRoot?.bottom
+        val before = moreInfoBottom()
+        repeat(3) {
+            rule.onRoot().performKeyInput { pressKey(Key.DirectionDown) }; rule.waitForIdle(); rule.mainClock.advanceTimeBy(800)
+            val f = rule.onAllNodes(isFocused(), useUnmergedTree = true).fetchSemanticsNodes().firstOrNull()
+            println("BANNER_STEP focusedTop=" + f?.boundsInRoot?.top + " moreInfoBottom=" + moreInfoBottom())
+        }
+        val after = moreInfoBottom()
+        println("BANNER_BOTTOM before=$before after=$after")
+        assertTrue("banner fully above the bar after focus moves below it (before=$before after=$after)", after == null || after <= 152f)
+    }
 }

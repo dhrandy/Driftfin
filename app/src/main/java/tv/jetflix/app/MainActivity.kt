@@ -110,9 +110,9 @@ fun JetflixRoot() {
         )
     }
 
-    // In-app screensaver: after 5 idle minutes (never while playing) rotate unwatched movie backdrops fullscreen.
+    // In-app screensaver: after 5 idle minutes on any screen or while the player is paused (never while playing) rotate unwatched movie backdrops fullscreen.
     tv.jetflix.app.ui.components.IdleScreensaverHost(
-        blocked = current is Screen.Player || confirmExit,
+        blocked = (current is Screen.Player && !tv.jetflix.app.ui.components.PlaybackPause.paused.collectAsState().value) || confirmExit,
         loadUrls = {
             val sess = session
             if (sess == null) emptyList() else {

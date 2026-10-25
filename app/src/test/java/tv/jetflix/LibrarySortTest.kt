@@ -1,5 +1,8 @@
 package tv.jetflix
 
+import androidx.compose.ui.test.requestFocus
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
@@ -51,14 +54,16 @@ class LibrarySortTest {
         }
         rule.waitForIdle()
         val navLabels = setOf("Home", "Shows", "Movies", "My Driftfin", "Search", "Settings", "demo")
-        val sortLabels = LibrarySort.values().map { it.label } + listOf("Ascending", "Descending")
+        val sortLabels = listOf("Sort: Name \u2191", "Filter")
         if (focused().isEmpty()) press(Key.DirectionDown) // Robolectric has no window focus; first key lands on the header
         if (focused() in sortLabels) { press(Key.DirectionUp); press(Key.DirectionUp) }
         assertTrue("header focused, was ${focused()}", focused() in navLabels || focused() == "?")
         press(Key.DirectionDown)
         assertTrue("header Down reaches the sort row, was: ${focused()}", focused() in sortLabels)
-        press(Key.DirectionRight); press(Key.Enter)
-        assertEquals(1, picked.size)
+        press(Key.Enter) // opens the Sort panel
+        rule.onNodeWithText("Rating").assertIsDisplayed()
+        rule.onNodeWithText("Rating").requestFocus(); rule.waitForIdle(); rule.onNodeWithText("Rating").performKeyInput { pressKey(Key.Enter) }; rule.waitForIdle()
+        assertEquals(listOf(LibrarySort.Rating), picked)
         press(Key.DirectionDown)
         assertTrue("grid focused, was ${focused()}", focused() !in sortLabels && focused() !in navLabels)
         press(Key.DirectionUp)

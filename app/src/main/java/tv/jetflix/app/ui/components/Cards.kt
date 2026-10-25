@@ -42,6 +42,16 @@ private fun focusedBorder() = CardDefaults.border(
 @Composable
 private fun cardScale() = CardDefaults.scale(scale = 1f, focusedScale = 1.12f)
 
+/**
+ * Resume progress only for titles with a real saved play position. Jellyfin can send a percentage for items nobody
+ * has started, so a bar needs a position above zero and the item must not be marked watched.
+ */
+fun BaseItemDto.resumePercent(): Double? {
+    val d = UserData ?: return null
+    if (d.Played || d.PlaybackPositionTicks <= 0L) return null
+    return d.PlayedPercentage ?: RunTimeTicks?.takeIf { it > 0 }?.let { d.PlaybackPositionTicks * 100.0 / it }
+}
+
 /** Progress bar at the bottom of resumable cards, like Netflix's red bar. */
 @Composable
 fun ResumeProgressBar(percent: Double?, modifier: Modifier = Modifier) {
@@ -111,7 +121,7 @@ fun PosterCard(
                 contentScale = ContentScale.Crop,
             )
             Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth()) {
-                ResumeProgressBar(item.UserData?.PlayedPercentage)
+                ResumeProgressBar(item.resumePercent())
             }
             if (item.Type == "BoxSet") {
                 // Collections show their own name and how many titles they hold.
@@ -158,7 +168,7 @@ fun WideCard(
                     contentScale = ContentScale.Crop,
                 )
                 Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth()) {
-                    ResumeProgressBar(item.UserData?.PlayedPercentage)
+                    ResumeProgressBar(item.resumePercent())
                 }
                 WatchedBadge(item, Modifier.align(Alignment.TopEnd))
             }

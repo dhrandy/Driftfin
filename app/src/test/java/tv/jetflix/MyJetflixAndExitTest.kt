@@ -51,7 +51,9 @@ class MyJetflixAndExitTest {
         rule.onNodeWithText("Favorites").assertIsDisplayed()
         rule.onNodeWithText("Collections").requestFocus(); rule.waitForIdle(); rule.onNodeWithText("Collections").performKeyInput { pressKey(Key.Enter) }; rule.waitForIdle()
         assertEquals(listOf(MySection.Collections), sections)
-        rule.onNodeWithText("Ascending").requestFocus(); rule.waitForIdle(); rule.onNodeWithText("Ascending").performKeyInput { pressKey(Key.Enter) }; rule.waitForIdle()
+        val sortBtn = "Sort: Name \u2191"
+        rule.onNodeWithText(sortBtn).requestFocus(); rule.waitForIdle(); rule.onNodeWithText(sortBtn).performKeyInput { pressKey(Key.Enter) }; rule.waitForIdle()
+        rule.onNodeWithText("Descending").requestFocus(); rule.waitForIdle(); rule.onNodeWithText("Descending").performKeyInput { pressKey(Key.Enter) }; rule.waitForIdle()
         assertEquals(listOf(true), reversed)
     }
 
@@ -80,14 +82,15 @@ class MyJetflixAndExitTest {
             }
         }
         rule.waitForIdle()
-        rule.onNodeWithText("Play Count").assertIsDisplayed()
-        rule.onNodeWithText("Genre: Drama").assertIsDisplayed()
-        rule.onNodeWithText("Year: 1990").assertIsDisplayed()
+        rule.onNodeWithText("Filter (2)").assertIsDisplayed()
         fun enter(label: String) { rule.onNodeWithText(label).requestFocus(); rule.waitForIdle(); rule.onNodeWithText(label).performKeyInput { pressKey(Key.Enter) }; rule.waitForIdle() }
+        enter("Sort: Name \u2191"); rule.onNodeWithText("Play Count").assertIsDisplayed(); rule.onNodeWithText("Release Year").assertIsDisplayed()
+        rule.onNodeWithText("Name").requestFocus(); rule.waitForIdle(); rule.onNodeWithText("Name").performKeyInput { pressKey(Key.Enter) }; rule.waitForIdle()
+        enter("Filter (2)")
         enter("Watched: All")
         // Pickers list every value the server returned for the library, not just values in the current result.
         enter("Genre: Drama"); rule.onNodeWithText("Western").assertIsDisplayed(); enter("Western")
-        enter("Year: 1990"); rule.onNodeWithText("2001").assertIsDisplayed(); enter("1995")
+        enter("Filter (2)"); enter("Year: 1990"); rule.onNodeWithText("2001").assertIsDisplayed(); enter("1995")
         assertEquals(listOf("watch", "genre=Western", "year=1995"), calls)
     }
 }

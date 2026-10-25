@@ -35,6 +35,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import tv.jetflix.app.ui.components.fadeUnderMenuBar
 import tv.jetflix.app.data.BaseItemDto
 import tv.jetflix.app.data.JellyfinRepository
 import tv.jetflix.app.data.SessionManager
@@ -273,7 +274,40 @@ fun LibraryContent(
     val sortFocus = remember { FocusRequester() }
     val filterFocus = remember { FocusRequester() }
     var picker by remember { androidx.compose.runtime.mutableStateOf<String?>(null) }
-    if (picker == "genre") {
+    if (picker == "sort") {
+        val ascending = (state.sort.order == "Ascending") != state.reversed
+        OptionPicker(
+            "Sort by",
+            LibrarySort.values().map { it.label to "sort:${it.name}" } + listOf("Ascending" to "order:asc", "Descending" to "order:desc"),
+            "sort:${state.sort.name}", { picker = null }, allLabel = null,
+        ) { v ->
+            when {
+                v == null -> {}
+                v.startsWith("sort:") -> onSort(LibrarySort.valueOf(v.removePrefix("sort:")))
+                v == "order:asc" -> if (!ascending) onReverse(!state.reversed)
+                v == "order:desc" -> if (ascending) onReverse(!state.reversed)
+            }
+            picker = null
+        }
+    } else if (picker == "filter") {
+        OptionPicker(
+            "Filter",
+            listOf("Watched: ${state.watch.label}" to "watch", "Genre: ${state.genre ?: "All"}" to "genre", "Year: ${state.year ?: "All"}" to "year", "Reset filters" to "reset"),
+            null, { picker = null }, allLabel = null, columns = 2,
+        ) { v ->
+            when (v) {
+                "watch" -> onWatch()
+                "genre" -> picker = "genre"
+                "year" -> picker = "year"
+                "reset" -> {
+                    onGenre(null); onYear(null)
+                    repeat(when (state.watch) { WatchFilter.All -> 0; WatchFilter.Unwatched -> 2; WatchFilter.Watched -> 1 }) { onWatch() }
+                    picker = null
+                }
+                else -> {}
+            }
+        }
+    } else if (picker == "genre") {
         OptionPicker("Genre", state.genres.map { it to it }, state.genre, { picker = null }) { onGenre(it); picker = null }
     } else if (picker == "year") {
         OptionPicker("Year", state.years.map { it.toString() to it }, state.year, { picker = null }) { onYear(it); picker = null }
@@ -295,6 +329,11 @@ fun LibraryContent(
             repeat(10) { try { bannerFocus.requestFocus(); return@LaunchedEffect } catch (_: Exception) { kotlinx.coroutines.delay(60) } }
         }
     }
+    // Focus below the banner scrolls the banner fully out of view, so its text is never left cut off under the menu bar.
+    val hideScope = androidx.compose.runtime.rememberCoroutineScope()
+    val hideBanner: () -> Unit = {
+        if (banner != null && showSort && gridState.firstVisibleItemIndex == 0) hideScope.launch { gridState.animateScrollToItem(1) }
+    }
     Box(Modifier.fillMaxSize().background(JetflixColors.Background)) {
         if (state.items.isNotEmpty() || isMine) {
             val barPx = with(androidx.compose.ui.platform.LocalDensity.current) { 76.dp.toPx() }
@@ -303,8 +342,9 @@ fun LibraryContent(
             LazyVerticalGrid(
                 columns = GridCells.Fixed(tv.jetflix.app.data.AppSettings.posterSize.collectAsState().value.gridColumns),
                 state = gridState,
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(start = 48.dp, end = 48.dp, top = 76.dp, bottom = 48.dp),
+                modifier = Modifier.fillMaxSize()
+                    .fadeUnderMenuBar(gridState.firstVisibleItemIndex > 0 || gridState.firstVisibleItemScrollOffset > 0),
+                contentPadding = PaddingValues(start = 32.dp, end = 32.dp, top = 76.dp, bottom = 48.dp),
                 horizontalArrangement = Arrangement.spacedBy(14.dp),
                 verticalArrangement = Arrangement.spacedBy(18.dp),
             ) {
@@ -321,7 +361,7 @@ fun LibraryContent(
                             downFocus = if (showSort) sortFocus else null,
                             modifier = Modifier
                                 .clip(androidx.compose.foundation.shape.RoundedCornerShape(20.dp)),
-                            height = 300.dp,
+                            height = 400.dp,
                         )
                     }
                 }
@@ -357,63 +397,31 @@ fun LibraryContent(
                         androidx.compose.foundation.layout.Row(
                             horizontalArrangement = Arrangement.spacedBy(10.dp),
                             modifier = Modifier
-                                .then(Modifier.focusProperties { down = filterFocus })
+                                .onFocusChanged { if (it.hasFocus) hideBanner() }
+                                .then(if (startedFresh && state.items.isNotEmpty()) Modifier.focusProperties { down = firstFocus } else Modifier)
                                 .then(if (banner != null) Modifier.focusProperties { up = bannerFocus } else Modifier)
                                 .then(if (isMine) Modifier.focusProperties { up = sectionFocus } else Modifier),
                         ) {
                             val ascending = (state.sort.order == "Ascending") != state.reversed
-                            androidx.tv.material3.Button(
-                                onClick = { onReverse(!state.reversed) },
-                                colors = androidx.tv.material3.ButtonDefaults.colors(
-                                    containerColor = androidx.compose.ui.graphics.Color.Transparent,
+                            val active = (if (state.watch != WatchFilter.All) 1 else 0) + (if (state.genre != null) 1 else 0) + (if (state.year != null) 1 else 0)
+                            val chipColors = @Composable { on: Boolean ->
+                                androidx.tv.material3.ButtonDefaults.colors(
+                                    containerColor = if (on) androidx.compose.ui.graphics.Color(0xFF3A3A3A) else androidx.compose.ui.graphics.Color.Transparent,
                                     contentColor = androidx.compose.ui.graphics.Color.White,
                                     focusedContainerColor = androidx.compose.ui.graphics.Color.White,
                                     focusedContentColor = androidx.compose.ui.graphics.Color.Black,
-                                ),
-                            ) { Text(if (ascending) "Ascending" else "Descending", style = JetflixType.body) }
-                            Text("Sort by", style = JetflixType.body, color = JetflixColors.TextSecondary, modifier = Modifier.padding(top = 8.dp, end = 4.dp))
-                            LibrarySort.values().forEach { option ->
-                                val selected = option == state.sort
-                                androidx.tv.material3.Button(
-                                    onClick = { onSort(option) },
-                                    modifier = if (selected) Modifier.focusRequester(sortFocus) else Modifier,
-                                    colors = androidx.tv.material3.ButtonDefaults.colors(
-                                        containerColor = if (selected) androidx.compose.ui.graphics.Color(0xFF3A3A3A) else androidx.compose.ui.graphics.Color.Transparent,
-                                        contentColor = androidx.compose.ui.graphics.Color.White,
-                                        focusedContainerColor = androidx.compose.ui.graphics.Color.White,
-                                        focusedContentColor = androidx.compose.ui.graphics.Color.Black,
-                                    ),
-                                ) { Text(option.label, style = JetflixType.body) }
+                                )
                             }
-                        }
-                    }
-                }
-                if (showSort) {
-                    item(key = "filter", span = { androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan) }) {
-                        androidx.compose.foundation.layout.Row(
-                            horizontalArrangement = Arrangement.spacedBy(10.dp),
-                            modifier = Modifier
-                                .focusProperties { up = sortFocus }
-                                .then(if (startedFresh && state.items.isNotEmpty()) Modifier.focusProperties { down = firstFocus } else Modifier),
-                        ) {
-                            Text("Filter", style = JetflixType.body, color = JetflixColors.TextSecondary, modifier = Modifier.padding(top = 8.dp, end = 4.dp))
-                            val chips = listOf(
-                                "Watched: ${state.watch.label}" to onWatch,
-                                "Genre: ${state.genre ?: "All"}" to { picker = "genre" },
-                                "Year: ${state.year ?: "All"}" to { picker = "year" },
-                            )
-                            chips.forEachIndexed { i, (label, click) ->
-                                androidx.tv.material3.Button(
-                                    onClick = click,
-                                    modifier = if (i == 0) Modifier.focusRequester(filterFocus) else Modifier,
-                                    colors = androidx.tv.material3.ButtonDefaults.colors(
-                                        containerColor = if (label.endsWith(": All")) androidx.compose.ui.graphics.Color.Transparent else androidx.compose.ui.graphics.Color(0xFF3A3A3A),
-                                        contentColor = androidx.compose.ui.graphics.Color.White,
-                                        focusedContainerColor = androidx.compose.ui.graphics.Color.White,
-                                        focusedContentColor = androidx.compose.ui.graphics.Color.Black,
-                                    ),
-                                ) { Text(label, style = JetflixType.body) }
-                            }
+                            androidx.tv.material3.Button(
+                                onClick = { picker = "sort" },
+                                modifier = Modifier.focusRequester(sortFocus),
+                                colors = chipColors(true),
+                            ) { Text("Sort: ${state.sort.label} ${if (ascending) "\u2191" else "\u2193"}", style = JetflixType.body) }
+                            androidx.tv.material3.Button(
+                                onClick = { picker = "filter" },
+                                modifier = Modifier.focusRequester(filterFocus),
+                                colors = chipColors(active > 0),
+                            ) { Text(if (active > 0) "Filter ($active)" else "Filter", style = JetflixType.body) }
                         }
                     }
                 }
@@ -421,8 +429,8 @@ fun LibraryContent(
                     PosterCard(
                         item = item,
                         imageUrl = repo.posterUrl(item),
-                        modifier = (if (showSort && index < tv.jetflix.app.data.AppSettings.posterSize.value.gridColumns) Modifier.focusProperties { up = filterFocus } else Modifier)
-                            .onFocusChanged { if (it.hasFocus) focusedItem = item }
+                        modifier = (if (showSort && index < tv.jetflix.app.data.AppSettings.posterSize.value.gridColumns) Modifier.focusProperties { up = sortFocus } else Modifier)
+                            .onFocusChanged { if (it.hasFocus) { focusedItem = item; hideBanner() } }
                             .then(if (startedFresh && item.Id == state.items.first().Id) {
                                 Modifier.focusRequester(firstFocus).restoreFocus(focusMemory, item.Id)
                             } else {
@@ -461,7 +469,7 @@ fun LibraryContent(
 
 /** Pick one value (or All) from the server's full list. Back closes it without changing anything. */
 @Composable
-fun <T> OptionPicker(title: String, options: List<Pair<String, T>>, selected: T?, onDismiss: () -> Unit, onPick: (T?) -> Unit) {
+fun <T> OptionPicker(title: String, options: List<Pair<String, T>>, selected: T?, onDismiss: () -> Unit, allLabel: String? = "All", columns: Int = 4, onPick: (T?) -> Unit) {
     val focus = remember { FocusRequester() }
     androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
         androidx.compose.foundation.layout.Column(
@@ -474,18 +482,18 @@ fun <T> OptionPicker(title: String, options: List<Pair<String, T>>, selected: T?
             Text(title, style = JetflixType.sectionTitle, color = androidx.compose.ui.graphics.Color.White)
             if (options.isEmpty()) Text("The server returned no ${title.lowercase()} values.", style = JetflixType.body, color = JetflixColors.TextSecondary)
             androidx.compose.foundation.lazy.grid.LazyVerticalGrid(
-                columns = androidx.compose.foundation.lazy.grid.GridCells.Fixed(4),
-                modifier = Modifier.height(320.dp),
+                columns = androidx.compose.foundation.lazy.grid.GridCells.Fixed(columns),
+                modifier = Modifier.height(if (allLabel == null) 220.dp else 320.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                val all: List<Pair<String, T?>> = listOf<Pair<String, T?>>("All" to null) + options
+                val all: List<Pair<String, T?>> = (if (allLabel != null) listOf<Pair<String, T?>>(allLabel to null) else emptyList()) + options
                 items(all.size) { i ->
                     val (label, value) = all[i]
                     val isSel = value == selected
                     androidx.tv.material3.Button(
                         onClick = { onPick(value) },
-                        modifier = if (isSel) Modifier.focusRequester(focus) else Modifier,
+                        modifier = if (isSel || (i == 0 && all.none { it.second == selected })) Modifier.focusRequester(focus) else Modifier,
                         colors = androidx.tv.material3.ButtonDefaults.colors(
                             containerColor = if (isSel) androidx.compose.ui.graphics.Color(0xFF3A3A3A) else androidx.compose.ui.graphics.Color.Transparent,
                             contentColor = androidx.compose.ui.graphics.Color.White,

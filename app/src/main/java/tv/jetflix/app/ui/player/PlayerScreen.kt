@@ -210,9 +210,11 @@ fun PlayerScreen(
             bufferedTicks = player.bufferedPosition.takeIf { it > 0 }?.times(10_000) ?: bufferedTicks
             isPlaying = player.isPlaying
             keepAwake = shouldKeepScreenOn(player.playWhenReady, player.playbackState)
+            tv.jetflix.app.ui.components.PlaybackPause.paused.value = !player.playWhenReady && player.playbackState == androidx.media3.common.Player.STATE_READY
             delay(1_000)
         }
     }
+    androidx.compose.runtime.DisposableEffect(Unit) { onDispose { tv.jetflix.app.ui.components.PlaybackPause.paused.value = false } }
     LaunchedEffect(Unit) {
         while (isActive) {
             delay(10_000)

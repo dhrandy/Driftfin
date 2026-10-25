@@ -44,6 +44,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.compose.foundation.lazy.LazyColumn
+import tv.jetflix.app.ui.components.fadeUnderMenuBar
 import androidx.tv.material3.Button
 import androidx.tv.material3.ButtonDefaults
 import androidx.tv.material3.Icon
@@ -218,7 +219,7 @@ class MenuAwareScrollSpec(private val topInsetPx: Float) : androidx.compose.foun
     }
 }
 
-/** Home row order: Continue Watching, Up Next, Recently Added Movies, then Favorites and the remaining rows as before. */
+/** Home row order: Continue Watching, Up Next, Recently Added Movies, then Favorites, Recently Added Episodes, library rows, and More like X last. */
 fun orderHomeSections(
     resume: List<BaseItemDto>, nextUp: List<BaseItemDto>, latestMovies: List<BaseItemDto>, favorites: List<BaseItemDto>,
     latestEpisodes: List<BaseItemDto>, moreLike: HomeSection?, library: List<HomeSection>,
@@ -229,8 +230,8 @@ fun orderHomeSections(
     if (latestMovies.isNotEmpty()) out += HomeSection("Recently Added Movies", latestMovies, wide = false)
     if (favorites.isNotEmpty()) out += HomeSection("Favorites", favorites, wide = false)
     if (latestEpisodes.isNotEmpty()) out += HomeSection("Recently Added Episodes", latestEpisodes, wide = true)
-    moreLike?.let { out += it }
     out += library.filter { it.items.isNotEmpty() }
+    moreLike?.let { out += it } // recommendations always sit at the very bottom
     return out
 }
 
@@ -307,7 +308,7 @@ fun HomeContent(
         }
     }
     // The details strip takes its own space under the rows so it never covers the focused row.
-    val showStrip = !heroHasFocus && focusMemory.key != null && focusedItem != null
+    val showStrip = false // Randy: no description under the rows; the synopsis lives in More Info
     val stripSpace by androidx.compose.animation.core.animateDpAsState(
         targetValue = if (showStrip) 112.dp else 0.dp,
         animationSpec = androidx.compose.animation.core.tween(220),
@@ -320,7 +321,8 @@ fun HomeContent(
         androidx.compose.runtime.CompositionLocalProvider(androidx.compose.foundation.gestures.LocalBringIntoViewSpec provides spec) {
         LazyColumn(
             state = listState,
-            modifier = Modifier.fillMaxSize().padding(bottom = stripSpace),
+            modifier = Modifier.fillMaxSize().padding(bottom = stripSpace)
+                .fadeUnderMenuBar(listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 0),
             contentPadding = PaddingValues(bottom = 140.dp),
             verticalArrangement = Arrangement.spacedBy(28.dp),
         ) {
@@ -357,7 +359,7 @@ fun HomeContent(
                         onFocused = { focusMemory.key = null },
                         onFocusChange = { heroHasFocus = it },
                         modifier = Modifier
-                            .padding(start = 16.dp, end = 16.dp, top = 68.dp, bottom = 12.dp)
+                            .padding(start = 16.dp, end = 16.dp, top = 62.dp, bottom = 10.dp)
                             .clip(androidx.compose.foundation.shape.RoundedCornerShape(20.dp)),
                     )
                 }
@@ -422,7 +424,7 @@ fun HeroBanner(
     onFocused: () -> Unit = {},
     onFocusChange: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier,
-    height: androidx.compose.ui.unit.Dp = 380.dp,
+    height: androidx.compose.ui.unit.Dp = 420.dp,
 ) {
     Box(
         modifier

@@ -27,6 +27,8 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.draw.drawWithContent
 import androidx.tv.material3.ClickableSurfaceDefaults
 import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
@@ -95,7 +97,7 @@ fun TopNavBar(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 48.dp, vertical = 14.dp),
+                .padding(horizontal = 32.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(26.dp),
         ) {
@@ -197,3 +199,21 @@ fun rememberMenuBack(): MenuBack {
     }
     return menu
 }
+
+/**
+ * Fades content out as it scrolls up under the menu bar, so text and artwork end cleanly instead of being
+ * sliced off mid-line. Only active while the list is scrolled; at the top the page may sit under the bar by design.
+ */
+fun Modifier.fadeUnderMenuBar(active: Boolean, barHeight: androidx.compose.ui.unit.Dp = 76.dp, fade: androidx.compose.ui.unit.Dp = 40.dp): Modifier =
+    if (!active) this else this
+        .graphicsLayer { compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen }
+        .drawWithContent {
+            drawContent()
+            val bar = barHeight.toPx(); val f = fade.toPx()
+            drawRect(
+                Brush.verticalGradient(
+                    colorStops = arrayOf(0f to Color.Transparent, (bar / size.height).coerceIn(0f, 1f) to Color.Transparent, ((bar + f) / size.height).coerceIn(0f, 1f) to Color.Black),
+                ),
+                blendMode = androidx.compose.ui.graphics.BlendMode.DstIn,
+            )
+        }

@@ -40,6 +40,11 @@ fun ScreensaverOverlay(urls: List<String>) {
     }
 }
 
+/** Set by the player: true while the user has paused playback. Only a paused player may be covered by the screensaver. */
+object PlaybackPause {
+    val paused = kotlinx.coroutines.flow.MutableStateFlow(false)
+}
+
 /**
  * Wraps the app. After [idleMs] without a key press (and not while [blocked], e.g. playback), loads art and shows it
  * fullscreen. The key press that wakes it is swallowed and never reaches the screen underneath.

@@ -77,15 +77,7 @@ fun SettingsContent(
             Text("Settings", style = JetflixType.sectionTitle, color = JetflixColors.TextPrimary)
             SettingRow("Autoplay next episode", "Starts the next episode after a 5 second countdown.", autoplay, onToggleAutoplay, Modifier.focusRequester(first))
             SettingRow("Show My List on Home", "My List uses your Jellyfin favorites for this user.", showMyList, onToggleMyList)
-            Button(
-                onClick = onCyclePosterSize,
-                colors = ButtonDefaults.colors(
-                    containerColor = JetflixColors.SurfaceLight.copy(alpha = 0.7f),
-                    contentColor = Color.White,
-                    focusedContainerColor = Color.White,
-                    focusedContentColor = Color.Black,
-                ),
-            ) { Text("Poster size: ${posterSize.label} (OK to change)") }
+            SettingRow("Poster size", "Small, Medium or Large cards on Home and in libraries. Press OK to change.", true, onCyclePosterSize, valueText = posterSize.label)
             SettingRow("Show Next Up on Home", "Jellyfin's next unwatched episode of series you follow.", showNextUp, onToggleNextUp)
             Spacer(Modifier.padding(top = 8.dp))
             Text(
@@ -117,7 +109,7 @@ fun SettingsContent(
 }
 
 @Composable
-private fun SettingRow(title: String, detail: String, on: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
+private fun SettingRow(title: String, detail: String, on: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier, valueText: String? = null) {
     Button(
         onClick = onClick,
         modifier = modifier.fillMaxWidth(),
@@ -133,7 +125,7 @@ private fun SettingRow(title: String, detail: String, on: Boolean, onClick: () -
                 Text(title, style = JetflixType.body)
                 Text(detail, style = JetflixType.caption, color = JetflixColors.TextSecondary)
             }
-            Text(if (on) "On" else "Off", style = JetflixType.body, color = if (on) JetflixColors.Red else JetflixColors.TextMuted)
+            Text(valueText ?: if (on) "On" else "Off", style = JetflixType.body, color = if (on) JetflixColors.Red else JetflixColors.TextMuted)
         }
     }
 }

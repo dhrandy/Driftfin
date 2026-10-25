@@ -1,5 +1,6 @@
 package tv.jetflix.app.ui.details
 
+import tv.jetflix.app.ui.components.resumePercent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -513,7 +514,7 @@ private fun EpisodeRow(episode: BaseItemDto, thumbUrl: String?, onClick: () -> U
                     contentScale = ContentScale.Crop,
                 )
                 Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth()) {
-                    ResumeProgressBar(episode.UserData?.PlayedPercentage)
+                    ResumeProgressBar(episode.resumePercent())
                 }
             }
             Spacer(Modifier.width(16.dp))
