@@ -233,6 +233,7 @@ fun DetailsContent(
     onToggleFavorite: () -> Unit = {},
     onTrailer: (tv.jetflix.app.data.TrailerSource) -> Unit = {},
 ) {
+    tv.jetflix.app.ui.components.CountRecompose("details")
     val item = state.item
     val playFocus = remember { FocusRequester() }
     LaunchedEffect(item?.Id) {

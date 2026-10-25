@@ -40,6 +40,7 @@ fun ArtImage(
         }
         return
     }
+    androidx.compose.runtime.LaunchedEffect(url) { PerfCounters.inc("imgLoads") }
     val painter = rememberAsyncImagePainter(
         model = ImageRequest.Builder(LocalContext.current)
             .data(url)

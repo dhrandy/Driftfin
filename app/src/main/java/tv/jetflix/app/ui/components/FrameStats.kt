@@ -119,6 +119,7 @@ object FrameStats {
         if (_state.value is FrameTest.Recording) return
         stopListening()
         synchronized(this) { frames.clear(); stages.clear() }
+        PerfCounters.begin()
         val t = HandlerThread("frame-stats").also { it.start() }
         val l = android.view.Window.OnFrameMetricsAvailableListener { _, m, _ -> add(m) }
         activity.window.addOnFrameMetricsAvailableListener(l, Handler(t.looper))
@@ -134,10 +135,12 @@ object FrameStats {
                 stopListening()
                 val summary = FrameStatsMath.summarize(copy(), refreshHz(activity))
                 val rows = copyStages()
+                val counterLines = PerfCounters.end()
                 val gpu = android.os.Build.VERSION.SDK_INT >= 31
                 val stageLines = if (rows.isEmpty()) emptyList() else listOf(
                     FrameStageMath.line("all frames ms:", FrameStageMath.averages(rows), gpu),
                     FrameStageMath.line("slow frames ms:", FrameStageMath.averages(rows, summary.budgetMs), gpu),
+                ) + counterLines + listOf(
                     "blur " + (if (tv.jetflix.app.data.AppSettings.liveBlur.value) "on" else "off"),
                 )
                 _state.value = FrameTest.Result(listOf("Frame timing, last $SECONDS seconds") + summary.lines() + stageLines)
@@ -156,7 +159,7 @@ object FrameStats {
     fun dismiss() { if (_state.value is FrameTest.Result) _state.value = FrameTest.Idle }
 
     /** Called when the Activity goes away: stop listening and drop any recording. */
-    fun cancel() { main.removeCallbacksAndMessages(null); stopListening(); _state.value = FrameTest.Idle }
+    fun cancel() { PerfCounters.end(); main.removeCallbacksAndMessages(null); stopListening(); _state.value = FrameTest.Idle }
 }
 
 /** Tiny countdown while recording; the result card shows only after the window ends, so nothing covers the screen being measured. */

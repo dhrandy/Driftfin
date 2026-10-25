@@ -12,6 +12,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.tv.material3.Text
 import tv.jetflix.app.ui.theme.JetflixType
 import androidx.compose.foundation.layout.fillMaxSize
@@ -52,16 +53,16 @@ fun ScreensaverOverlay(urls: List<ScreensaverSlide>) {
                 ArtImage(url = slide.url, contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
                 if (!slide.title.isNullOrBlank() || !slide.overview.isNullOrBlank()) {
                     Box(
-                        Modifier.align(Alignment.BottomStart).fillMaxWidth().height(300.dp).background(
+                        Modifier.align(Alignment.BottomStart).fillMaxWidth().height(220.dp).background(
                             Brush.verticalGradient(0f to Color.Transparent, 1f to Color.Black.copy(alpha = 0.88f)),
                         ),
                     )
-                    Column(Modifier.align(Alignment.BottomStart).padding(start = 64.dp, end = 64.dp, bottom = 56.dp).fillMaxWidth(0.62f)) {
+                    Column(Modifier.align(Alignment.BottomStart).padding(start = 56.dp, end = 56.dp, bottom = 40.dp).fillMaxWidth(0.5f)) {
                         if (!slide.title.isNullOrBlank()) {
-                            Text(slide.title, style = JetflixType.heroTitle, color = Color.White, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                            Text(slide.title, style = JetflixType.heroTitle.copy(fontSize = 28.sp, lineHeight = 32.sp), color = Color.White, maxLines = 2, overflow = TextOverflow.Ellipsis)
                         }
                         if (!slide.overview.isNullOrBlank()) {
-                            Text(slide.overview, style = JetflixType.body, color = Color(0xFFE5E5E5), maxLines = 3, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 8.dp))
+                            Text(slide.overview, style = JetflixType.body.copy(fontSize = 13.sp, lineHeight = 18.sp), color = Color(0xFFE5E5E5), maxLines = 3, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 8.dp))
                         }
                     }
                 }

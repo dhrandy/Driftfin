@@ -1,5 +1,7 @@
 package tv.jetflix.app.ui.home
 
+import tv.jetflix.app.ui.components.CountRecompose
+import kotlinx.coroutines.flow.collectLatest
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -260,6 +262,7 @@ fun HomeContent(
     previewScrollIndex: Int = 0,
     heroIntervalMs: Long = HeroRotation.INTERVAL_MS,
 ) {
+    CountRecompose("home")
     val focusMemory = rememberFocusMemory(restoredFocusKey)
     val heroPlayFocus = remember { FocusRequester() }
     val navFocus = remember { FocusRequester() }
@@ -331,13 +334,22 @@ fun HomeContent(
     }
     // The details strip takes its own space under the rows so it never covers the focused row.
     // Only changes (and so only recomposes Home) when the nav bar is solid and the art really differs.
-    val navArtUrl by androidx.compose.runtime.remember(repo, heroes, state.hero) {
+    val rawNavArtUrl = androidx.compose.runtime.remember(repo, heroes, state.hero) {
         androidx.compose.runtime.derivedStateOf {
             (if (navSolid) focusedItemState.value?.let { repo.backdropUrl(it, 960) } else null)
                 ?: (heroes.getOrNull(heroIndex) ?: state.hero)?.let { repo.backdropUrl(it, 960) }
         }
     }
-    val showStrip = false // Randy: no description under the rows; the synopsis lives in More Info
+    // The top bar's blurred art follows the focused card only after focus rests for 300 ms, so quick remote
+    // presses do not each start an image request, decode and crossfade. Read inside the effect, not in Home.
+    val settledNavArt = androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(rawNavArtUrl.value) }
+    androidx.compose.runtime.LaunchedEffect(rawNavArtUrl) {
+        androidx.compose.runtime.snapshotFlow { rawNavArtUrl.value }.collectLatest { url ->
+            if (url != settledNavArt.value) { delay(300); settledNavArt.value = url }
+        }
+    }
+    val navArtUrl = settledNavArt.value
+    val showStrip = false // no description under the rows; the synopsis lives in More Info
     val stripSpace by androidx.compose.animation.core.animateDpAsState(
         targetValue = if (showStrip) 112.dp else 0.dp,
         animationSpec = androidx.compose.animation.core.tween(220),

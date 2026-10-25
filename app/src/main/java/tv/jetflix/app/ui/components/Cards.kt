@@ -104,6 +104,7 @@ fun PosterCard(
     modifier: Modifier = Modifier,
     width: Dp = 140.dp * tv.jetflix.app.data.AppSettings.posterSize.collectAsState().value.scale,
 ) {
+    CountRecompose("cards")
     Card(
         onClick = onClick,
         modifier = modifier.width(width),
@@ -150,6 +151,7 @@ fun WideCard(
     width: Dp = 260.dp * tv.jetflix.app.data.AppSettings.posterSize.collectAsState().value.scale,
     showTitle: Boolean = true,
 ) {
+    CountRecompose("cards")
     Card(
         onClick = onClick,
         modifier = modifier.width(width),

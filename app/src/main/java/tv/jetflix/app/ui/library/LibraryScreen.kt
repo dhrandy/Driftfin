@@ -388,7 +388,7 @@ fun LibraryContent(
     val isMine = tab == JetflixTab.MY_LIST && collectionTitle == null
     val showSort = (tab != JetflixTab.MY_LIST || collectionTitle != null || isMine) && (state.items.isNotEmpty() || state.sort != LibrarySort.Name || isMine || state.watch != WatchFilter.All || state.genre != null || state.year != null)
     val sectionFocus = remember { FocusRequester() }
-    // Randy: the banner belongs on Home only; Movies and Shows start straight at the sort and poster grid.
+    // the banner belongs on Home only; Movies and Shows start straight at the sort and poster grid.
     val banner: BaseItemDto? = null
     val bannerFocus = remember { FocusRequester() }
     LaunchedEffect(banner?.Id) {

@@ -67,6 +67,7 @@ fun TopNavBar(
     /** Backdrop of what is on screen; when the bar is solid it shows a blurred, darkened copy of it. */
     blurArtUrl: String? = null,
 ) {
+    CountRecompose("navBar")
     Box(
         modifier = modifier
             .onFocusChanged { onNavFocusChange(it.hasFocus) }

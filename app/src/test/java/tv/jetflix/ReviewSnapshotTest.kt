@@ -51,6 +51,16 @@ class ReviewSnapshotTest {
         }
     }
 
+    @Test fun screensaverCaptionLongText() {
+        val m = items.first { it.Name == "Sahara" }
+        val longOverview = "A retired sergeant, a runaway scientist and a crew of mercenaries cross a burning desert to recover a stolen archive before the border closes, and each of them has a reason to keep it hidden. ".repeat(3)
+        paparazzi.snapshot(name = "review_screensaver_long") {
+            CompositionLocalProvider(LocalTestArtwork provides { art(it) }) {
+                tv.jetflix.app.ui.components.ScreensaverOverlay(listOf(tv.jetflix.app.ui.components.ScreensaverSlide(repo.backdropUrl(m, 1920)!!, "The Extraordinarily Long Title of a Film: Part Two, The Reckoning", longOverview)))
+            }
+        }
+    }
+
     @Test fun libraryPicker() {
         paparazzi.snapshot(name = "review_library_picker") {
             CompositionLocalProvider(LocalTestArtwork provides { art(it) }) {
