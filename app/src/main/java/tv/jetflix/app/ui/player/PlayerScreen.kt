@@ -394,46 +394,10 @@ fun PlayerScreen(
                     )
                 }
 
-                // Bottom: seek bar
-                Column(
-                    Modifier
-                        .align(Alignment.BottomCenter)
-                        .fillMaxWidth()
-                        .background(
-                            Brush.verticalGradient(
-                                listOf(Color.Transparent, Color.Black.copy(alpha = 0.8f)),
-                            ),
-                        )
-                        .padding(horizontal = 48.dp, vertical = 24.dp),
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            positionTicks.ticksToHms(),
-                            style = JetflixType.caption,
-                            color = Color.White,
-                        )
-                        Spacer(Modifier.width(14.dp))
-                        SeekBar(
-                            positionTicks = positionTicks,
-                            bufferedTicks = bufferedTicks,
-                            durationTicks = durationTicks,
-                            modifier = Modifier.weight(1f),
-                        )
-                        Spacer(Modifier.width(14.dp))
-                        val remaining = (durationTicks - positionTicks).coerceAtLeast(0)
-                        Text(
-                            "-${remaining.ticksToHms()}",
-                            style = JetflixType.caption,
-                            color = JetflixColors.TextSecondary,
-                        )
-                    }
-                    Text(
-                        "OK pause/play   ◀ ▶ skip 10s   ▲ ▼ audio & subtitles",
-                        style = JetflixType.caption,
-                        color = JetflixColors.TextSecondary,
-                        modifier = Modifier.padding(top = 8.dp),
-                    )
-                }
+                PlayerBottomBar(
+                    positionTicks, bufferedTicks, durationTicks,
+                    Modifier.align(Alignment.BottomCenter),
+                )
             }
         }
     }
@@ -542,3 +506,34 @@ private fun mediaItemFor(url: String, subs: List<tv.jetflix.app.data.SubtitleTra
             },
         )
         .build()
+
+/** Seek bar, times, and the remote-control hint along the bottom of the player. */
+@Composable
+fun PlayerBottomBar(positionTicks: Long, bufferedTicks: Long, durationTicks: Long, modifier: Modifier = Modifier) {
+    Column(
+        modifier
+            .fillMaxWidth()
+            .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.8f))))
+            .padding(horizontal = 48.dp, vertical = 24.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(positionTicks.ticksToHms(), style = JetflixType.caption, color = Color.White)
+            Spacer(Modifier.width(14.dp))
+            SeekBar(
+                positionTicks = positionTicks,
+                bufferedTicks = bufferedTicks,
+                durationTicks = durationTicks,
+                modifier = Modifier.weight(1f),
+            )
+            Spacer(Modifier.width(14.dp))
+            val remaining = (durationTicks - positionTicks).coerceAtLeast(0)
+            Text("-${remaining.ticksToHms()}", style = JetflixType.caption, color = JetflixColors.TextSecondary)
+        }
+        Text(
+            "OK pause/play   \u25C0 \u25B6 skip 10s   \u25B2 \u25BC audio & subtitles",
+            style = JetflixType.caption,
+            color = JetflixColors.TextSecondary,
+            modifier = Modifier.padding(top = 8.dp),
+        )
+    }
+}

@@ -37,4 +37,17 @@ class PlayerPanelSnapshotTest {
             }
         }
     }
+
+    @Test fun controlsBar() {
+        paparazzi.snapshot(name = "player_controls_bar") {
+            tv.jetflix.app.ui.theme.JetflixTheme {
+                Box(Modifier.fillMaxSize().background(Color(0xFF223344))) {
+                    tv.jetflix.app.ui.player.PlayerBottomBar(
+                        positionTicks = 1_500_000_000L, bufferedTicks = 3_000_000_000L, durationTicks = 27_000_000_000L,
+                        modifier = Modifier.align(androidx.compose.ui.Alignment.BottomCenter),
+                    )
+                }
+            }
+        }
+    }
 }
