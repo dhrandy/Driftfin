@@ -118,6 +118,10 @@ fun PlayerScreen(
     }
 
     var playbackError by remember { mutableStateOf<String?>(null) }
+    // If a direct stream fails on this TV (decoder/format error), ask the server to transcode once and resume in place.
+    var transcodeRetry by remember { mutableStateOf(false) }
+    var retryResumeMs by remember { mutableStateOf(0L) }
+    var playingDirect by remember { mutableStateOf(false) }
     var trackToast by remember { mutableStateOf<String?>(null) }
     var panelOpen by remember { mutableStateOf(false) }
     var panelOptions by remember { mutableStateOf(emptyList<TrackCycler.Option>()) }
@@ -145,13 +149,13 @@ fun PlayerScreen(
         onPlayNext(next)
     }
 
-    LaunchedEffect(item.Id) {
-        val startTicks = item.UserData?.PlaybackPositionTicks ?: 0L
+    LaunchedEffect(item.Id, transcodeRetry) {
+        val startTicks = if (transcodeRetry) retryResumeMs * 10_000 else item.UserData?.PlaybackPositionTicks ?: 0L
         val choice = try {
             val resp = api.getPlaybackInfo(
                 item.Id,
                 session.userId,
-                tv.jetflix.app.data.PlaybackNegotiator.playbackInfoBody(session.userId, startTicks, tv.jetflix.app.data.CodecSupport.detect()),
+                tv.jetflix.app.data.PlaybackNegotiator.playbackInfoBody(session.userId, startTicks, tv.jetflix.app.data.CodecSupport.detect(), forceTranscode = transcodeRetry),
             )
             if (!resp.isSuccessful) {
                 tv.jetflix.app.data.PlaybackChoice.Unplayable("The server refused playback (HTTP ${resp.code()}).")
@@ -164,10 +168,12 @@ fun PlayerScreen(
         }
         when (choice) {
             is tv.jetflix.app.data.PlaybackChoice.Direct -> {
+                playingDirect = true
                 mediaSourceId = choice.mediaSourceId
                 player.setMediaItem(mediaItemFor(choice.url, choice.subtitles), startTicks.ticksToMs())
             }
             is tv.jetflix.app.data.PlaybackChoice.Hls -> {
+                playingDirect = false
                 mediaSourceId = choice.mediaSourceId
                 // Server-side transcode starts at StartTimeTicks already, so start at 0 here.
                 player.setMediaItem(mediaItemFor(choice.url, choice.subtitles), 0L)
@@ -233,7 +239,14 @@ fun PlayerScreen(
             }
 
             override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
-                playbackError = "Playback failed (${error.errorCodeName}). This file may use a format this TV can't play."
+                if (playingDirect && !transcodeRetry) {
+                    retryResumeMs = player.currentPosition.coerceAtLeast(0L)
+                    playingDirect = false
+                    player.stop()
+                    transcodeRetry = true
+                } else {
+                    playbackError = "Playback failed (${error.errorCodeName}). This file may use a format this TV can't play."
+                }
             }
         }
         player.addListener(listener)

@@ -72,3 +72,49 @@ class ExternalSubtitleTest {
         org.junit.Assert.assertFalse(s.contains("pgs"))
     }
 }
+
+class BroadPlaybackProfileTest {
+    private val uhd = tv.jetflix.app.data.CodecSupport(
+        video = listOf("h264", "hevc"), audio = listOf("aac", "ac3", "eac3"),
+        hevcMain10 = true, hevcMainLevel = 153, hevcMain10Level = 153, avcLevel = 52,
+        maxResolution = mapOf("hevc" to (4096 to 2304), "h264" to (1920 to 1088)), hdr10 = true,
+    )
+
+    @org.junit.Test fun offersOfficialClientBitrateNotTheOldCap() {
+        val b = tv.jetflix.app.data.PlaybackNegotiator.playbackInfoBody("u", 0, uhd).toString()
+        org.junit.Assert.assertTrue(b.contains("\"MaxStreamingBitrate\":100000000"))
+        org.junit.Assert.assertFalse(b.contains("40000000"))
+    }
+
+    @org.junit.Test fun sendsDecoderLimitsSoOversizedFilesAreTranscoded() {
+        val s = tv.jetflix.app.data.PlaybackNegotiator.deviceProfile(uhd).toString()
+        org.junit.Assert.assertTrue(s.contains("\"Property\":\"VideoLevel\"") && s.contains("\"Value\":\"153\""))
+        org.junit.Assert.assertTrue(s.contains("\"Property\":\"Width\"") && s.contains("\"Value\":\"4096\""))
+        org.junit.Assert.assertTrue(s.contains("main 10"))
+    }
+
+    @org.junit.Test fun hdrFormatsTheTvLacksAreRoutedToTranscode() {
+        val bad = tv.jetflix.app.data.PlaybackNegotiator.unsupportedHevcRanges(uhd)
+        org.junit.Assert.assertTrue("DOVI" in bad && "HDR10Plus" in bad)
+        org.junit.Assert.assertFalse("HDR10" in bad)
+        val sdrOnly = tv.jetflix.app.data.PlaybackNegotiator.unsupportedHevcRanges(uhd.copy(hdr10 = false))
+        org.junit.Assert.assertTrue("HDR10" in sdrOnly)
+    }
+
+    @org.junit.Test fun keepsHevcWhenOnlyAudioNeedsConverting() {
+        val s = tv.jetflix.app.data.PlaybackNegotiator.deviceProfile(uhd).toString()
+        org.junit.Assert.assertTrue(s.contains("\"VideoCodec\":\"hevc,h264\""))
+    }
+
+    @org.junit.Test fun retryAfterDeviceFailureForcesAReEncode() {
+        val b = tv.jetflix.app.data.PlaybackNegotiator.playbackInfoBody("u", 5, uhd, forceTranscode = true).toString()
+        org.junit.Assert.assertTrue(b.contains("\"EnableDirectPlay\":false") && b.contains("\"AllowVideoStreamCopy\":false"))
+        org.junit.Assert.assertTrue(b.contains("\"VideoCodec\":\"h264\"") && !b.contains("hevc,h264"))
+    }
+
+    @org.junit.Test fun unknownDecoderLimitsSendNoLimits() {
+        val s = tv.jetflix.app.data.PlaybackNegotiator.deviceProfile(tv.jetflix.app.data.CodecSupport.Conservative).toString()
+        org.junit.Assert.assertFalse(s.contains("\"Property\":\"Width\"") && s.contains("LessThanEqual\",\"Property\":\"VideoLevel"))
+        org.junit.Assert.assertFalse(s.contains("hevc"))
+    }
+}

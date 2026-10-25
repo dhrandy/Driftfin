@@ -128,6 +128,30 @@ class HomeNavigationTest {
         assertFalse("second Back must fall through so the app exits", dispatcher.hasEnabledCallbacks())
     }
 
+    @Test fun headerTabsAreReachableInOrderAndSelectable() {
+        val picked = mutableListOf<String>()
+        setHome(picked)
+        press(Key.DirectionUp)
+        assertEquals("Home", focusedText())
+        val seen = mutableListOf(focusedText())
+        repeat(6) { press(Key.DirectionRight); seen += focusedText() }
+        // Wordmark is not focusable; tabs come in order and the last stop is the user name.
+        assertEquals(listOf("Home", "Shows", "Movies", "My List", "Search", "Settings", "demo"), seen.distinct())
+        press(Key.DirectionLeft); press(Key.DirectionLeft)
+        assertEquals("Search", focusedText())
+    }
+
+    @Test fun enterOnAHeaderTabSelectsThatTab() {
+        val picked = mutableListOf<String>()
+        setHome(picked)
+        press(Key.DirectionUp)
+        press(Key.DirectionRight); assertEquals("Shows", focusedText())
+        press(Key.Enter)
+        press(Key.DirectionRight); assertEquals("Movies", focusedText())
+        press(Key.DirectionCenter)
+        assertEquals(listOf("Shows", "Movies"), picked)
+    }
+
     @Test fun trace() {
         setHome()
         println("NAV start: ${focusedText()}")
