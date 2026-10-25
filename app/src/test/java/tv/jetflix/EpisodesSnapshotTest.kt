@@ -53,7 +53,7 @@ class EpisodesSnapshotTest {
             CompositionLocalProvider(LocalTestArtwork provides { art(it) }) {
                 tv.jetflix.app.ui.theme.JetflixTheme {
                     DetailsContent(
-                        DetailsUiState(loading = false, item = series, playTarget = eps[0], episodes = eps,
+                        DetailsUiState(loading = false, item = series, playTarget = eps[0].copy(ParentIndexNumber = 2, IndexNumber = 5, UserData = tv.jetflix.app.data.UserItemDataDto(PlaybackPositionTicks = 9_000_000_000L, PlayedPercentage = 40.0)), episodes = eps,
                             seasons = listOf(BaseItemDto(Id = "s1", Name = "Season 1", Type = "Season"), BaseItemDto(Id = "s2", Name = "Season 2", Type = "Season")),
                             selectedSeasonId = "s1", similar = items.take(8)),
                         repo(), {}, { _, _ -> }, {}, {}, {},

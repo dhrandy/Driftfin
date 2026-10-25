@@ -162,6 +162,9 @@ data class BaseItemDto(
     }
 }
 
+/** Same item, but playback starts at 0:00 instead of the saved position. */
+fun BaseItemDto.fromStart(): BaseItemDto = copy(UserData = UserData?.copy(PlaybackPositionTicks = 0))
+
 fun Long.ticksToHms(): String {
     var total = this / 10_000_000
     val h = total / 3600
@@ -182,5 +185,26 @@ object NextEpisode {
     fun pick(episodes: List<BaseItemDto>, currentId: String): BaseItemDto? {
         val i = episodes.indexOfFirst { it.Id == currentId }
         return if (i >= 0) episodes.getOrNull(i + 1) else null
+    }
+}
+
+/** Which episode a series' Play/Resume button should start. Server order = season, then episode. */
+object EpisodeTarget {
+    fun pick(episodes: List<BaseItemDto>): BaseItemDto? {
+        if (episodes.isEmpty()) return null
+        val inProgress = episodes.withIndex().filter { (_, e) ->
+            e.UserData?.Played != true && (e.UserData?.PlaybackPositionTicks ?: 0) > 0
+        }
+        if (inProgress.isNotEmpty()) {
+            return inProgress.maxWith(
+                compareBy<IndexedValue<BaseItemDto>>({ it.value.UserData?.LastPlayedDate ?: "" }, { it.index }),
+            ).value
+        }
+        val lastWatched = episodes.withIndex().filter { it.value.UserData?.Played == true }
+            .maxWithOrNull(compareBy<IndexedValue<BaseItemDto>>({ it.value.UserData?.LastPlayedDate ?: "" }, { it.index }))
+        if (lastWatched != null) {
+            episodes.getOrNull(lastWatched.index + 1)?.let { return it }
+        }
+        return episodes.firstOrNull { it.UserData?.Played != true } ?: episodes.first()
     }
 }

@@ -36,7 +36,7 @@ private sealed class Screen {
     data class Library(val tab: JetflixTab) : Screen()
     data object Search : Screen()
     data object Settings : Screen()
-    data class Details(val itemId: String) : Screen()
+    data class Details(val itemId: String, val focusEpisodeId: String? = null) : Screen()
     data class Player(val item: BaseItemDto) : Screen()
 }
 
@@ -64,6 +64,10 @@ fun JetflixRoot() {
     fun pop() { if (backStack.size > 1) backStack = backStack.dropLast(1) }
 
     BackHandler(enabled = session != null && backStack.size > 1) { pop() }
+    // From Shows/Movies/My List/Search/Settings, Back goes to Home first; Back on Home exits.
+    BackHandler(enabled = session != null && backStack.size == 1 && current != Screen.Home) {
+        backStack = listOf(Screen.Home)
+    }
 
     if (session == null) {
         val vm: LoginViewModel = viewModel(
@@ -102,7 +106,7 @@ fun JetflixRoot() {
                 viewModel = vm,
                 userName = userName,
                 onTabSelected = onTabSelected,
-                onItemClick = { push(Screen.Details(it.seriesOrSelfId())) },
+                onItemClick = { push(Screen.Details(it.seriesOrSelfId(), if (it.isEpisode) it.Id else null)) },
                 onPlay = { push(Screen.Player(it)) },
                 onSignOut = onSignOut,
             )
@@ -138,8 +142,8 @@ fun JetflixRoot() {
             )
         }
         is Screen.Details -> {
-            val vm: DetailsViewModel = viewModel(key = "details-${session?.userId}-${screen.itemId}", factory = viewModelFactory { DetailsViewModel(app.repo) })
-            LaunchedEffect(screen.itemId) { vm.load(screen.itemId) }
+            val vm: DetailsViewModel = viewModel(key = "details-${session?.userId}-${screen.itemId}-${screen.focusEpisodeId}", factory = viewModelFactory { DetailsViewModel(app.repo) })
+            LaunchedEffect(screen.itemId, screen.focusEpisodeId) { vm.load(screen.itemId, screen.focusEpisodeId) }
             DetailsScreen(
                 viewModel = vm,
                 onPlay = { push(Screen.Player(it)) },

@@ -15,7 +15,15 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.focus.onFocusChanged
+import kotlinx.coroutines.delay
+import tv.jetflix.app.data.fromStart
 import androidx.compose.runtime.remember
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -182,14 +190,34 @@ fun HomeContent(
 ) {
     val focusMemory = rememberFocusMemory()
     val heroPlayFocus = remember { FocusRequester() }
+    val navFocus = remember { FocusRequester() }
+    val firstRowFocus = remember { FocusRequester() }
+    val listState = rememberLazyListState()
+    val scope = rememberCoroutineScope()
+    var heroHasFocus by androidx.compose.runtime.mutableStateOf(false)
+    suspend fun focusHero() {
+        // The first request can land before the button is attached or the window has focus; retry until it sticks.
+        repeat(20) {
+            try { heroPlayFocus.requestFocus() } catch (_: Exception) { }
+            delay(60)
+            if (heroHasFocus) return
+        }
+    }
     // First visit: land on the hero Play button. Returning: the remembered card wins.
     LaunchedEffect(state.hero?.Id) {
-        if (state.hero != null && !focusMemory.hasKey) {
-            try { heroPlayFocus.requestFocus() } catch (_: Exception) { }
+        if (state.hero != null && !focusMemory.hasKey) focusHero()
+    }
+    // Back from deep in the rows goes back to the top of Home first; the next Back exits.
+    BackHandler(enabled = focusMemory.key != null) {
+        focusMemory.key = null
+        scope.launch {
+            listState.scrollToItem(0)
+            focusHero()
         }
     }
     Box(Modifier.fillMaxSize().background(JetflixColors.Background)) {
         LazyColumn(
+            state = listState,
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(bottom = 48.dp),
             verticalArrangement = Arrangement.spacedBy(28.dp),
@@ -202,6 +230,10 @@ fun HomeContent(
                     onPlay = onPlay,
                     onMoreInfo = onItemClick,
                     playFocus = heroPlayFocus,
+                    upFocus = navFocus,
+                    downFocus = if (state.sections.isNotEmpty()) firstRowFocus else null,
+                    onFocused = { focusMemory.key = null },
+                    onFocusChange = { heroHasFocus = it },
                 )
             }
             state.sections.forEach { section ->
@@ -215,6 +247,8 @@ fun HomeContent(
                         },
                         onItemClick = onItemClick,
                         focusMemory = focusMemory,
+                        firstItemFocus = if (section === state.sections.first()) firstRowFocus else null,
+                        upFocus = if (section === state.sections.first() && state.hero != null) heroPlayFocus else null,
                     )
                 }
             }
@@ -235,6 +269,8 @@ fun HomeContent(
             onTabSelected = onTabSelected,
             onSignOut = onSignOut,
             modifier = Modifier.align(Alignment.TopCenter),
+            downFocus = if (state.hero != null) heroPlayFocus else if (state.sections.isNotEmpty()) firstRowFocus else null,
+            selectedFocus = navFocus,
         )
     }
 }
@@ -247,6 +283,10 @@ fun HeroBanner(
     onPlay: (BaseItemDto) -> Unit,
     onMoreInfo: (BaseItemDto) -> Unit,
     playFocus: FocusRequester? = null,
+    upFocus: FocusRequester? = null,
+    downFocus: FocusRequester? = null,
+    onFocused: () -> Unit = {},
+    onFocusChange: (Boolean) -> Unit = {},
 ) {
     Box(
         Modifier
@@ -308,7 +348,15 @@ fun HeroBanner(
                     )
                 }
                 Spacer(Modifier.height(16.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier
+                        .onFocusChanged { onFocusChange(it.hasFocus); if (it.hasFocus) onFocused() }
+                        .focusProperties {
+                            if (upFocus != null) up = upFocus
+                            if (downFocus != null) down = downFocus
+                        },
+                ) {
                     Button(
                         onClick = { onPlay(hero) },
                         modifier = if (playFocus != null) Modifier.focusRequester(playFocus) else Modifier,
@@ -322,6 +370,19 @@ fun HeroBanner(
                         Icon(Icons.Filled.PlayArrow, contentDescription = null)
                         Spacer(Modifier.width(6.dp))
                         Text(if (hero.isResumeable) "Resume" else "Play")
+                    }
+                    if (hero.isResumeable) {
+                        Button(
+                            onClick = { onPlay(hero.fromStart()) },
+                            colors = ButtonDefaults.colors(
+                                containerColor = JetflixColors.SurfaceLight.copy(alpha = 0.7f),
+                                contentColor = Color.White,
+                                focusedContainerColor = JetflixColors.SurfaceLight,
+                                focusedContentColor = Color.White,
+                            ),
+                        ) {
+                            Text("Play from start")
+                        }
                     }
                     Button(
                         onClick = { onMoreInfo(hero) },

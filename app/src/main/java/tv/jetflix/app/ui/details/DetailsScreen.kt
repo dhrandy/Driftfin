@@ -49,6 +49,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import tv.jetflix.app.data.BaseItemDto
+import tv.jetflix.app.data.EpisodeTarget
+import tv.jetflix.app.data.fromStart
 import tv.jetflix.app.data.BaseItemPerson
 import tv.jetflix.app.data.JellyfinRepository
 import tv.jetflix.app.data.SessionManager
@@ -76,7 +78,14 @@ class DetailsViewModel(val repo: JellyfinRepository) : ViewModel() {
     private val _state = MutableStateFlow(DetailsUiState())
     val state = _state.asStateFlow()
 
-    fun load(itemId: String) {
+    private var allEpisodes: List<BaseItemDto> = emptyList()
+    private var seriesTarget: BaseItemDto? = null
+    private var firstLoad = true
+
+    fun load(itemId: String, focusEpisodeId: String? = null) {
+        // The tapped episode only decides the first open; coming back from the player re-picks from fresh progress.
+        val focusId = if (firstLoad) focusEpisodeId else null
+        firstLoad = false
         val session = SessionManager.session.value ?: return
         val api = repo.apiFor(session.serverUrl)
         viewModelScope.launch {
@@ -101,14 +110,13 @@ class DetailsViewModel(val repo: JellyfinRepository) : ViewModel() {
                         includeItemTypes = "Season",
                         sortBy = "SortName",
                     ).body()?.Items ?: emptyList()
-                    selectedSeasonId = seasons.firstOrNull()?.Id
-                    if (selectedSeasonId != null) {
-                        episodes = api.getEpisodes(item.Id, session.userId, seasonId = selectedSeasonId)
-                            .body()?.Items ?: emptyList()
-                    }
-                    playTarget = episodes.firstOrNull { it.isResumeable || it.UserData?.Played != true }
-                        ?: episodes.firstOrNull()
-                        ?: item
+                    allEpisodes = api.getEpisodes(item.Id, session.userId, limit = 2000)
+                        .body()?.Items ?: emptyList()
+                    val target = allEpisodes.firstOrNull { it.Id == focusId } ?: EpisodeTarget.pick(allEpisodes)
+                    seriesTarget = target
+                    selectedSeasonId = target?.SeasonId ?: seasons.firstOrNull()?.Id
+                    episodes = allEpisodes.filter { it.SeasonId == selectedSeasonId }.ifEmpty { allEpisodes }
+                    playTarget = target ?: item
                 }
                 _state.value = DetailsUiState(
                     loading = false,
@@ -125,20 +133,12 @@ class DetailsViewModel(val repo: JellyfinRepository) : ViewModel() {
         }
     }
 
-    fun selectSeason(seriesId: String, seasonId: String) {
-        val session = SessionManager.session.value ?: return
-        val api = repo.apiFor(session.serverUrl)
-        viewModelScope.launch {
-            val episodes = api.getEpisodes(seriesId, session.userId, seasonId = seasonId)
-                .body()?.Items ?: emptyList()
-            _state.value = _state.value.copy(
-                episodes = episodes,
-                selectedSeasonId = seasonId,
-                playTarget = episodes.firstOrNull { it.isResumeable || it.UserData?.Played != true }
-                    ?: episodes.firstOrNull()
-                    ?: _state.value.playTarget,
-            )
-        }
+    fun selectSeason(@Suppress("UNUSED_PARAMETER") seriesId: String, seasonId: String) {
+        // Season switching only changes the list; Play/Resume keeps pointing at where you are in the series.
+        _state.value = _state.value.copy(
+            episodes = allEpisodes.filter { it.SeasonId == seasonId },
+            selectedSeasonId = seasonId,
+        )
     }
 
     fun toggleFavorite() {
@@ -253,7 +253,7 @@ fun DetailsContent(
                         Modifier
                             .align(Alignment.BottomStart)
                             .padding(start = 48.dp, bottom = 12.dp)
-                            .fillMaxWidth(0.6f),
+                            .fillMaxWidth(0.8f),
                     ) {
                         Text(
                             text = item.displayTitle(),
@@ -279,7 +279,20 @@ fun DetailsContent(
                             ) {
                                 Icon(Icons.Filled.PlayArrow, contentDescription = null)
                                 Spacer(Modifier.width(6.dp))
-                                Text(if (target.isResumeable) "Resume" else "Play")
+                                Text(playLabel(target))
+                            }
+                            if (target.isResumeable) {
+                                Button(
+                                    onClick = { onPlay(target.fromStart()) },
+                                    colors = ButtonDefaults.colors(
+                                        containerColor = JetflixColors.SurfaceLight.copy(alpha = 0.7f),
+                                        contentColor = Color.White,
+                                        focusedContainerColor = JetflixColors.SurfaceLight,
+                                        focusedContentColor = Color.White,
+                                    ),
+                                ) {
+                                    Text("Play from start")
+                                }
                             }
                             Button(
                                 onClick = { onToggleWatched() },
@@ -552,4 +565,11 @@ private fun CastChip(person: BaseItemPerson, imageUrl: String?) {
             Text(it, style = JetflixType.caption, color = JetflixColors.TextMuted, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
+}
+
+/** "Resume S2:E5" / "Play S2:E5" for episodes, plain "Resume" / "Play" otherwise. */
+fun playLabel(target: BaseItemDto): String {
+    val verb = if (target.isResumeable) "Resume" else "Play"
+    val ep = target.episodeLabel()
+    return if (ep != null) "$verb $ep" else verb
 }

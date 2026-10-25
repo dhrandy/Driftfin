@@ -14,6 +14,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -47,9 +49,12 @@ fun TopNavBar(
     onTabSelected: (JetflixTab) -> Unit,
     onSignOut: () -> Unit,
     modifier: Modifier = Modifier,
+    downFocus: androidx.compose.ui.focus.FocusRequester? = null,
+    selectedFocus: androidx.compose.ui.focus.FocusRequester? = null,
 ) {
     Row(
         modifier = modifier
+            .then(if (downFocus != null) Modifier.focusProperties { down = downFocus } else Modifier)
             .fillMaxWidth()
             .background(
                 Brush.verticalGradient(
@@ -67,6 +72,7 @@ fun TopNavBar(
                 label = tab.label,
                 selected = tab == selected,
                 onClick = { onTabSelected(tab) },
+                modifier = if (tab == selected && selectedFocus != null) Modifier.focusRequester(selectedFocus) else Modifier,
             )
         }
         Spacer(Modifier.weight(1f))
@@ -77,11 +83,11 @@ fun TopNavBar(
 }
 
 @Composable
-private fun NavTab(label: String, selected: Boolean, onClick: () -> Unit) {
+private fun NavTab(label: String, selected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
     var focused by remember { mutableStateOf(false) }
     Surface(
         onClick = onClick,
-        modifier = Modifier.onFocusChanged { focused = it.isFocused },
+        modifier = modifier.onFocusChanged { focused = it.isFocused },
         colors = ClickableSurfaceDefaults.colors(
             containerColor = Color.Transparent,
             contentColor = when {
