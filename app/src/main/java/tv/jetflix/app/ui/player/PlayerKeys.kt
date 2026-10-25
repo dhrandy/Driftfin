@@ -1,0 +1,51 @@
+package tv.jetflix.app.ui.player
+
+import android.view.KeyEvent
+import androidx.compose.foundation.focusable
+import androidx.compose.foundation.layout.Box
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.media3.common.Player
+import kotlinx.coroutines.delay
+
+/**
+ * Full-screen box that really owns D-pad focus. A key handler only receives events when it sits
+ * above a focusable node that holds focus, so the box is focusable and requests focus itself
+ * (retrying until the window lets it).
+ */
+@Composable
+fun KeyCaptureBox(
+    onKey: (KeyEvent) -> Boolean,
+    modifier: Modifier = Modifier,
+    content: @Composable androidx.compose.foundation.layout.BoxScope.() -> Unit,
+) {
+    val requester = remember { FocusRequester() }
+    Box(
+        modifier
+            .onKeyEvent { onKey(it.nativeKeyEvent) }
+            .focusRequester(requester)
+            .focusable(),
+    ) { content() }
+    LaunchedEffect(Unit) {
+        repeat(20) {
+            try { requester.requestFocus(); return@LaunchedEffect } catch (_: Exception) { delay(50) }
+        }
+    }
+}
+
+object PlayerKeys {
+    /** Pause when the player is meant to be playing (even if still buffering); otherwise play, restarting if ended. */
+    fun togglePlayback(player: Player) {
+        if (player.playWhenReady && player.playbackState != Player.STATE_ENDED) {
+            player.pause()
+        } else {
+            if (player.playbackState == Player.STATE_ENDED) player.seekTo(0)
+            player.play()
+        }
+    }
+}

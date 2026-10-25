@@ -248,22 +248,20 @@ fun PlayerScreen(
         }
     }
 
-    val focusRequester = remember { FocusRequester() }
-
-    Box(
-        Modifier
+    KeyCaptureBox(
+        modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black)
-            .focusRequester(focusRequester)
-            .onKeyEvent { keyEvent ->
-                if (keyEvent.nativeKeyEvent.action != KeyEvent.ACTION_DOWN) return@onKeyEvent false
+            .background(Color.Black),
+        onKey = { nativeEvent ->
+            run {
+                if (nativeEvent.action != KeyEvent.ACTION_DOWN) return@run false
                 lastInteraction = System.currentTimeMillis()
                 upNext?.let { n ->
-                    if (keyEvent.nativeKeyEvent.keyCode in listOf(KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER)) onPlayNext(n)
-                    return@onKeyEvent keyEvent.nativeKeyEvent.keyCode != KeyEvent.KEYCODE_BACK
+                    if (nativeEvent.keyCode in listOf(KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER)) onPlayNext(n)
+                    return@run nativeEvent.keyCode != KeyEvent.KEYCODE_BACK
                 }
                 if (panelOpen) {
-                    when (keyEvent.nativeKeyEvent.keyCode) {
+                    when (nativeEvent.keyCode) {
                         KeyEvent.KEYCODE_DPAD_UP -> panelIndex = (panelIndex - 1).coerceAtLeast(0)
                         KeyEvent.KEYCODE_DPAD_DOWN -> panelIndex = (panelIndex + 1).coerceAtMost((panelOptions.size - 1).coerceAtLeast(0))
                         KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER -> {
@@ -272,19 +270,16 @@ fun PlayerScreen(
                         }
                         KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_BACK -> panelOpen = false
                     }
-                    return@onKeyEvent true
+                    return@run true
                 }
-                when (keyEvent.nativeKeyEvent.keyCode) {
+                when (nativeEvent.keyCode) {
                     KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER -> {
-                        if (!controlsVisible) {
-                            controlsVisible = true
-                        } else {
-                            if (player.isPlaying) player.pause() else player.play()
-                        }
+                        controlsVisible = true
+                        PlayerKeys.togglePlayback(player)
                         true
                     }
                     KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE -> {
-                        if (player.isPlaying) player.pause() else player.play(); true
+                        PlayerKeys.togglePlayback(player); true
                     }
                     KeyEvent.KEYCODE_MEDIA_PLAY -> { player.play(); true }
                     KeyEvent.KEYCODE_MEDIA_PAUSE -> { player.pause(); true }
@@ -311,7 +306,8 @@ fun PlayerScreen(
                         false
                     }
                 }
-            },
+            }
+        },
     ) {
         playbackError?.let { msg ->
             androidx.tv.material3.Text(
@@ -351,6 +347,8 @@ fun PlayerScreen(
             factory = { ctx ->
                 PlayerView(ctx).apply {
                     useController = false
+                    isFocusable = false
+                    isFocusableInTouchMode = false
                     this.player = player
                 }
             },
@@ -429,11 +427,16 @@ fun PlayerScreen(
                             color = JetflixColors.TextSecondary,
                         )
                     }
+                    Text(
+                        "OK pause/play   ◀ ▶ skip 10s   ▲ ▼ audio & subtitles",
+                        style = JetflixType.caption,
+                        color = JetflixColors.TextSecondary,
+                        modifier = Modifier.padding(top = 8.dp),
+                    )
                 }
             }
         }
     }
-    LaunchedEffect(Unit) { focusRequester.requestFocus() }
 }
 
 @Composable
