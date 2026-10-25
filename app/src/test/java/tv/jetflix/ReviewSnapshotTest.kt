@@ -33,7 +33,11 @@ class ReviewSnapshotTest {
     private fun art(url: String?): androidx.compose.ui.graphics.painter.BitmapPainter? {
         val m = Regex("/Items/([0-9a-f]+)/Images/(Primary|Backdrop)").find(url ?: return null) ?: return null
         val bytes = javaClass.classLoader!!.getResourceAsStream("art/${m.groupValues[1]}_${m.groupValues[2]}.jpg")?.readBytes() ?: return null
-        return androidx.compose.ui.graphics.painter.BitmapPainter(android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size).asImageBitmap())
+        var bmp = android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+        // Mimic the server's maxWidth resize, so small blur copies really are small, as they are on the device.
+        val w = Regex("maxWidth=(\\d+)").find(url)?.groupValues?.get(1)?.toInt()
+        if (w != null && w < bmp.width) bmp = android.graphics.Bitmap.createScaledBitmap(bmp, w, (bmp.height * w.toFloat() / bmp.width).toInt().coerceAtLeast(1), true)
+        return androidx.compose.ui.graphics.painter.BitmapPainter(bmp.asImageBitmap(), filterQuality = androidx.compose.ui.graphics.FilterQuality.Low)
     }
 
     private val repo get() = JellyfinRepository().apply { apiFor("http://demo.test") }

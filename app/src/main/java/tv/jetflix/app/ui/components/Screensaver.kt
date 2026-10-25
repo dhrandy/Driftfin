@@ -95,6 +95,7 @@ fun IdleScreensaverHost(
         val loaded = try { loadSlides() } catch (_: Exception) { emptyList() }
         if (ScreensaverRules.mayRun(blocked, loaded)) urls = loaded
     }
+    androidx.compose.runtime.SideEffect { ButtonSounds.screensaverOn = urls != null }
     Box(
         Modifier.fillMaxSize().onPreviewKeyEvent {
             val showing = urls != null

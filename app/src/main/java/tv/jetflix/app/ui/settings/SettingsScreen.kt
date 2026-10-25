@@ -48,6 +48,12 @@ fun SettingsScreen(
         onTabSelected, onSignOut,
         posterSize = AppSettings.posterSize.collectAsState().value,
         onCyclePosterSize = { AppSettings.setPosterSize(AppSettings.posterSize.value.next()) },
+        buttonSound = AppSettings.buttonSound.collectAsState().value,
+        onCycleButtonSound = {
+            val next = AppSettings.buttonSound.value.next()
+            AppSettings.setButtonSound(next)
+            tv.jetflix.app.ui.components.ButtonSounds.preview(next)
+        },
     )
 }
 
@@ -65,6 +71,8 @@ fun SettingsContent(
     onSignOut: () -> Unit,
     posterSize: tv.jetflix.app.data.PosterSize = tv.jetflix.app.data.PosterSize.Medium,
     onCyclePosterSize: () -> Unit = {},
+    buttonSound: tv.jetflix.app.ui.components.ButtonSound = tv.jetflix.app.ui.components.ButtonSound.Off,
+    onCycleButtonSound: () -> Unit = {},
 ) {
     val menuBack = tv.jetflix.app.ui.components.rememberMenuBack()
     val first = remember { FocusRequester() }
@@ -78,6 +86,7 @@ fun SettingsContent(
             SettingRow("Autoplay next episode", "Starts the next episode after a 5 second countdown.", autoplay, onToggleAutoplay, Modifier.focusRequester(first))
             SettingRow("Show My List on Home", "My List uses your Jellyfin favorites for this user.", showMyList, onToggleMyList)
             SettingRow("Poster size", "Small, Medium or Large cards on Home and in libraries. Press OK to change.", true, onCyclePosterSize, valueText = posterSize.label)
+            SettingRow("Button sound", "A quiet sound when you move and when you select. Press OK to try the next one.", true, onCycleButtonSound, valueText = buttonSound.label)
             SettingRow("Show Next Up on Home", "Jellyfin's next unwatched episode of series you follow.", showNextUp, onToggleNextUp)
             Spacer(Modifier.padding(top = 8.dp))
             Text(

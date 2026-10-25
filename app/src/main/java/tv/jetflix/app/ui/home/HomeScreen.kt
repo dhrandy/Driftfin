@@ -208,9 +208,18 @@ fun HomeScreen(
  * ([topInsetPx] covers the bar plus the row title above the cards).
  */
 @androidx.compose.foundation.ExperimentalFoundationApi
-class MenuAwareScrollSpec(private val topInsetPx: Float, private val bottomMarginPx: Float = 0f) : androidx.compose.foundation.gestures.BringIntoViewSpec {
+class MenuAwareScrollSpec(
+    private val topInsetPx: Float,
+    private val bottomMarginPx: Float = 0f,
+    /** Where the banner currently ends on screen, or null when it is not on screen. Focus inside the banner scrolls the list back to the top. */
+    private val bannerBottom: () -> Float? = { null },
+    private val scrolledBy: () -> Float = { 0f },
+) : androidx.compose.foundation.gestures.BringIntoViewSpec {
     override fun calculateScrollDistance(offset: Float, size: Float, containerSize: Float): Float {
         // The focus zoom and outline grow past the card bounds, so keep a margin below it inside the screen.
+        val heroEnd = bannerBottom()
+        // A button inside the banner: show the whole banner (title, synopsis, buttons), not just the button.
+        if (heroEnd != null && offset + size <= heroEnd + 1f) return -scrolledBy()
         val bottom = offset + size + bottomMarginPx
         return when {
             offset < topInsetPx -> offset - topInsetPx
@@ -275,8 +284,15 @@ fun HomeContent(
     var focusedItem by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<BaseItemDto?>(previewFocusedItem) }
     var heroHasFocus by androidx.compose.runtime.mutableStateOf(false)
     // Coming back up to the banner (or the menu) shows the whole banner again, title and synopsis included.
+    // The focus scroll for the Play button would otherwise stop with the banner's title above the screen, so the banner
+    // is corrected here: once the banner has focus, the list goes back to the very top.
     LaunchedEffect(heroHasFocus) {
-        if (heroHasFocus && (listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 0)) listState.animateScrollToItem(0)
+        if (heroHasFocus) {
+            repeat(3) {
+                delay(if (it == 0) 80L else 250L)
+                if (heroHasFocus && (listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 0)) listState.animateScrollToItem(0)
+            }
+        }
     }
     suspend fun focusHero() {
         // The first request can land before the button is attached or the window has focus; retry until it sticks.
@@ -322,7 +338,13 @@ fun HomeContent(
     // Focus scrolling keeps the focused card AND its row title below the menu bar (default scrolling stops at the screen edge).
     val topInsetPx = with(androidx.compose.ui.platform.LocalDensity.current) { 124.dp.toPx() }
     val bottomMarginPx = with(androidx.compose.ui.platform.LocalDensity.current) { 56.dp.toPx() }
-    val spec = remember(topInsetPx, bottomMarginPx) { MenuAwareScrollSpec(topInsetPx, bottomMarginPx) }
+    val spec = remember(topInsetPx, bottomMarginPx) {
+        MenuAwareScrollSpec(
+            topInsetPx, bottomMarginPx,
+            bannerBottom = { listState.layoutInfo.visibleItemsInfo.firstOrNull { it.key == "hero" }?.let { (it.offset + it.size).toFloat() } },
+            scrolledBy = { if (listState.firstVisibleItemIndex == 0) listState.firstVisibleItemScrollOffset.toFloat() else 0f },
+        )
+    }
     Box(Modifier.fillMaxSize().background(JetflixColors.Background)) {
         androidx.compose.runtime.CompositionLocalProvider(androidx.compose.foundation.gestures.LocalBringIntoViewSpec provides spec) {
         LazyColumn(
@@ -500,10 +522,20 @@ fun HeroBanner(
                     )
                 }
                 Spacer(Modifier.height(16.dp))
+                // The banner is "focused" while any of its buttons is. Each button reports for itself, because a
+                // Row with no focus target of its own did not report focus gained by its children.
+                val buttonFocus = remember { androidx.compose.runtime.mutableStateMapOf<String, Boolean>() }
+                val reportFocus: (String) -> (androidx.compose.ui.focus.FocusState) -> Unit = { name ->
+                    { st ->
+                        buttonFocus[name] = st.isFocused
+                        val any = buttonFocus.values.any { it }
+                        onFocusChange(any)
+                        if (st.isFocused) onFocused()
+                    }
+                }
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                     modifier = Modifier
-                        .onFocusChanged { onFocusChange(it.hasFocus); if (it.hasFocus) onFocused() }
                         .focusProperties {
                             if (upFocus != null) up = upFocus
                             if (downFocus != null) down = downFocus
@@ -511,7 +543,7 @@ fun HeroBanner(
                 ) {
                     Button(
                         onClick = { onPlay(hero) },
-                        modifier = if (playFocus != null) Modifier.focusRequester(playFocus) else Modifier,
+                        modifier = (if (playFocus != null) Modifier.focusRequester(playFocus) else Modifier).onFocusChanged(reportFocus("play")),
                         colors = ButtonDefaults.colors(
                             containerColor = Color.White,
                             contentColor = Color.Black,
@@ -526,6 +558,7 @@ fun HeroBanner(
                     if (hero.isResumeable) {
                         Button(
                             onClick = { onPlay(hero.fromStart()) },
+                            modifier = Modifier.onFocusChanged(reportFocus("start")),
                             colors = ButtonDefaults.colors(
                                 containerColor = JetflixColors.SurfaceLight.copy(alpha = 0.7f),
                                 contentColor = Color.White,
@@ -538,6 +571,7 @@ fun HeroBanner(
                     }
                     Button(
                         onClick = { onMoreInfo(hero) },
+                        modifier = Modifier.onFocusChanged(reportFocus("more")),
                         colors = ButtonDefaults.colors(
                             containerColor = JetflixColors.SurfaceLight.copy(alpha = 0.7f),
                             contentColor = Color.White,

@@ -206,14 +206,16 @@ fun rememberMenuBack(): MenuBack {
  */
 fun Modifier.fadeUnderMenuBar(active: Boolean, barHeight: androidx.compose.ui.unit.Dp = 76.dp, fade: androidx.compose.ui.unit.Dp = 40.dp): Modifier =
     if (!active) this else this
-        .graphicsLayer { compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen }
+        // Paints the page background over the strip under the bar, fading out below it. The list sits on that same
+        // background, so this looks like fading the content out, without the full-screen offscreen layer a mask needs.
         .drawWithContent {
             drawContent()
             val bar = barHeight.toPx(); val f = fade.toPx()
             drawRect(
                 Brush.verticalGradient(
-                    colorStops = arrayOf(0f to Color.Transparent, (bar / size.height).coerceIn(0f, 1f) to Color.Transparent, ((bar + f) / size.height).coerceIn(0f, 1f) to Color.Black),
+                    colorStops = arrayOf(0f to JetflixColors.Background, (bar / (bar + f)) to JetflixColors.Background, 1f to Color.Transparent),
+                    startY = 0f, endY = bar + f,
                 ),
-                blendMode = androidx.compose.ui.graphics.BlendMode.DstIn,
+                size = androidx.compose.ui.geometry.Size(size.width, minOf(size.height, bar + f)),
             )
         }

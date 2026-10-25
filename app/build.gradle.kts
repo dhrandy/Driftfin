@@ -93,6 +93,8 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
 
     implementation("io.coil-kt:coil-compose:2.7.0")
+    // Installs the baseline profile (src/main/baseline-prof.txt) so Compose screens are precompiled instead of interpreted on first use.
+    implementation("androidx.profileinstaller:profileinstaller:1.4.1")
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.robolectric:robolectric:4.14.1")

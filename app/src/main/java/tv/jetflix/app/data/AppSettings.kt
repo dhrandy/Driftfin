@@ -16,6 +16,13 @@ object AppSettings {
     val posterSize: StateFlow<PosterSize> = _posterSize
     fun setPosterSize(v: PosterSize) { _posterSize.value = v; prefs?.edit()?.putString("poster_size", v.name)?.apply() }
 
+    private val _buttonSound = MutableStateFlow(tv.jetflix.app.ui.components.ButtonSound.Off)
+    val buttonSound: StateFlow<tv.jetflix.app.ui.components.ButtonSound> = _buttonSound
+    fun setButtonSound(v: tv.jetflix.app.ui.components.ButtonSound) {
+        _buttonSound.value = v; tv.jetflix.app.ui.components.ButtonSounds.style = v
+        prefs?.edit()?.putString("button_sound", v.name)?.apply()
+    }
+
     private var prefs: android.content.SharedPreferences? = null
     private val _autoplayNext = MutableStateFlow(true)
     private val _showMyList = MutableStateFlow(true)
@@ -30,6 +37,8 @@ object AppSettings {
         _autoplayNext.value = p.getBoolean("autoplay_next", true)
         _showMyList.value = p.getBoolean("show_my_list", true)
         _showNextUp.value = p.getBoolean("show_next_up", true)
+        _buttonSound.value = tv.jetflix.app.ui.components.ButtonSound.values().firstOrNull { it.name == p.getString("button_sound", null) } ?: tv.jetflix.app.ui.components.ButtonSound.Off
+        tv.jetflix.app.ui.components.ButtonSounds.style = _buttonSound.value
         _posterSize.value = PosterSize.values().firstOrNull { it.name == p.getString("poster_size", null) } ?: PosterSize.Medium
     }
 

@@ -49,6 +49,19 @@ private sealed class Screen {
 }
 
 class MainActivity : ComponentActivity() {
+    override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean {
+        if (event.action == android.view.KeyEvent.ACTION_DOWN) {
+            when (event.keyCode) {
+                android.view.KeyEvent.KEYCODE_DPAD_UP, android.view.KeyEvent.KEYCODE_DPAD_DOWN,
+                android.view.KeyEvent.KEYCODE_DPAD_LEFT, android.view.KeyEvent.KEYCODE_DPAD_RIGHT ->
+                    tv.jetflix.app.ui.components.ButtonSounds.onKey(select = false)
+                android.view.KeyEvent.KEYCODE_DPAD_CENTER, android.view.KeyEvent.KEYCODE_ENTER, android.view.KeyEvent.KEYCODE_NUMPAD_ENTER ->
+                    if (event.repeatCount == 0) tv.jetflix.app.ui.components.ButtonSounds.onKey(select = true)
+            }
+        }
+        return super.dispatchKeyEvent(event)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
@@ -67,6 +80,7 @@ fun JetflixRoot() {
 
     var backStack by remember { mutableStateOf(listOf<Screen>(Screen.Home)) }
     val current = backStack.last()
+    androidx.compose.runtime.SideEffect { tv.jetflix.app.ui.components.ButtonSounds.onPlayer = current is Screen.Player }
 
     fun push(screen: Screen) { backStack = backStack + screen }
     fun pop() { if (backStack.size > 1) backStack = backStack.dropLast(1) }

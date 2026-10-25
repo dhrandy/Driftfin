@@ -117,23 +117,31 @@ class HomeScrollFlowTest {
 
     @Test fun homeHeroScrollsBackIntoViewOnUp() {
         val sections = (0 until 6).map { i -> HomeSection("Row $i", items.drop(i).take(8), wide = i < 2) }
+        val hero = items.first().copy(UserData = null)
         rule.setContent {
             JetflixTheme {
-                HomeContent(HomeUiState(loading = false, hero = items.first().copy(UserData = null), heroes = emptyList(), sections = sections),
+                HomeContent(HomeUiState(loading = false, hero = hero, heroes = emptyList(), sections = sections),
                     JellyfinRepository().apply { apiFor("http://demo.test") }, "demo", {}, {}, {}, {})
             }
         }
         rule.waitForIdle()
-        fun key(k: Key) { rule.onRoot().performKeyInput { pressKey(k) }; rule.waitForIdle(); rule.mainClock.advanceTimeBy(900) }
-        fun playTop() = rule.onAllNodes(androidx.compose.ui.test.hasText("Play"), useUnmergedTree = true).fetchSemanticsNodes().firstOrNull()?.boundsInRoot?.top
+        fun key(k: Key) { rule.onRoot().performKeyInput { pressKey(k) }; rule.waitForIdle(); rule.mainClock.advanceTimeBy(1200); rule.waitForIdle(); println("FOCUSED after $k: " + rule.onAllNodes(isFocused(), useUnmergedTree = true).fetchSemanticsNodes().map { n -> n.config.toString().take(80) + "@" + n.boundsInRoot.top }) }
+        // The Play button sits a fixed distance below the banner title, so its position says where the whole banner is.
+        fun play() = rule.onAllNodes(androidx.compose.ui.test.hasText("Play", substring = false), useUnmergedTree = true).fetchSemanticsNodes().firstOrNull()?.boundsInRoot?.top
+        val rest = play() ?: -1f
         key(Key.DirectionDown) // first focus
-        val start = playTop()
-        repeat(4) { key(Key.DirectionDown) }
-        val scrolled = playTop()
-        repeat(4) { key(Key.DirectionUp) }
-        val back = playTop()
-        println("HERO_PLAY_TOP start=$start scrolled=$scrolled back=$back")
-        assertTrue("hero scrolled away going down (start=$start scrolled=$scrolled)", scrolled == null || start == null || scrolled < start - 50f)
-        assertTrue("hero Play back where it started after going up (start=$start back=$back)", back != null && back >= 0f && back < 700f)
+        val focused = play()
+        key(Key.DirectionDown); key(Key.DirectionUp)
+        val afterOne = play()
+        repeat(5) { key(Key.DirectionDown) }
+        val scrolled = play()
+        repeat(5) { key(Key.DirectionUp) }
+        val back = play()
+        println("HERO_PLAY_TOP rest=$rest focused=$focused afterOne=$afterOne scrolled=$scrolled back=$back")
+        assertTrue("banner at rest has room above Play for its title ($rest)", rest > 150f)
+        assertTrue("banner back at rest after focusing Play (rest=$rest focused=$focused)", focused != null && kotlin.math.abs(focused - rest) < 4f)
+        assertTrue("banner back at rest after one row down and up (rest=$rest afterOne=$afterOne)", afterOne != null && kotlin.math.abs(afterOne - rest) < 4f)
+        assertTrue("banner scrolled away going down (scrolled=$scrolled)", scrolled == null || scrolled < rest - 50f)
+        assertTrue("banner back at rest after rows down and up (rest=$rest back=$back)", back != null && kotlin.math.abs(back - rest) < 4f)
     }
 }
