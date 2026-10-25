@@ -105,19 +105,19 @@ class HomeViewModel(val repo: JellyfinRepository) : ViewModel() {
                 val viewsResp = api.getUserViews(session.userId)
                 val views = viewsResp.body()?.Items ?: emptyList()
                 val librarySections = views
-                    .filter { it.CollectionType == "movies" || it.CollectionType == "tvshows" }
+                    .filter { tv.jetflix.app.ui.library.isVideoLibrary(it) }
                     .map { view ->
                         val items = api.getItems(
                             userId = session.userId,
                             parentId = view.Id,
-                            includeItemTypes = if (view.CollectionType == "movies") "Movie" else "Series",
+                            includeItemTypes = when (view.CollectionType) { "movies" -> "Movie"; "tvshows" -> "Series"; else -> "Movie,Series" },
                             recursive = true,
                             sortBy = "DateCreated",
                             sortOrder = "Descending",
                             limit = 16,
                         ).body()?.Items ?: emptyList()
                         HomeSection(view.Name ?: "Library", items, wide = false)
-                    }
+                    }.filter { it.items.isNotEmpty() }
 
                 val myList = if (tv.jetflix.app.data.AppSettings.showMyList.value) {
                     api.getItems(
@@ -208,9 +208,10 @@ fun HomeScreen(
  * ([topInsetPx] covers the bar plus the row title above the cards).
  */
 @androidx.compose.foundation.ExperimentalFoundationApi
-class MenuAwareScrollSpec(private val topInsetPx: Float) : androidx.compose.foundation.gestures.BringIntoViewSpec {
+class MenuAwareScrollSpec(private val topInsetPx: Float, private val bottomMarginPx: Float = 0f) : androidx.compose.foundation.gestures.BringIntoViewSpec {
     override fun calculateScrollDistance(offset: Float, size: Float, containerSize: Float): Float {
-        val bottom = offset + size
+        // The focus zoom and outline grow past the card bounds, so keep a margin below it inside the screen.
+        val bottom = offset + size + bottomMarginPx
         return when {
             offset < topInsetPx -> offset - topInsetPx
             bottom > containerSize -> minOf(bottom - containerSize, offset - topInsetPx)
@@ -273,6 +274,10 @@ fun HomeContent(
     }
     var focusedItem by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<BaseItemDto?>(previewFocusedItem) }
     var heroHasFocus by androidx.compose.runtime.mutableStateOf(false)
+    // Coming back up to the banner (or the menu) shows the whole banner again, title and synopsis included.
+    LaunchedEffect(heroHasFocus) {
+        if (heroHasFocus && (listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 0)) listState.animateScrollToItem(0)
+    }
     suspend fun focusHero() {
         // The first request can land before the button is attached or the window has focus; retry until it sticks.
         repeat(20) {
@@ -316,7 +321,8 @@ fun HomeContent(
     )
     // Focus scrolling keeps the focused card AND its row title below the menu bar (default scrolling stops at the screen edge).
     val topInsetPx = with(androidx.compose.ui.platform.LocalDensity.current) { 124.dp.toPx() }
-    val spec = remember(topInsetPx) { MenuAwareScrollSpec(topInsetPx) }
+    val bottomMarginPx = with(androidx.compose.ui.platform.LocalDensity.current) { 56.dp.toPx() }
+    val spec = remember(topInsetPx, bottomMarginPx) { MenuAwareScrollSpec(topInsetPx, bottomMarginPx) }
     Box(Modifier.fillMaxSize().background(JetflixColors.Background)) {
         androidx.compose.runtime.CompositionLocalProvider(androidx.compose.foundation.gestures.LocalBringIntoViewSpec provides spec) {
         LazyColumn(

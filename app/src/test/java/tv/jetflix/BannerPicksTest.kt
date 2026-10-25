@@ -42,8 +42,8 @@ class BannerPicksTest {
         val items = listOf(movie("a", 5f), movie("b", 6f, played = true), movie("c", 7f, type = "Episode"), movie("d", 7f, pos = 5), movie("e", 8f))
         assertEquals(listOf("a", "e"), BannerPicks.randomUnwatchedList(items, all).map { it.Id })
         assertTrue(BannerPicks.randomUnwatchedList(items) { false }.isEmpty())
-        assertTrue(!tv.jetflix.app.ui.components.ScreensaverRules.mayRun(true, listOf("x")))
+        assertTrue(!tv.jetflix.app.ui.components.ScreensaverRules.mayRun(true, listOf(tv.jetflix.app.ui.components.ScreensaverSlide("x"))))
         assertTrue(!tv.jetflix.app.ui.components.ScreensaverRules.mayRun(false, emptyList()))
-        assertTrue(tv.jetflix.app.ui.components.ScreensaverRules.mayRun(false, listOf("x")))
+        assertTrue(tv.jetflix.app.ui.components.ScreensaverRules.mayRun(false, listOf(tv.jetflix.app.ui.components.ScreensaverSlide("x"))))
     }
 }

@@ -30,7 +30,7 @@ class ScreensaverTest {
 
     private fun host(blocked: Boolean = false, urls: List<String>, clicks: IntArray) = rule.setContent {
         JetflixTheme {
-            IdleScreensaverHost(blocked = blocked, loadUrls = { urls }, idleMs = 1000) {
+            IdleScreensaverHost(blocked = blocked, loadSlides = { urls.map { tv.jetflix.app.ui.components.ScreensaverSlide(it, "Demo Title", "Demo overview text") } }, idleMs = 1000) {
                 androidx.tv.material3.Button(onClick = { clicks[0]++ }) { androidx.tv.material3.Text("Underneath") }
             }
         }

@@ -4,6 +4,16 @@ import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.tv.material3.Text
+import tv.jetflix.app.ui.theme.JetflixType
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -23,19 +33,39 @@ import kotlinx.coroutines.delay
 object ScreensaverRules {
     const val IDLE_MS = 5 * 60 * 1000L
     const val SLIDE_MS = 12_000L
-    fun mayRun(onPlayer: Boolean, urls: List<String>) = !onPlayer && urls.isNotEmpty()
+    fun mayRun(onPlayer: Boolean, urls: List<ScreensaverSlide>) = !onPlayer && urls.isNotEmpty()
 }
+
+/** One screensaver picture with the title's name and description shown over it. */
+data class ScreensaverSlide(val url: String, val title: String? = null, val overview: String? = null)
 
 /** Fullscreen, rotating backdrops of unwatched movies. The caller consumes the first key press to dismiss it. */
 @Composable
-fun ScreensaverOverlay(urls: List<String>) {
+fun ScreensaverOverlay(urls: List<ScreensaverSlide>) {
     var index by remember { mutableIntStateOf(0) }
     LaunchedEffect(urls) {
         while (urls.size > 1) { delay(ScreensaverRules.SLIDE_MS); index = (index + 1) % urls.size }
     }
     Box(Modifier.fillMaxSize().background(Color.Black).semantics { contentDescription = "Screensaver" }) {
-        Crossfade(targetState = urls[index % urls.size], animationSpec = tween(1500), label = "screensaver") { url ->
-            ArtImage(url = url, contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+        Crossfade(targetState = urls[index % urls.size], animationSpec = tween(1500), label = "screensaver") { slide ->
+            Box(Modifier.fillMaxSize()) {
+                ArtImage(url = slide.url, contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                if (!slide.title.isNullOrBlank() || !slide.overview.isNullOrBlank()) {
+                    Box(
+                        Modifier.align(Alignment.BottomStart).fillMaxWidth().height(300.dp).background(
+                            Brush.verticalGradient(0f to Color.Transparent, 1f to Color.Black.copy(alpha = 0.88f)),
+                        ),
+                    )
+                    Column(Modifier.align(Alignment.BottomStart).padding(start = 64.dp, end = 64.dp, bottom = 56.dp).fillMaxWidth(0.62f)) {
+                        if (!slide.title.isNullOrBlank()) {
+                            Text(slide.title, style = JetflixType.heroTitle, color = Color.White, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        }
+                        if (!slide.overview.isNullOrBlank()) {
+                            Text(slide.overview, style = JetflixType.body, color = Color(0xFFE5E5E5), maxLines = 3, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 8.dp))
+                        }
+                    }
+                }
+            }
         }
     }
 }
@@ -52,17 +82,17 @@ object PlaybackPause {
 @Composable
 fun IdleScreensaverHost(
     blocked: Boolean,
-    loadUrls: suspend () -> List<String>,
+    loadSlides: suspend () -> List<ScreensaverSlide>,
     idleMs: Long = ScreensaverRules.IDLE_MS,
     content: @Composable () -> Unit,
 ) {
     var lastInput by remember { androidx.compose.runtime.mutableLongStateOf(0L) }
-    var urls by remember { androidx.compose.runtime.mutableStateOf<List<String>?>(null) }
+    var urls by remember { androidx.compose.runtime.mutableStateOf<List<ScreensaverSlide>?>(null) }
     LaunchedEffect(lastInput, blocked) {
         urls = null
         if (blocked) return@LaunchedEffect
         delay(idleMs)
-        val loaded = try { loadUrls() } catch (_: Exception) { emptyList() }
+        val loaded = try { loadSlides() } catch (_: Exception) { emptyList() }
         if (ScreensaverRules.mayRun(blocked, loaded)) urls = loaded
     }
     Box(

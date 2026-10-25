@@ -100,34 +100,42 @@ class DetailsViewModel(val repo: JellyfinRepository) : ViewModel() {
                 val similarDef = async {
                     tv.jetflix.app.data.RelatedItems.filter(item, api.getSimilar(itemId, session.userId).body()?.Items ?: emptyList())
                 }
-                var seasons: List<BaseItemDto> = emptyList()
-                var episodes: List<BaseItemDto> = emptyList()
-                var selectedSeasonId: String? = null
-                var playTarget: BaseItemDto = item
-                if (item.isSeries) {
-                    seasons = api.getItems(
+                if (!item.isSeries) {
+                    // Movies show the page as soon as the title itself arrives; "More like this" fills in when ready.
+                    _state.value = DetailsUiState(loading = false, item = item, playTarget = item)
+                    val similar = similarDef.await()
+                    if (_state.value.item?.Id == item.Id) _state.value = _state.value.copy(similar = similar)
+                    return@launch
+                }
+                // Shows: the season list and the full episode list are fetched side by side, not one after the other.
+                val seasonsDef = async {
+                    api.getItems(
                         userId = session.userId,
                         parentId = item.Id,
                         includeItemTypes = "Season",
                         sortBy = "SortName",
                     ).body()?.Items ?: emptyList()
-                    allEpisodes = api.getEpisodes(item.Id, session.userId, fields = "Overview", limit = 2000)
-                        .body()?.Items ?: emptyList()
-                    val target = allEpisodes.firstOrNull { it.Id == focusId } ?: EpisodeTarget.pick(allEpisodes)
-                    seriesTarget = target
-                    selectedSeasonId = target?.SeasonId ?: seasons.firstOrNull()?.Id
-                    episodes = allEpisodes.filter { it.SeasonId == selectedSeasonId }.ifEmpty { allEpisodes }
-                    playTarget = target ?: item
                 }
+                val episodesDef = async {
+                    api.getEpisodes(item.Id, session.userId, fields = "Overview", limit = 2000).body()?.Items ?: emptyList()
+                }
+                val seasons = seasonsDef.await()
+                allEpisodes = episodesDef.await()
+                val target = allEpisodes.firstOrNull { it.Id == focusId } ?: EpisodeTarget.pick(allEpisodes)
+                seriesTarget = target
+                val selectedSeasonId = target?.SeasonId ?: seasons.firstOrNull()?.Id
+                val episodes = allEpisodes.filter { it.SeasonId == selectedSeasonId }.ifEmpty { allEpisodes }
                 _state.value = DetailsUiState(
                     loading = false,
                     item = item,
-                    playTarget = playTarget,
+                    playTarget = target ?: item,
                     episodes = episodes,
                     seasons = seasons,
                     selectedSeasonId = selectedSeasonId,
-                    similar = similarDef.await(),
+                    similar = emptyList(),
                 )
+                val similar = similarDef.await()
+                if (_state.value.item?.Id == item.Id) _state.value = _state.value.copy(similar = similar)
             } catch (e: Exception) {
                 _state.value = DetailsUiState(loading = false, error = "Couldn't load details (${e.javaClass.simpleName})")
             }

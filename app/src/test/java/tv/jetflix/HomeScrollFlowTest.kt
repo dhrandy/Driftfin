@@ -3,6 +3,7 @@ package tv.jetflix
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.isFocused
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onRoot
@@ -44,17 +45,20 @@ class HomeScrollFlowTest {
         rule.waitForIdle()
         fun key(k: Key) { rule.onRoot().performKeyInput { pressKey(k) }; rule.waitForIdle(); rule.mainClock.advanceTimeBy(600) }
         key(Key.DirectionDown)
-        val tops = mutableListOf<Float>(); val labels = mutableListOf<String>()
+        val tops = mutableListOf<Float>(); val bottoms = mutableListOf<Float>(); val labels = mutableListOf<String>()
         repeat(9) {
             key(Key.DirectionDown)
             val n = rule.onAllNodes(isFocused()).fetchSemanticsNodes()
-            if (n.isNotEmpty()) { tops += n.first().boundsInRoot.top; labels += n.first().let { x -> (x.config.getOrNull(androidx.compose.ui.semantics.SemanticsProperties.Text)?.joinToString { it.text } ?: "") + "@" + x.boundsInRoot.left } }
+            if (n.isNotEmpty()) { tops += n.first().boundsInRoot.top; bottoms += n.first().boundsInRoot.bottom; labels += n.first().let { x -> (x.config.getOrNull(androidx.compose.ui.semantics.SemanticsProperties.Text)?.joinToString { it.text } ?: "") + "@" + x.boundsInRoot.left } }
         }
         println("FOCUSED_TOPS " + tops + " " + labels)
         assertTrue("focus reached rows, tops=$tops", tops.size >= 5)
         // 124 dp at 2x density = 248 px: bar plus the row title.
         val rowTops = tops.drop(2)
         assertTrue("cards below bar+title, tops=$tops", rowTops.all { it >= 240f })
+        val viewH = rule.onRoot().fetchSemanticsNode().boundsInRoot.height
+        // 56 dp margin at 2x density = 112 px under every focused card (room for zoom, outline and TV overscan).
+        assertTrue("focused cards keep 112 px below, bottoms=$bottoms of $viewH", bottoms.all { it + 90f <= viewH })
     }
 
     @Test fun gridSmall() = gridCheck(tv.jetflix.app.data.PosterSize.Small)
@@ -65,7 +69,7 @@ class HomeScrollFlowTest {
         run {
             tv.jetflix.app.data.AppSettings.setPosterSize(size)
             val many = (0 until 5).flatMap { r -> items.map { it.copy(Id = it.Id + "r$r") } }
-            val tops = mutableListOf<Float>(); val seq = mutableListOf<String>()
+            val tops = mutableListOf<Float>(); val bottoms = mutableListOf<Float>(); val seq = mutableListOf<String>()
             rule.setContent {
                 JetflixTheme {
                     tv.jetflix.app.ui.library.LibraryContent(
@@ -78,7 +82,7 @@ class HomeScrollFlowTest {
             repeat(14) {
                 rule.onRoot().performKeyInput { pressKey(Key.DirectionDown) }; rule.waitForIdle(); rule.mainClock.advanceTimeBy(400)
                 rule.onAllNodes(isFocused(), useUnmergedTree = true).fetchSemanticsNodes().firstOrNull()?.let { n ->
-                    tops += n.boundsInRoot.top
+                    tops += n.boundsInRoot.top; bottoms += n.boundsInRoot.bottom
                     fun desc(x: androidx.compose.ui.semantics.SemanticsNode): String? =
                         x.config.getOrNull(androidx.compose.ui.semantics.SemanticsProperties.ContentDescription)?.firstOrNull()
                             ?: x.config.getOrNull(androidx.compose.ui.semantics.SemanticsProperties.Text)?.firstOrNull()?.text
@@ -91,29 +95,45 @@ class HomeScrollFlowTest {
             println("GRID_SEQ " + size + " " + seq)
             assertTrue("$size: focus moved, tops=$tops", tops.size >= 8)
             assertTrue("$size: below the 76 dp bar (152 px), tops=$tops", tops.drop(2).all { it >= 150f })
+            val viewH = rule.onRoot().fetchSemanticsNode().boundsInRoot.height
+            assertTrue("$size: focused poster keeps 112 px below, bottoms=$bottoms of $viewH", bottoms.all { it + 90f <= viewH })
             tv.jetflix.app.data.AppSettings.setPosterSize(tv.jetflix.app.data.PosterSize.Medium)
         }
     }
 
-    @Test fun bannerScrollsAwayWhenFocusMovesBelowIt() {
+    @Test fun libraryHasNoBannerAndHomeHeroComesBackWhenGoingUp() {
         rule.setContent {
             JetflixTheme {
                 tv.jetflix.app.ui.library.LibraryContent(
-                    tv.jetflix.app.ui.library.LibraryUiState(loading = false, items = (0 until 5).flatMap { r -> items.map { it.copy(Id = it.Id + "b$r") } }, banner = items.first()),
+                    tv.jetflix.app.ui.library.LibraryUiState(loading = false, items = items, banner = items.first(), libraries = listOf("a" to "Movies", "b" to "Kids Movies")),
                     JellyfinRepository().apply { apiFor("http://demo.test") }, tv.jetflix.app.ui.components.JetflixTab.MOVIES, "demo", {}, {}, {},
                 )
             }
         }
-        rule.waitForIdle(); rule.mainClock.advanceTimeBy(800)
-        fun moreInfoBottom() = rule.onAllNodes(androidx.compose.ui.test.hasText("More Info"), useUnmergedTree = true).fetchSemanticsNodes().firstOrNull()?.boundsInRoot?.bottom
-        val before = moreInfoBottom()
-        repeat(3) {
-            rule.onRoot().performKeyInput { pressKey(Key.DirectionDown) }; rule.waitForIdle(); rule.mainClock.advanceTimeBy(800)
-            val f = rule.onAllNodes(isFocused(), useUnmergedTree = true).fetchSemanticsNodes().firstOrNull()
-            println("BANNER_STEP focusedTop=" + f?.boundsInRoot?.top + " moreInfoBottom=" + moreInfoBottom())
+        rule.waitForIdle()
+        rule.onAllNodes(androidx.compose.ui.test.hasText("More Info")).assertCountEquals(0)
+        rule.onAllNodes(androidx.compose.ui.test.hasText("Library: All")).assertCountEquals(1)
+    }
+
+    @Test fun homeHeroScrollsBackIntoViewOnUp() {
+        val sections = (0 until 6).map { i -> HomeSection("Row $i", items.drop(i).take(8), wide = i < 2) }
+        rule.setContent {
+            JetflixTheme {
+                HomeContent(HomeUiState(loading = false, hero = items.first().copy(UserData = null), heroes = emptyList(), sections = sections),
+                    JellyfinRepository().apply { apiFor("http://demo.test") }, "demo", {}, {}, {}, {})
+            }
         }
-        val after = moreInfoBottom()
-        println("BANNER_BOTTOM before=$before after=$after")
-        assertTrue("banner fully above the bar after focus moves below it (before=$before after=$after)", after == null || after <= 152f)
+        rule.waitForIdle()
+        fun key(k: Key) { rule.onRoot().performKeyInput { pressKey(k) }; rule.waitForIdle(); rule.mainClock.advanceTimeBy(900) }
+        fun playTop() = rule.onAllNodes(androidx.compose.ui.test.hasText("Play"), useUnmergedTree = true).fetchSemanticsNodes().firstOrNull()?.boundsInRoot?.top
+        key(Key.DirectionDown) // first focus
+        val start = playTop()
+        repeat(4) { key(Key.DirectionDown) }
+        val scrolled = playTop()
+        repeat(4) { key(Key.DirectionUp) }
+        val back = playTop()
+        println("HERO_PLAY_TOP start=$start scrolled=$scrolled back=$back")
+        assertTrue("hero scrolled away going down (start=$start scrolled=$scrolled)", scrolled == null || start == null || scrolled < start - 50f)
+        assertTrue("hero Play back where it started after going up (start=$start back=$back)", back != null && back >= 0f && back < 700f)
     }
 }
