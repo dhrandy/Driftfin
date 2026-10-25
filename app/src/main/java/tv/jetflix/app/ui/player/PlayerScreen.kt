@@ -95,6 +95,11 @@ fun PlayerScreen(
     var controlsVisible by remember { mutableStateOf(true) }
     var lastInteraction by remember { mutableLongStateOf(System.currentTimeMillis()) }
     var isPlaying by remember { mutableStateOf(true) }
+    // Stop the TV screensaver while a video is playing or buffering; release it on pause, end and when leaving.
+    var keepAwake by remember { mutableStateOf(true) }
+    val hostView = androidx.compose.ui.platform.LocalView.current
+    androidx.compose.runtime.SideEffect { hostView.keepScreenOn = keepAwake }
+    androidx.compose.runtime.DisposableEffect(hostView) { onDispose { hostView.keepScreenOn = false } }
     var positionTicks by remember { mutableLongStateOf(item.UserData?.PlaybackPositionTicks ?: 0L) }
     var durationTicks by remember { mutableLongStateOf(item.RunTimeTicks ?: 0L) }
     var bufferedTicks by remember { mutableLongStateOf(0L) }
@@ -204,6 +209,7 @@ fun PlayerScreen(
             durationTicks = player.duration.takeIf { it > 0 }?.times(10_000) ?: durationTicks
             bufferedTicks = player.bufferedPosition.takeIf { it > 0 }?.times(10_000) ?: bufferedTicks
             isPlaying = player.isPlaying
+            keepAwake = shouldKeepScreenOn(player.playWhenReady, player.playbackState)
             delay(1_000)
         }
     }
@@ -322,6 +328,19 @@ fun PlayerScreen(
             }
         },
     ) {
+        // The video goes first so everything below (errors, up-next, the audio/subtitle panel) draws in front of it.
+        AndroidView(
+            factory = { ctx ->
+                PlayerView(ctx).apply {
+                    useController = false
+                    isFocusable = false
+                    isFocusableInTouchMode = false
+                    this.player = player
+                }
+            },
+            modifier = Modifier.fillMaxSize(),
+        )
+
         playbackError?.let { msg ->
             androidx.tv.material3.Text(
                 text = msg + "\nPress Back to return.",
@@ -356,18 +375,6 @@ fun PlayerScreen(
                     .padding(horizontal = 16.dp, vertical = 8.dp),
             )
         }
-        AndroidView(
-            factory = { ctx ->
-                PlayerView(ctx).apply {
-                    useController = false
-                    isFocusable = false
-                    isFocusableInTouchMode = false
-                    this.player = player
-                }
-            },
-            modifier = Modifier.fillMaxSize(),
-        )
-
         AnimatedVisibility(visible = controlsVisible, enter = fadeIn(), exit = fadeOut()) {
             Box(Modifier.fillMaxSize()) {
                 // Top: title
@@ -550,3 +557,9 @@ fun PlayerBottomBar(positionTicks: Long, bufferedTicks: Long, durationTicks: Lon
         )
     }
 }
+
+
+/** True while playback is wanted and the player is buffering or ready, so the screensaver must not start. */
+internal fun shouldKeepScreenOn(playWhenReady: Boolean, playbackState: Int): Boolean =
+    playWhenReady && (playbackState == androidx.media3.common.Player.STATE_BUFFERING ||
+        playbackState == androidx.media3.common.Player.STATE_READY)

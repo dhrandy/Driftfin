@@ -295,7 +295,7 @@ object PlaybackNegotiator {
     }
 
     fun deviceProfile(caps: CodecSupport = CodecSupport.Conservative, forceTranscode: Boolean = false): JsonObject = buildJsonObject {
-        put("Name", "Jetflix Android TV")
+        put("Name", "Driftfin Android TV")
         put("MaxStreamingBitrate", MAX_STREAMING_BITRATE)
         put("MaxStaticBitrate", MAX_STREAMING_BITRATE)
         put("DirectPlayProfiles", buildJsonArray {

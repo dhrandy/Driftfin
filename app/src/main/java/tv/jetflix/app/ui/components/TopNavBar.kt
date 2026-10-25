@@ -14,6 +14,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.blur
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.Box
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.foundation.layout.size
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
@@ -26,12 +33,12 @@ import androidx.tv.material3.Text
 import tv.jetflix.app.ui.theme.JetflixColors
 import tv.jetflix.app.ui.theme.JetflixType
 
-enum class JetflixTab(val label: String) { HOME("Home"), SHOWS("Shows"), MOVIES("Movies"), MY_LIST("My List"), SEARCH("Search"), SETTINGS("Settings") }
+enum class JetflixTab(val label: String) { HOME("Home"), SHOWS("Shows"), MOVIES("Movies"), MY_LIST("My Driftfin"), SEARCH("Search"), SETTINGS("Settings") }
 
 @Composable
 fun Wordmark(modifier: Modifier = Modifier) {
     Text(
-        text = "JETFLIX",
+        text = "DRIFTFIN",
         style = JetflixType.wordmark,
         color = JetflixColors.Red,
         modifier = modifier,
@@ -51,23 +58,52 @@ fun TopNavBar(
     modifier: Modifier = Modifier,
     downFocus: androidx.compose.ui.focus.FocusRequester? = null,
     selectedFocus: androidx.compose.ui.focus.FocusRequester? = null,
+    /** Opaque bar for when content scrolls underneath, so tab labels never sit on top of posters. */
+    solid: Boolean = false,
+    onNavFocusChange: (Boolean) -> Unit = {},
+    /** Backdrop of what is on screen; when the bar is solid it shows a blurred, darkened copy of it. */
+    blurArtUrl: String? = null,
 ) {
-    Row(
+    Box(
         modifier = modifier
+            .onFocusChanged { onNavFocusChange(it.hasFocus) }
             .then(if (downFocus != null) Modifier.focusProperties { down = downFocus } else Modifier)
-            .fillMaxWidth()
-            .background(
-                Brush.verticalGradient(
-                    listOf(Color.Black.copy(alpha = 0.85f), Color.Black.copy(alpha = 0f)),
-                ),
-            )
-            .padding(horizontal = 48.dp, vertical = 14.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(26.dp),
+            .fillMaxWidth(),
     ) {
+        val canBlur = true
+        if (!solid && blurArtUrl != null && canBlur) {
+            // On Home the bar sits on a blurred, colour-matched copy of the featured title (drawn by the page itself).
+        } else if (solid) {
+            if (blurArtUrl != null && canBlur) {
+                // A blurred copy of the current artwork with a dark scrim: readable, and it follows what you are on.
+                Box(Modifier.matchParentSize().clipToBounds()) {
+                    ArtImage(
+                        url = blurSource(blurArtUrl),
+                        contentDescription = null,
+                        modifier = Modifier.fillMaxSize().blurIfSupported(28.dp),
+                        contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                    )
+                    Box(Modifier.fillMaxSize().background(Color(0xFF141414).copy(alpha = 0.62f)))
+                }
+            } else {
+                // No artwork, or a device without blur support: an opaque bar, so labels never sit on posters.
+                Box(Modifier.matchParentSize().background(JetflixColors.Background))
+            }
+        } else if (blurArtUrl == null || !canBlur) {
+            Box(Modifier.matchParentSize().background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.85f), Color.Black.copy(alpha = 0f)))))
+        }
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 48.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(26.dp),
+        ) {
         Wordmark()
-        Spacer(Modifier.width(10.dp))
-        JetflixTab.entries.forEach { tab ->
+        Spacer(Modifier.weight(1f))
+        // Search is a magnifier icon at the start of the menu, as on the current Netflix TV menu.
+        SearchIconTab(selected = selected == JetflixTab.SEARCH, onClick = { onTabSelected(JetflixTab.SEARCH) })
+        JetflixTab.entries.filter { it != JetflixTab.SEARCH }.forEach { tab ->
             NavTab(
                 label = tab.label,
                 selected = tab == selected,
@@ -77,27 +113,65 @@ fun TopNavBar(
         }
         Spacer(Modifier.weight(1f))
         if (userName != null) {
-            NavTab(label = userName, selected = false, onClick = onSignOut)
+            // Signing out loses the session, so the first OK only asks; a second OK within 5 seconds confirms.
+            var confirming by remember { mutableStateOf(false) }
+            androidx.compose.runtime.LaunchedEffect(confirming) {
+                if (confirming) { kotlinx.coroutines.delay(5_000); confirming = false }
+            }
+            NavTab(
+                label = if (confirming) "Sign out? Press OK again" else userName,
+                selected = false,
+                onClick = { if (confirming) { confirming = false; onSignOut() } else confirming = true },
+                onFocusLost = { confirming = false },
+            )
+        }
         }
     }
 }
 
 @Composable
-private fun NavTab(label: String, selected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
+private fun SearchIconTab(selected: Boolean, onClick: () -> Unit) {
+    Surface(
+        onClick = onClick,
+        colors = ClickableSurfaceDefaults.colors(
+            containerColor = if (selected) Color.White else Color.Transparent,
+            contentColor = if (selected) Color.Black else JetflixColors.TextPrimary,
+            focusedContainerColor = Color(0xFFD0D0D0),
+            focusedContentColor = Color.Black,
+        ),
+        shape = ClickableSurfaceDefaults.shape(shape = androidx.compose.foundation.shape.RoundedCornerShape(50)),
+    ) {
+        // Magnifier drawn by hand (the extended icon set is not a dependency).
+        androidx.compose.foundation.Canvas(
+            Modifier
+                .padding(horizontal = 12.dp, vertical = 5.dp)
+                .size(18.dp)
+                .semantics { contentDescription = "Search" },
+        ) {
+            val w = size.width * 0.12f
+            drawCircle(color = Color.White, radius = size.width * 0.34f, center = androidx.compose.ui.geometry.Offset(size.width * 0.4f, size.height * 0.4f), style = androidx.compose.ui.graphics.drawscope.Stroke(width = w))
+            drawLine(color = Color.White, start = androidx.compose.ui.geometry.Offset(size.width * 0.66f, size.height * 0.66f), end = androidx.compose.ui.geometry.Offset(size.width * 0.95f, size.height * 0.95f), strokeWidth = w)
+        }
+    }
+}
+
+@Composable
+private fun NavTab(label: String, selected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier, onFocusLost: () -> Unit = {}) {
     var focused by remember { mutableStateOf(false) }
     Surface(
         onClick = onClick,
-        modifier = modifier.onFocusChanged { focused = it.isFocused },
+        modifier = modifier.onFocusChanged { if (focused && !it.isFocused) onFocusLost(); focused = it.isFocused },
         colors = ClickableSurfaceDefaults.colors(
-            containerColor = Color.Transparent,
+            // Current tab: white pill, dark text. Focused non-current tab: light gray pill.
+            containerColor = if (selected) Color.White else Color.Transparent,
             contentColor = when {
-                selected -> JetflixColors.TextPrimary
+                selected -> Color.Black
                 else -> JetflixColors.TextSecondary
             },
-            focusedContainerColor = JetflixColors.SurfaceLight,
-            focusedContentColor = JetflixColors.TextPrimary,
+            focusedContainerColor = Color.White,
+            focusedContentColor = Color.Black,
         ),
-        shape = ClickableSurfaceDefaults.shape(shape = androidx.compose.foundation.shape.RoundedCornerShape(4.dp)),
+        shape = ClickableSurfaceDefaults.shape(shape = androidx.compose.foundation.shape.RoundedCornerShape(50)),
     ) {
         Text(
             text = label,
@@ -106,4 +180,20 @@ private fun NavTab(label: String, selected: Boolean, onClick: () -> Unit, modifi
             modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
         )
     }
+}
+
+
+/** Back from page content goes to the selected tab in the top menu first; Back from the menu leaves. */
+class MenuBack {
+    val focus = androidx.compose.ui.focus.FocusRequester()
+    var navHasFocus by mutableStateOf(false)
+}
+
+@Composable
+fun rememberMenuBack(): MenuBack {
+    val menu = remember { MenuBack() }
+    androidx.activity.compose.BackHandler(enabled = !menu.navHasFocus) {
+        try { menu.focus.requestFocus() } catch (_: Exception) { }
+    }
+    return menu
 }

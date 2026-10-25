@@ -5,6 +5,7 @@ import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.isFocused
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performKeyInput
@@ -51,26 +52,34 @@ class HomeNavigationTest {
         rule.waitForIdle()
     }
 
-    private fun setHome(tabs: MutableList<String> = mutableListOf()) {
+    private fun setHome(
+        tabs: MutableList<String> = mutableListOf(),
+        heroes: List<BaseItemDto> = emptyList(),
+        opened: MutableList<String> = mutableListOf(),
+        played: MutableList<String> = mutableListOf(),
+        signOuts: MutableList<Int> = mutableListOf(),
+        restoredKey: String? = null,
+    ) {
         val repo = JellyfinRepository().apply { apiFor("http://demo.test") }
         val cont = items.take(6).map { it.copy(UserData = UserItemDataDto(PlaybackPositionTicks = 1, PlayedPercentage = 35.0)) }
         val state = HomeUiState(
             loading = false,
             hero = items.first { it.Name == "Jungle Book" },
+            heroes = heroes,
             sections = listOf(
                 HomeSection("Continue Watching", cont, wide = true),
                 HomeSection("Recently Added Movies", items.drop(2), wide = false),
                 HomeSection("Popular Picks", items.reversed(), wide = false),
             ),
         )
-        rule.setContent { JetflixTheme { HomeContent(state, repo, "demo", { tabs += it.label }, {}, {}, {}) } }
+        rule.setContent { JetflixTheme { HomeContent(state, repo, "demo", { tabs += it.label }, { opened += it.Name.orEmpty() }, { played += it.Name.orEmpty() }, { signOuts += 1 }, restoredFocusKey = restoredKey, heroIntervalMs = 1000) } }
         rule.waitForIdle()
         // Robolectric's window never reports focus, so the on-launch focus request cannot be observed here.
         // The first D-pad press gives the screen its initial focus on the hero Play button, as on a TV.
         if (zone() == "none") press(Key.DirectionDown)
     }
 
-    private val navLabels = setOf("Home", "Shows", "Movies", "My List", "Search", "Settings", "demo")
+    private val navLabels = setOf("Home", "Shows", "Movies", "My Driftfin", "Search", "Settings", "demo")
     private val heroLabels = setOf("Play", "Resume", "Play from start", "More Info")
     private fun zone(): String {
         val t = focusedText()
@@ -132,13 +141,18 @@ class HomeNavigationTest {
         val picked = mutableListOf<String>()
         setHome(picked)
         press(Key.DirectionUp)
+        if (focusedText() == "?") press(Key.DirectionRight) // first stop may be the search icon
         assertEquals("Home", focusedText())
         val seen = mutableListOf(focusedText())
-        repeat(6) { press(Key.DirectionRight); seen += focusedText() }
-        // Wordmark is not focusable; tabs come in order and the last stop is the user name.
-        assertEquals(listOf("Home", "Shows", "Movies", "My List", "Search", "Settings", "demo"), seen.distinct())
+        repeat(5) { press(Key.DirectionRight); seen += focusedText() }
+        // Search is an icon before Home; tabs follow in order and the last stop is the user name.
+        assertEquals(listOf("Home", "Shows", "Movies", "My Driftfin", "Settings", "demo"), seen.distinct())
         press(Key.DirectionLeft); press(Key.DirectionLeft)
-        assertEquals("Search", focusedText())
+        assertEquals("My Driftfin", focusedText())
+        repeat(4) { press(Key.DirectionLeft) }
+        assertEquals("search icon is the first stop", "?", focusedText())
+        press(Key.Enter)
+        assertTrue(picked.contains("Search"))
     }
 
     @Test fun enterOnAHeaderTabSelectsThatTab() {
@@ -150,6 +164,81 @@ class HomeNavigationTest {
         press(Key.DirectionRight); assertEquals("Movies", focusedText())
         press(Key.DirectionCenter)
         assertEquals(listOf("Shows", "Movies"), picked)
+    }
+
+    @Test fun signOutNeedsASecondOkAndFocusLossCancelsIt() {
+        val out = mutableListOf<Int>()
+        setHome(signOuts = out)
+        press(Key.DirectionUp)
+        repeat(6) { press(Key.DirectionRight) }
+        assertEquals("demo", focusedText())
+        press(Key.Enter)
+        assertEquals("first OK must only ask", 0, out.size)
+        assertEquals("Sign out? Press OK again", focusedText())
+        // Moving away cancels the question.
+        press(Key.DirectionLeft); press(Key.DirectionRight)
+        assertEquals("demo", focusedText())
+        press(Key.Enter)
+        assertEquals(0, out.size)
+        press(Key.Enter)
+        assertEquals("second OK confirms", 1, out.size)
+    }
+
+    @Test fun heroButtonsAndRowCardsReactToOk() {
+        val played = mutableListOf<String>(); val opened = mutableListOf<String>()
+        setHome(opened = opened, played = played)
+        assertEquals("hero", zone())
+        press(Key.Enter)
+        assertEquals(listOf("Jungle Book"), played)
+        var guard = 0
+        while (focusedText() != "More Info" && guard++ < 4) press(Key.DirectionRight)
+        assertEquals("More Info", focusedText())
+        press(Key.Enter)
+        assertEquals(listOf("Jungle Book"), opened)
+        press(Key.DirectionDown); assertEquals("row", zone())
+        press(Key.Enter)
+        assertEquals(2, opened.size)
+    }
+
+    @Test fun bannerRotatesToTheNextTitleAndKeepsFocusOnPlay() {
+        val played = mutableListOf<String>()
+        val first = items.first { it.Name == "Jungle Book" }
+        val second = items.first { it.Name != "Jungle Book" && it.Name != null }
+        setHome(heroes = listOf(first, second), played = played)
+        rule.mainClock.autoAdvance = false
+        // Short test interval; the real banner waits 8 seconds. Press OK repeatedly: the title it plays must change.
+        repeat(4) {
+            rule.mainClock.advanceTimeBy(1100); repeat(3) { rule.mainClock.advanceTimeByFrame() }; rule.waitForIdle()
+            assertEquals("hero", zone())
+            press(Key.Enter)
+        }
+        assertEquals("OK must act on the title currently shown", setOf(first.Name, second.Name), played.toSet())
+    }
+
+    @Test fun returningWithAMissingRememberedCardStillLandsOnTheHeroAndNavigates() {
+        // Back from playback with a remembered card that no longer exists (Next Up changed): must not leave nothing focused.
+        setHome(restoredKey = "row-gone-card")
+        rule.mainClock.advanceTimeBy(3000); rule.waitForIdle()
+        if (zone() == "none") press(Key.DirectionDown)
+        press(Key.DirectionDown)
+        assertEquals("row", zone())
+        press(Key.DirectionUp)
+        assertEquals("hero", zone())
+        press(Key.DirectionUp)
+        assertEquals("nav", zone())
+        press(Key.DirectionDown)
+        assertEquals("hero", zone())
+    }
+
+    @Test fun focusedRowTitleShowsItsDetailsAndHeroHidesThem() {
+        setHome()
+        press(Key.DirectionDown)
+        assertEquals("row", zone())
+        val title = rule.onAllNodes(isFocused()).fetchSemanticsNodes().size
+        assertTrue(title == 1)
+        // The strip repeats the focused title's name, so the name now appears at least twice (card + strip) when it has one.
+        press(Key.DirectionUp)
+        assertEquals("hero", zone())
     }
 
     @Test fun trace() {

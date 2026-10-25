@@ -13,6 +13,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.runtime.collectAsState
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.foundation.layout.size
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.Dp
@@ -35,7 +40,7 @@ private fun focusedBorder() = CardDefaults.border(
 )
 
 @Composable
-private fun cardScale() = CardDefaults.scale(scale = 1f, focusedScale = 1.08f)
+private fun cardScale() = CardDefaults.scale(scale = 1f, focusedScale = 1.12f)
 
 /** Progress bar at the bottom of resumable cards, like Netflix's red bar. */
 @Composable
@@ -57,6 +62,29 @@ fun ResumeProgressBar(percent: Double?, modifier: Modifier = Modifier) {
     }
 }
 
+/** White circle with a check, top-right of a card, for anything Jellyfin marks as fully watched. */
+@Composable
+fun WatchedBadge(item: BaseItemDto, modifier: Modifier = Modifier) {
+    if (item.UserData?.Played != true) return
+    androidx.compose.foundation.Canvas(
+        modifier
+            .padding(6.dp)
+            .size(22.dp)
+            .androidx_semantics("Watched"),
+    ) {
+        drawCircle(color = androidx.compose.ui.graphics.Color.White)
+        val path = androidx.compose.ui.graphics.Path().apply {
+            moveTo(size.width * 0.27f, size.height * 0.52f)
+            lineTo(size.width * 0.44f, size.height * 0.69f)
+            lineTo(size.width * 0.74f, size.height * 0.33f)
+        }
+        drawPath(path, color = androidx.compose.ui.graphics.Color(0xFF141414), style = androidx.compose.ui.graphics.drawscope.Stroke(width = size.width * 0.12f, cap = androidx.compose.ui.graphics.StrokeCap.Round, join = androidx.compose.ui.graphics.StrokeJoin.Round))
+    }
+}
+
+private fun Modifier.androidx_semantics(label: String): Modifier =
+    this.then(androidx.compose.ui.Modifier.semantics { contentDescription = label })
+
 /** 2:3 poster card used in rows and grids. */
 @Composable
 fun PosterCard(
@@ -64,7 +92,7 @@ fun PosterCard(
     imageUrl: String?,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    width: Dp = 140.dp,
+    width: Dp = 140.dp * tv.jetflix.app.data.AppSettings.posterSize.collectAsState().value.scale,
 ) {
     Card(
         onClick = onClick,
@@ -85,6 +113,19 @@ fun PosterCard(
             Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth()) {
                 ResumeProgressBar(item.UserData?.PlayedPercentage)
             }
+            if (item.Type == "BoxSet") {
+                // Collections show their own name and how many titles they hold.
+                androidx.compose.foundation.layout.Column(
+                    Modifier.align(Alignment.BottomStart).fillMaxWidth()
+                        .background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color.Transparent, Color(0xDD000000))))
+                        .padding(horizontal = 8.dp, vertical = 6.dp),
+                ) {
+                    Text(item.Name ?: "Collection", style = JetflixType.caption, color = JetflixColors.TextPrimary, maxLines = 2)
+                    item.ChildCount?.let { Text(if (it == 1) "1 title" else "$it titles", style = JetflixType.caption, color = JetflixColors.TextSecondary) }
+                }
+            } else {
+                WatchedBadge(item, Modifier.align(Alignment.TopEnd))
+            }
         }
     }
 }
@@ -96,7 +137,7 @@ fun WideCard(
     imageUrl: String?,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    width: Dp = 260.dp,
+    width: Dp = 260.dp * tv.jetflix.app.data.AppSettings.posterSize.collectAsState().value.scale,
     showTitle: Boolean = true,
 ) {
     Card(
@@ -119,6 +160,7 @@ fun WideCard(
                 Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth()) {
                     ResumeProgressBar(item.UserData?.PlayedPercentage)
                 }
+                WatchedBadge(item, Modifier.align(Alignment.TopEnd))
             }
             if (showTitle) {
                 Column(Modifier.padding(horizontal = 8.dp, vertical = 6.dp)) {

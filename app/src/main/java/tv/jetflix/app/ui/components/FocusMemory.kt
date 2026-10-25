@@ -24,8 +24,8 @@ class FocusMemory(initialKey: String?) {
 }
 
 @Composable
-fun rememberFocusMemory(): FocusMemory {
-    val saved = rememberSaveable { mutableStateOf<String?>(null) }
+fun rememberFocusMemory(initialKey: String? = null): FocusMemory {
+    val saved = rememberSaveable { mutableStateOf<String?>(initialKey) }
     val memory = remember { FocusMemory(saved.value) }
     // Mirror the live key into saved state.
     if (saved.value != memory.key) saved.value = memory.key

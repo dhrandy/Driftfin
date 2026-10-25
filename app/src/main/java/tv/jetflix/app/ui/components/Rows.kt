@@ -12,6 +12,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.focus.focusRequester
 import androidx.tv.material3.Text
 import tv.jetflix.app.data.BaseItemDto
@@ -27,6 +28,7 @@ fun MediaRow(
     imageUrlFor: (BaseItemDto) -> String?,
     onItemClick: (BaseItemDto) -> Unit,
     modifier: Modifier = Modifier,
+    onItemFocused: (BaseItemDto) -> Unit = {},
     focusMemory: FocusMemory? = null,
     firstItemFocus: FocusRequester? = null,
     upFocus: FocusRequester? = null,
@@ -45,7 +47,8 @@ fun MediaRow(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             itemsIndexed(items, key = { _, it -> it.Id }) { index, item ->
-                var m: Modifier = if (focusMemory != null) Modifier.restoreFocus(focusMemory, "$title|${item.Id}") else Modifier
+                var m: Modifier = (if (focusMemory != null) Modifier.restoreFocus(focusMemory, "$title|${item.Id}") else Modifier)
+                    .onFocusChanged { if (it.hasFocus) onItemFocused(item) }
                 if (index == 0 && firstItemFocus != null) m = m.focusRequester(firstItemFocus)
                 if (wide) {
                     WideCard(item = item, imageUrl = imageUrlFor(item), modifier = m, onClick = { onItemClick(item) })

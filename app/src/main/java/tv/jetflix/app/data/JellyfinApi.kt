@@ -17,6 +17,14 @@ interface JellyfinApi {
     @POST("Users/AuthenticateByName")
     suspend fun authenticateByName(@Body body: AuthenticateUserByName): Response<AuthenticationResult>
 
+    /** Every genre and year in a library (not just the current filtered list), for the filter pickers. */
+    @GET("Items/Filters")
+    suspend fun getItemFilters(
+        @Query("userId") userId: String,
+        @Query("parentId") parentId: String? = null,
+        @Query("includeItemTypes") includeItemTypes: String? = null,
+    ): Response<QueryFilters>
+
     @GET("UserViews")
     suspend fun getUserViews(@Query("userId") userId: String): Response<BaseItemDtoQueryResult>
 
@@ -25,7 +33,7 @@ interface JellyfinApi {
         @Query("userId") userId: String,
         @Query("limit") limit: Int = 16,
         @Query("mediaTypes") mediaTypes: String = "Video",
-        @Query("fields") fields: String = "PrimaryImageAspectRatio",
+        @Query("fields") fields: String = "PrimaryImageAspectRatio,Overview,Genres",
     ): Response<BaseItemDtoQueryResult>
 
     @GET("Shows/NextUp")
@@ -33,6 +41,7 @@ interface JellyfinApi {
         @Query("userId") userId: String,
         @Query("limit") limit: Int = 16,
         @Query("enableResumable") enableResumable: Boolean = false,
+        @Query("fields") fields: String = "Overview,Genres",
     ): Response<BaseItemDtoQueryResult>
 
     @GET("Items/Latest")
@@ -41,6 +50,7 @@ interface JellyfinApi {
         @Query("limit") limit: Int = 16,
         @Query("parentId") parentId: String? = null,
         @Query("includeItemTypes") includeItemTypes: String? = null,
+        @Query("fields") fields: String = "Overview,Genres",
     ): Response<List<BaseItemDto>>
 
     @GET("Items")
@@ -57,6 +67,8 @@ interface JellyfinApi {
         @Query("searchTerm") searchTerm: String? = null,
         @Query("fields") fields: String? = null,
         @Query("filters") filters: String? = null,
+        @Query("genres") genres: String? = null,
+        @Query("years") years: String? = null,
     ): Response<BaseItemDtoQueryResult>
 
     @GET("Items/{itemId}")
@@ -79,6 +91,7 @@ interface JellyfinApi {
         @Path("itemId") itemId: String,
         @Query("userId") userId: String,
         @Query("limit") limit: Int = 16,
+        @Query("fields") fields: String? = "Genres",
     ): Response<BaseItemDtoQueryResult>
 
     @POST("Items/{itemId}/PlaybackInfo")
@@ -144,4 +157,10 @@ data class PlaybackStopInfo(
     val PlaySessionId: String? = null,
     val PositionTicks: Long? = null,
     val Failed: Boolean = false,
+)
+
+@Serializable
+data class QueryFilters(
+    val Genres: List<String> = emptyList(),
+    val Years: List<Int> = emptyList(),
 )

@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="320dp" android:height="180dp" android:viewportWidth="320" android:viewportHeight="180">
+    <path android:pathData="M0,0H320V180H0Z" android:fillColor="#000000"/>
+    <group android:translateX="45" android:translateY="75" android:scaleX="5" android:scaleY="5">
+        <path android:pathData="M0,0 H2 L4,2 V4 L2,6 H0 Z" android:strokeColor="#E50914" android:strokeWidth="1.0" android:strokeLineJoin="bevel" android:strokeLineCap="butt" android:fillColor="#00000000"/>
+    </group>
+    <group android:translateX="75" android:translateY="75" android:scaleX="5" android:scaleY="5">
+        <path android:pathData="M0,6 V0 H3 L4,1 V2 L3,3 H0 M2,3 L4,6" android:strokeColor="#E50914" android:strokeWidth="1.0" android:strokeLineJoin="bevel" android:strokeLineCap="butt" android:fillColor="#00000000"/>
+    </group>
+    <group android:translateX="105" android:translateY="75" android:scaleX="5" android:scaleY="5">
+        <path android:pathData="M2,0 V6" android:strokeColor="#E50914" android:strokeWidth="1.0" android:strokeLineJoin="bevel" android:strokeLineCap="butt" android:fillColor="#00000000"/>
+    </group>
+    <group android:translateX="135" android:translateY="75" android:scaleX="5" android:scaleY="5">
+        <path android:pathData="M4,0 H0 V6 M0,3 H3" android:strokeColor="#E50914" android:strokeWidth="1.0" android:strokeLineJoin="bevel" android:strokeLineCap="butt" android:fillColor="#00000000"/>
+    </group>
+    <group android:translateX="165" android:translateY="75" android:scaleX="5" android:scaleY="5">
+        <path android:pathData="M0,0 H4 M2,0 V6" android:strokeColor="#E50914" android:strokeWidth="1.0" android:strokeLineJoin="bevel" android:strokeLineCap="butt" android:fillColor="#00000000"/>
+    </group>
+    <group android:translateX="195" android:translateY="75" android:scaleX="5" android:scaleY="5">
+        <path android:pathData="M4,0 H0 V6 M0,3 H3" android:strokeColor="#E50914" android:strokeWidth="1.0" android:strokeLineJoin="bevel" android:strokeLineCap="butt" android:fillColor="#00000000"/>
+    </group>
+    <group android:translateX="225" android:translateY="75" android:scaleX="5" android:scaleY="5">
+        <path android:pathData="M2,0 V6" android:strokeColor="#E50914" android:strokeWidth="1.0" android:strokeLineJoin="bevel" android:strokeLineCap="butt" android:fillColor="#00000000"/>
+    </group>
+    <group android:translateX="255" android:translateY="75" android:scaleX="5" android:scaleY="5">
+        <path android:pathData="M0,6 V0 L4,6 V0" android:strokeColor="#E50914" android:strokeWidth="1.0" android:strokeLineJoin="bevel" android:strokeLineCap="butt" android:fillColor="#00000000"/>
+    </group>
+</vector>

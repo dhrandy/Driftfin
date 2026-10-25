@@ -33,6 +33,9 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -54,11 +57,19 @@ import tv.jetflix.app.data.BaseItemDto
 import tv.jetflix.app.data.JellyfinRepository
 import tv.jetflix.app.data.SessionManager
 import tv.jetflix.app.ui.components.ArtImage
+import tv.jetflix.app.ui.components.blurIfSupported
 import tv.jetflix.app.ui.components.JetflixTab
 import tv.jetflix.app.ui.components.MediaRow
 import tv.jetflix.app.ui.components.TopNavBar
 import tv.jetflix.app.ui.theme.JetflixColors
 import tv.jetflix.app.ui.theme.JetflixType
+
+/** Which banner title is showing. Cycles through the list and wraps. */
+object HeroRotation {
+    const val MAX_TITLES = 6
+    const val INTERVAL_MS = 8_000L
+    fun next(index: Int, size: Int): Int = if (size <= 1) 0 else (index + 1) % size
+}
 
 data class HomeSection(val title: String, val items: List<BaseItemDto>, val wide: Boolean)
 
@@ -66,6 +77,8 @@ data class HomeUiState(
     val loading: Boolean = true,
     val error: String? = null,
     val hero: BaseItemDto? = null,
+    /** Titles the banner cycles through; [hero] is the first. Empty means just [hero]. */
+    val heroes: List<BaseItemDto> = emptyList(),
     val sections: List<HomeSection> = emptyList(),
 )
 
@@ -125,10 +138,11 @@ class HomeViewModel(val repo: JellyfinRepository) : ViewModel() {
                         sortBy = "DatePlayed",
                         sortOrder = "Descending",
                         limit = 1,
+                        fields = "Genres",
                         filters = "IsPlayed",
                     ).body()?.Items?.firstOrNull()
                     if (last == null) null else {
-                        val sim = api.getSimilar(last.Id, session.userId, limit = 16).body()?.Items ?: emptyList()
+                        val sim = tv.jetflix.app.data.RelatedItems.filter(last, api.getSimilar(last.Id, session.userId, limit = 24).body()?.Items ?: emptyList()).take(16)
                         if (sim.isEmpty()) null else HomeSection("More like ${last.Name}", sim, wide = false)
                     }
                 } catch (_: Exception) { null }
@@ -137,19 +151,29 @@ class HomeViewModel(val repo: JellyfinRepository) : ViewModel() {
                 val latestMovieItems = latestMovies.await()
                 val latestEpisodeItems = latestEpisodes.await()
 
-                val sections = mutableListOf<HomeSection>()
-                if (resumeItems.isNotEmpty()) sections += HomeSection("Continue Watching", resumeItems, wide = true)
-                if (myList.isNotEmpty()) sections += HomeSection("My List", myList, wide = false)
-                if (nextUpItems.isNotEmpty() && tv.jetflix.app.data.AppSettings.showNextUp.value) sections += HomeSection("Next Up", nextUpItems, wide = true)
-                if (latestMovieItems.isNotEmpty()) sections += HomeSection("Recently Added Movies", latestMovieItems, wide = false)
-                if (latestEpisodeItems.isNotEmpty()) sections += HomeSection("Recently Added Episodes", latestEpisodeItems, wide = true)
-                moreLike?.let { sections += it }
-                sections += librarySections.filter { it.items.isNotEmpty() }
+                val sections = orderHomeSections(
+                    resumeItems, nextUpItems.takeIf { tv.jetflix.app.data.AppSettings.showNextUp.value } ?: emptyList(),
+                    latestMovieItems, myList, latestEpisodeItems, moreLike, librarySections,
+                ).toMutableList()
 
-                val hero = (resumeItems + latestMovieItems + sections.flatMap { it.items })
-                    .firstOrNull { repo.backdropUrl(it) != null && (it.isMovie || it.isSeries || it.isEpisode) }
+                // Banner: unwatched movies from this library that rate highest (Jellyfin CommunityRating, 7.0 or more).
+                // If none reach 7.0 the best-rated unwatched movies are used; if there are no unwatched movies there is no banner.
+                val unwatchedMovies = try {
+                    api.getItems(
+                        userId = session.userId,
+                        includeItemTypes = "Movie",
+                        recursive = true,
+                        sortBy = "CommunityRating",
+                        sortOrder = "Descending",
+                        limit = 60,
+                        fields = "Overview,Genres",
+                        filters = "IsUnplayed",
+                    ).body()?.Items ?: emptyList()
+                } catch (_: Exception) { emptyList() }
+                val heroes = tv.jetflix.app.data.BannerPicks.topUnwatchedMovies(unwatchedMovies, hasBackdrop = { repo.backdropUrl(it) != null }, count = HeroRotation.MAX_TITLES)
+                val hero = heroes.firstOrNull()
 
-                _state.value = HomeUiState(loading = false, hero = hero, sections = sections)
+                _state.value = HomeUiState(loading = false, hero = hero, heroes = heroes, sections = sections)
             } catch (e: Exception) {
                 _state.value = HomeUiState(loading = false, error = "Couldn't load your library (${e.javaClass.simpleName})")
             }
@@ -178,6 +202,39 @@ fun HomeScreen(
     )
 }
 
+/**
+ * Focus scrolling for Home: a focused child is brought fully into view and never left under the menu bar
+ * ([topInsetPx] covers the bar plus the row title above the cards).
+ */
+@androidx.compose.foundation.ExperimentalFoundationApi
+class MenuAwareScrollSpec(private val topInsetPx: Float) : androidx.compose.foundation.gestures.BringIntoViewSpec {
+    override fun calculateScrollDistance(offset: Float, size: Float, containerSize: Float): Float {
+        val bottom = offset + size
+        return when {
+            offset < topInsetPx -> offset - topInsetPx
+            bottom > containerSize -> minOf(bottom - containerSize, offset - topInsetPx)
+            else -> 0f
+        }
+    }
+}
+
+/** Home row order: Continue Watching, Up Next, Recently Added Movies, then Favorites and the remaining rows as before. */
+fun orderHomeSections(
+    resume: List<BaseItemDto>, nextUp: List<BaseItemDto>, latestMovies: List<BaseItemDto>, favorites: List<BaseItemDto>,
+    latestEpisodes: List<BaseItemDto>, moreLike: HomeSection?, library: List<HomeSection>,
+): List<HomeSection> {
+    val out = mutableListOf<HomeSection>()
+    if (resume.isNotEmpty()) out += HomeSection("Continue Watching", resume, wide = true)
+    if (nextUp.isNotEmpty()) out += HomeSection("Next Up", nextUp, wide = true)
+    if (latestMovies.isNotEmpty()) out += HomeSection("Recently Added Movies", latestMovies, wide = false)
+    if (favorites.isNotEmpty()) out += HomeSection("Favorites", favorites, wide = false)
+    if (latestEpisodes.isNotEmpty()) out += HomeSection("Recently Added Episodes", latestEpisodes, wide = true)
+    moreLike?.let { out += it }
+    out += library.filter { it.items.isNotEmpty() }
+    return out
+}
+
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun HomeContent(
     state: HomeUiState,
@@ -187,13 +244,33 @@ fun HomeContent(
     onItemClick: (BaseItemDto) -> Unit,
     onPlay: (BaseItemDto) -> Unit,
     onSignOut: () -> Unit,
+    restoredFocusKey: String? = null,
+    previewFocusedItem: BaseItemDto? = null,
+    previewScrollIndex: Int = 0,
+    heroIntervalMs: Long = HeroRotation.INTERVAL_MS,
 ) {
-    val focusMemory = rememberFocusMemory()
+    val focusMemory = rememberFocusMemory(restoredFocusKey)
     val heroPlayFocus = remember { FocusRequester() }
     val navFocus = remember { FocusRequester() }
     val firstRowFocus = remember { FocusRequester() }
-    val listState = rememberLazyListState()
+    val listState = rememberLazyListState(initialFirstVisibleItemIndex = previewScrollIndex)
     val scope = rememberCoroutineScope()
+    val heroes = state.heroes.ifEmpty { listOfNotNull(state.hero) }
+    var heroIndex by androidx.compose.runtime.remember { androidx.compose.runtime.mutableIntStateOf(0) }
+    val currentHero = heroes.getOrNull(heroIndex) ?: state.hero
+    // The banner moves to the next title every few seconds while it is on screen; it holds still while you browse the rows.
+    LaunchedEffect(heroes.size, focusMemory.key == null) {
+        if (heroes.size > 1 && focusMemory.key == null) {
+            while (true) {
+                delay(heroIntervalMs)
+                heroIndex = HeroRotation.next(heroIndex, heroes.size)
+            }
+        }
+    }
+    val navSolid by androidx.compose.runtime.remember {
+        androidx.compose.runtime.derivedStateOf { listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 200 }
+    }
+    var focusedItem by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<BaseItemDto?>(previewFocusedItem) }
     var heroHasFocus by androidx.compose.runtime.mutableStateOf(false)
     suspend fun focusHero() {
         // The first request can land before the button is attached or the window has focus; retry until it sticks.
@@ -207,6 +284,20 @@ fun HomeContent(
     LaunchedEffect(state.hero?.Id) {
         if (state.hero != null && !focusMemory.hasKey) focusHero()
     }
+    // Returning from playback: the remembered card may be gone (Next Up and Continue Watching change after
+    // watching) or scrolled out of composition. If focus was not restored, fall back to the hero instead of
+    // leaving the screen with nothing focused.
+    LaunchedEffect(state.sections.size, state.hero?.Id) {
+        if (focusMemory.pending && focusMemory.key != null) {
+            delay(1200)
+            if (focusMemory.pending) {
+                focusMemory.pending = false
+                focusMemory.key = null
+                listState.scrollToItem(0)
+                focusHero()
+            }
+        }
+    }
     // Back from deep in the rows goes back to the top of Home first; the next Back exits.
     BackHandler(enabled = focusMemory.key != null) {
         focusMemory.key = null
@@ -215,26 +306,61 @@ fun HomeContent(
             focusHero()
         }
     }
+    // The details strip takes its own space under the rows so it never covers the focused row.
+    val showStrip = !heroHasFocus && focusMemory.key != null && focusedItem != null
+    val stripSpace by androidx.compose.animation.core.animateDpAsState(
+        targetValue = if (showStrip) 112.dp else 0.dp,
+        animationSpec = androidx.compose.animation.core.tween(220),
+        label = "stripSpace",
+    )
+    // Focus scrolling keeps the focused card AND its row title below the menu bar (default scrolling stops at the screen edge).
+    val topInsetPx = with(androidx.compose.ui.platform.LocalDensity.current) { 124.dp.toPx() }
+    val spec = remember(topInsetPx) { MenuAwareScrollSpec(topInsetPx) }
     Box(Modifier.fillMaxSize().background(JetflixColors.Background)) {
+        androidx.compose.runtime.CompositionLocalProvider(androidx.compose.foundation.gestures.LocalBringIntoViewSpec provides spec) {
         LazyColumn(
             state = listState,
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(bottom = 48.dp),
+            modifier = Modifier.fillMaxSize().padding(bottom = stripSpace),
+            contentPadding = PaddingValues(bottom = 140.dp),
             verticalArrangement = Arrangement.spacedBy(28.dp),
         ) {
             item(key = "hero") {
-                HeroBanner(
-                    hero = state.hero,
-                    backdropUrl = state.hero?.let { repo.backdropUrl(it, 1920) },
-                    logoUrl = state.hero?.let { repo.logoUrl(it.Id) },
-                    onPlay = onPlay,
-                    onMoreInfo = onItemClick,
-                    playFocus = heroPlayFocus,
-                    upFocus = navFocus,
-                    downFocus = if (state.sections.isNotEmpty()) firstRowFocus else null,
-                    onFocused = { focusMemory.key = null },
-                    onFocusChange = { heroHasFocus = it },
-                )
+                val currentHero = heroes.getOrNull(heroIndex) ?: state.hero
+                val heroBackdrop = currentHero?.let { repo.backdropUrl(it, 1920) }
+                Box(Modifier.fillMaxWidth()) {
+                    // Blurred, colour-matched copy of the featured title surrounds the inset hero and sits behind the menu.
+                    if (heroBackdrop != null) {
+                        androidx.compose.animation.Crossfade(
+                            targetState = heroBackdrop,
+                            animationSpec = androidx.compose.animation.core.tween(durationMillis = 800),
+                            label = "heroBlur",
+                            modifier = Modifier.matchParentSize().clipToBounds(),
+                        ) { url ->
+                            ArtImage(url = tv.jetflix.app.ui.components.blurSource(url), contentDescription = null, modifier = Modifier.fillMaxSize().then(Modifier.blurIfSupported(36.dp)), contentScale = ContentScale.Crop)
+                        }
+                        Box(Modifier.matchParentSize().background(Color(0xFF141414).copy(alpha = 0.35f)))
+                        Box(
+                            Modifier.matchParentSize().background(
+                                Brush.verticalGradient(0.7f to Color.Transparent, 1f to JetflixColors.Background),
+                            ),
+                        )
+                    }
+                    HeroBanner(
+                        hero = currentHero,
+                        backdropUrl = heroBackdrop,
+                        logoUrl = currentHero?.let { repo.logoUrl(it.Id) },
+                        onPlay = onPlay,
+                        onMoreInfo = onItemClick,
+                        playFocus = heroPlayFocus,
+                        upFocus = navFocus,
+                        downFocus = if (state.sections.isNotEmpty()) firstRowFocus else null,
+                        onFocused = { focusMemory.key = null },
+                        onFocusChange = { heroHasFocus = it },
+                        modifier = Modifier
+                            .padding(start = 16.dp, end = 16.dp, top = 68.dp, bottom = 12.dp)
+                            .clip(androidx.compose.foundation.shape.RoundedCornerShape(20.dp)),
+                    )
+                }
             }
             state.sections.forEach { section ->
                 item(key = section.title) {
@@ -247,6 +373,7 @@ fun HomeContent(
                         },
                         onItemClick = onItemClick,
                         focusMemory = focusMemory,
+                        onItemFocused = { focusedItem = it },
                         firstItemFocus = if (section === state.sections.first()) firstRowFocus else null,
                         upFocus = if (section === state.sections.first() && state.hero != null) heroPlayFocus else null,
                     )
@@ -263,6 +390,10 @@ fun HomeContent(
                 }
             }
         }
+        }
+        if (showStrip) {
+            focusedItem?.let { FocusedDetails(it, Modifier.align(Alignment.BottomStart)) }
+        }
         TopNavBar(
             selected = JetflixTab.HOME,
             userName = userName,
@@ -271,6 +402,9 @@ fun HomeContent(
             modifier = Modifier.align(Alignment.TopCenter),
             downFocus = if (state.hero != null) heroPlayFocus else if (state.sections.isNotEmpty()) firstRowFocus else null,
             selectedFocus = navFocus,
+            solid = navSolid,
+            blurArtUrl = (if (navSolid) focusedItem?.let { repo.backdropUrl(it, 960) } else null)
+                ?: (heroes.getOrNull(heroIndex) ?: state.hero)?.let { repo.backdropUrl(it, 960) },
         )
     }
 }
@@ -287,19 +421,29 @@ fun HeroBanner(
     downFocus: FocusRequester? = null,
     onFocused: () -> Unit = {},
     onFocusChange: (Boolean) -> Unit = {},
+    modifier: Modifier = Modifier,
+    height: androidx.compose.ui.unit.Dp = 380.dp,
 ) {
     Box(
-        Modifier
+        modifier
             .fillMaxWidth()
-            .height(380.dp),
+            .height(height),
     ) {
         if (backdropUrl != null) {
-            ArtImage(
-                url = backdropUrl,
-                contentDescription = hero?.displayTitle(),
+            // Slow cross-fade between featured titles; the buttons are outside it so focus is never disturbed.
+            androidx.compose.animation.Crossfade(
+                targetState = backdropUrl,
+                animationSpec = androidx.compose.animation.core.tween(durationMillis = 800),
+                label = "heroBackdrop",
                 modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop,
-            )
+            ) { url ->
+                ArtImage(
+                    url = url,
+                    contentDescription = hero?.displayTitle(),
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop,
+                )
+            }
         }
         Box(
             Modifier
@@ -398,5 +542,27 @@ fun HeroBanner(
                 }
             }
         }
+    }
+}
+
+
+/** Details for the focused title, shown along the bottom while browsing rows: genre, year, rating, length and synopsis. */
+@Composable
+fun FocusedDetails(item: BaseItemDto, modifier: Modifier = Modifier) {
+    Column(
+        modifier
+            .fillMaxWidth()
+            .background(JetflixColors.Background)
+            .padding(start = 48.dp, end = 48.dp, top = 8.dp, bottom = 10.dp),
+    ) {
+        Text(item.displayTitle(), style = JetflixType.sectionTitle, color = JetflixColors.TextPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        val meta = listOfNotNull(
+            item.ProductionYear?.toString(),
+            item.OfficialRating,
+            item.runtimeLabel(),
+            item.Genres.take(3).joinToString(" • ").ifEmpty { null },
+        ).joinToString("  |  ")
+        if (meta.isNotEmpty()) Text(meta, style = JetflixType.body, color = JetflixColors.TextSecondary, maxLines = 1)
+        item.Overview?.let { Text(it, style = JetflixType.body, color = JetflixColors.TextSecondary, maxLines = 2, overflow = TextOverflow.Ellipsis) }
     }
 }

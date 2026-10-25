@@ -129,6 +129,7 @@ fun SearchContent(
     onItemClick: (BaseItemDto) -> Unit,
     onSignOut: () -> Unit,
 ) {
+    val menuBack = tv.jetflix.app.ui.components.rememberMenuBack()
     var fieldFocused by remember { mutableStateOf(false) }
     val fieldFocus = remember { androidx.compose.ui.focus.FocusRequester() }
     androidx.compose.runtime.LaunchedEffect(Unit) { runCatching { fieldFocus.requestFocus() } }
@@ -194,6 +195,9 @@ fun SearchContent(
             }
         }
         TopNavBar(
+            solid = true,
+            selectedFocus = menuBack.focus,
+            onNavFocusChange = { menuBack.navHasFocus = it },
             selected = JetflixTab.SEARCH,
             userName = userName,
             onTabSelected = onTabSelected,

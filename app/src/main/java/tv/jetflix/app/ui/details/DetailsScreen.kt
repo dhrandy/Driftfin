@@ -97,7 +97,7 @@ class DetailsViewModel(val repo: JellyfinRepository) : ViewModel() {
                     return@launch
                 }
                 val similarDef = async {
-                    api.getSimilar(itemId, session.userId).body()?.Items ?: emptyList()
+                    tv.jetflix.app.data.RelatedItems.filter(item, api.getSimilar(itemId, session.userId).body()?.Items ?: emptyList())
                 }
                 var seasons: List<BaseItemDto> = emptyList()
                 var episodes: List<BaseItemDto> = emptyList()
@@ -110,7 +110,7 @@ class DetailsViewModel(val repo: JellyfinRepository) : ViewModel() {
                         includeItemTypes = "Season",
                         sortBy = "SortName",
                     ).body()?.Items ?: emptyList()
-                    allEpisodes = api.getEpisodes(item.Id, session.userId, limit = 2000)
+                    allEpisodes = api.getEpisodes(item.Id, session.userId, fields = "Overview", limit = 2000)
                         .body()?.Items ?: emptyList()
                     val target = allEpisodes.firstOrNull { it.Id == focusId } ?: EpisodeTarget.pick(allEpisodes)
                     seriesTarget = target
@@ -322,7 +322,7 @@ fun DetailsContent(
                                     Icon(Icons.Filled.Check, contentDescription = null)
                                     Spacer(Modifier.width(6.dp))
                                 }
-                                Text(if (item.UserData?.IsFavorite == true) "In My List" else "My List")
+                                Text(if (item.UserData?.IsFavorite == true) "In Favorites" else "Add to Favorites")
                             }
                         }
                     }
@@ -534,15 +534,15 @@ private fun EpisodeRow(episode: BaseItemDto, thumbUrl: String?, onClick: () -> U
                         Icon(Icons.Filled.Check, contentDescription = "Watched", tint = JetflixColors.Red, modifier = Modifier.size(16.dp))
                     }
                 }
-                episode.Overview?.let {
-                    Text(
-                        it,
-                        style = JetflixType.caption,
-                        color = JetflixColors.TextSecondary,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
+                // This episode's own Jellyfin summary; never the series overview. Missing data is said plainly.
+                val summary = episode.Overview?.takeIf { it.isNotBlank() }
+                Text(
+                    summary ?: "No summary available for this episode.",
+                    style = JetflixType.caption,
+                    color = if (summary != null) JetflixColors.TextSecondary else JetflixColors.TextMuted,
+                    maxLines = 3,
+                    overflow = TextOverflow.Ellipsis,
+                )
             }
         }
     }

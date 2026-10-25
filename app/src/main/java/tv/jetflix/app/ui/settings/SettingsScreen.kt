@@ -46,6 +46,8 @@ fun SettingsScreen(
         { AppSettings.setShowMyList(!myList) },
         { AppSettings.setShowNextUp(!nextUp) },
         onTabSelected, onSignOut,
+        posterSize = AppSettings.posterSize.collectAsState().value,
+        onCyclePosterSize = { AppSettings.setPosterSize(AppSettings.posterSize.value.next()) },
     )
 }
 
@@ -61,7 +63,10 @@ fun SettingsContent(
     onToggleNextUp: () -> Unit,
     onTabSelected: (JetflixTab) -> Unit,
     onSignOut: () -> Unit,
+    posterSize: tv.jetflix.app.data.PosterSize = tv.jetflix.app.data.PosterSize.Medium,
+    onCyclePosterSize: () -> Unit = {},
 ) {
+    val menuBack = tv.jetflix.app.ui.components.rememberMenuBack()
     val first = remember { FocusRequester() }
     LaunchedEffect(Unit) { try { first.requestFocus() } catch (_: Exception) { } }
     Box(Modifier.fillMaxSize().background(JetflixColors.Background)) {
@@ -72,6 +77,15 @@ fun SettingsContent(
             Text("Settings", style = JetflixType.sectionTitle, color = JetflixColors.TextPrimary)
             SettingRow("Autoplay next episode", "Starts the next episode after a 5 second countdown.", autoplay, onToggleAutoplay, Modifier.focusRequester(first))
             SettingRow("Show My List on Home", "My List uses your Jellyfin favorites for this user.", showMyList, onToggleMyList)
+            Button(
+                onClick = onCyclePosterSize,
+                colors = ButtonDefaults.colors(
+                    containerColor = JetflixColors.SurfaceLight.copy(alpha = 0.7f),
+                    contentColor = Color.White,
+                    focusedContainerColor = Color.White,
+                    focusedContentColor = Color.Black,
+                ),
+            ) { Text("Poster size: ${posterSize.label} (OK to change)") }
             SettingRow("Show Next Up on Home", "Jellyfin's next unwatched episode of series you follow.", showNextUp, onToggleNextUp)
             Spacer(Modifier.padding(top = 8.dp))
             Text(
@@ -90,6 +104,9 @@ fun SettingsContent(
             ) { Text("Switch profile / sign out") }
         }
         TopNavBar(
+            solid = true,
+            selectedFocus = menuBack.focus,
+            onNavFocusChange = { menuBack.navHasFocus = it },
             selected = JetflixTab.SETTINGS,
             userName = userName,
             onTabSelected = onTabSelected,

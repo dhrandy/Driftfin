@@ -39,7 +39,7 @@ class JellyfinRepositoryTest {
         assertEquals("tok", res.body()?.AccessToken)
         val req = server.takeRequest()
         assertEquals("/Users/AuthenticateByName", req.path)
-        assertTrue(req.getHeader("Authorization")!!.startsWith("MediaBrowser Client=\"Jetflix\""))
+        assertTrue(req.getHeader("Authorization")!!.startsWith("MediaBrowser Client=\"Driftfin\""))
         assertNull(req.getHeader("X-Emby-Authorization"))
         assertFalse(req.getHeader("Authorization")!!.contains("Token="))
     }
@@ -51,6 +51,16 @@ class JellyfinRepositoryTest {
         val req = server.takeRequest()
         assertEquals("/UserViews?userId=u1", req.path)
         assertTrue(req.getHeader("Authorization")!!.contains("Token=\"secret-token\""))
+    }
+
+    @Test fun filterOptionsComeFromTheServerWholeLibraryList() = runTest {
+        SessionManager.signIn(tv.jetflix.app.data.Session(base(), "u1", "n", "t", "dev"))
+        server.enqueue(MockResponse().setBody("""{"Genres":["Western","Action"],"Tags":[],"OfficialRatings":[],"Years":[1990,2001,1995],"Extra":1}"""))
+        val f = repo.apiFor(base()).getItemFilters("u1", "lib1", "Movie").body()!!
+        assertEquals(listOf("Western", "Action"), f.Genres)
+        assertEquals(listOf(1990, 2001, 1995), f.Years)
+        val path = server.takeRequest().path!!
+        assertTrue(path, path.startsWith("/Items/Filters?") && path.contains("parentId=lib1") && path.contains("includeItemTypes=Movie"))
     }
 
     @Test fun badCredentialsReturnUnsuccessfulNotCrash() = runTest {

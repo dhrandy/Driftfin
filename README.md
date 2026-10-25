@@ -1,4 +1,4 @@
-# Jetflix
+# Driftfin (formerly Jetflix)
 
 An Android TV client for your own Jellyfin server, with a Netflix-style layout (home rows, hero banner, My List, details, search, player). Original branding only: no Netflix assets. Not affiliated with Netflix or Jellyfin.
 
@@ -28,4 +28,4 @@ The workflow in `.github/workflows/android.yml` builds a signed release APK from
 
 ## License
 
-MIT. See LICENSE. Jetflix is an independent project, not affiliated with Netflix or Jellyfin.
+MIT. See LICENSE. Driftfin is an independent project, not affiliated with Netflix or Jellyfin.

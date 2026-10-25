@@ -4,7 +4,9 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -28,12 +30,18 @@ import tv.jetflix.app.ui.login.LoginViewModel
 import tv.jetflix.app.ui.player.PlayerScreen
 import tv.jetflix.app.ui.search.SearchScreen
 import tv.jetflix.app.ui.search.SearchViewModel
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.background
+import androidx.compose.ui.Modifier
 import tv.jetflix.app.ui.theme.JetflixTheme
 
 private sealed class Screen {
     data object Login : Screen()
     data object Home : Screen()
     data class Library(val tab: JetflixTab) : Screen()
+    data class Collection(val id: String, val title: String) : Screen()
     data object Search : Screen()
     data object Settings : Screen()
     data class Details(val itemId: String, val focusEpisodeId: String? = null) : Screen()
@@ -68,6 +76,13 @@ fun JetflixRoot() {
     BackHandler(enabled = session != null && backStack.size == 1 && current != Screen.Home) {
         backStack = listOf(Screen.Home)
     }
+    // Back on Home asks before leaving the app. Cancel or Back stays; Exit leaves.
+    var confirmExit by remember { mutableStateOf(false) }
+    BackHandler(enabled = session != null && backStack.size == 1 && current == Screen.Home && !confirmExit) { confirmExit = true }
+    if (confirmExit) {
+        val activity = context as? android.app.Activity
+        ExitDialog(onCancel = { confirmExit = false }, onExit = { confirmExit = false; activity?.finish() })
+    }
 
     if (session == null) {
         val vm: LoginViewModel = viewModel(
@@ -95,6 +110,18 @@ fun JetflixRoot() {
         )
     }
 
+    // In-app screensaver: after 5 idle minutes (never while playing) rotate unwatched movie backdrops fullscreen.
+    tv.jetflix.app.ui.components.IdleScreensaverHost(
+        blocked = current is Screen.Player || confirmExit,
+        loadUrls = {
+            val sess = session
+            if (sess == null) emptyList() else {
+                val api = app.repo.apiFor(sess.serverUrl)
+                val pool = api.getItems(userId = sess.userId, includeItemTypes = "Movie", recursive = true, sortBy = "Random", limit = 40, filters = "IsUnplayed").body()?.Items ?: emptyList()
+                tv.jetflix.app.data.BannerPicks.randomUnwatchedList(pool) { app.repo.backdropUrl(it, 1920) != null }.mapNotNull { app.repo.backdropUrl(it, 1920) }
+            }
+        },
+    ) {
     val stateHolder = androidx.compose.runtime.saveable.rememberSaveableStateHolder()
     stateHolder.SaveableStateProvider(key = current.toString()) {
     when (val screen = current) {
@@ -119,8 +146,23 @@ fun JetflixRoot() {
                 tab = screen.tab,
                 userName = userName,
                 onTabSelected = onTabSelected,
-                onItemClick = { push(Screen.Details(it.seriesOrSelfId())) },
+                onItemClick = { if (it.Type == "BoxSet") push(Screen.Collection(it.Id, it.Name.orEmpty())) else push(Screen.Details(it.seriesOrSelfId())) },
                 onSignOut = onSignOut,
+                onPlay = { push(Screen.Player(it)) },
+            )
+        }
+        is Screen.Collection -> {
+            val vm: LibraryViewModel = viewModel(key = "collection-${session?.userId}-${screen.id}", factory = viewModelFactory { LibraryViewModel(app.repo) })
+            LaunchedEffect(screen.id) { vm.loadCollection(screen.id) }
+            LibraryScreen(
+                viewModel = vm,
+                tab = JetflixTab.MY_LIST,
+                userName = userName,
+                onTabSelected = onTabSelected,
+                onItemClick = { if (it.Type == "BoxSet") push(Screen.Collection(it.Id, it.Name.orEmpty())) else push(Screen.Details(it.seriesOrSelfId())) },
+                onSignOut = onSignOut,
+                onPlay = { push(Screen.Player(it)) },
+                collectionTitle = screen.title,
             )
         }
         Screen.Settings -> {
@@ -161,6 +203,7 @@ fun JetflixRoot() {
         }
     }
     }
+    }
 }
 
 /** Episodes open their series details page; everything else opens itself. */
@@ -173,3 +216,25 @@ private fun <VM : androidx.lifecycle.ViewModel> viewModelFactory(create: () -> V
             return create() as T
         }
     }
+
+
+/** "Exit Driftfin?" with Cancel focused first, so a stray OK press never leaves the app. */
+@Composable
+fun ExitDialog(onCancel: () -> Unit, onExit: () -> Unit) {
+    val cancelFocus = remember { androidx.compose.ui.focus.FocusRequester() }
+    androidx.compose.ui.window.Dialog(onDismissRequest = onCancel) {
+        androidx.compose.foundation.layout.Column(
+            Modifier
+                .background(androidx.compose.ui.graphics.Color(0xFF222222), androidx.compose.foundation.shape.RoundedCornerShape(16.dp))
+                .padding(32.dp),
+            verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(20.dp),
+        ) {
+            androidx.tv.material3.Text("Exit Driftfin?", style = tv.jetflix.app.ui.theme.JetflixType.sectionTitle, color = androidx.compose.ui.graphics.Color.White)
+            androidx.compose.foundation.layout.Row(horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(12.dp)) {
+                androidx.tv.material3.Button(onClick = onCancel, modifier = Modifier.focusRequester(cancelFocus)) { androidx.tv.material3.Text("Cancel") }
+                androidx.tv.material3.Button(onClick = onExit) { androidx.tv.material3.Text("Exit") }
+            }
+        }
+    }
+    LaunchedEffect(Unit) { repeat(10) { try { cancelFocus.requestFocus(); return@LaunchedEffect } catch (_: Exception) { kotlinx.coroutines.delay(60) } } }
+}

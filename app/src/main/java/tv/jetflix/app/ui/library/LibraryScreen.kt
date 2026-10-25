@@ -2,6 +2,8 @@ package tv.jetflix.app.ui.library
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
@@ -15,6 +17,7 @@ import tv.jetflix.app.ui.components.restoreFocus
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -22,6 +25,10 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.itemsIndexed
+import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.lazy.grid.items
 import androidx.tv.material3.Text
 import kotlinx.coroutines.async
@@ -37,10 +44,38 @@ import tv.jetflix.app.ui.components.TopNavBar
 import tv.jetflix.app.ui.theme.JetflixColors
 import tv.jetflix.app.ui.theme.JetflixType
 
+/** Orders Jellyfin supports for the Shows and Movies grids. */
+enum class LibrarySort(val label: String, val sortBy: String, val order: String) {
+    Name("Name", "SortName", "Ascending"),
+    Added("Date Added", "DateCreated,SortName", "Descending"),
+    Released("Release Year", "ProductionYear,PremiereDate,SortName", "Descending"),
+    Rating("Rating", "CommunityRating,SortName", "Descending"),
+    PlayCount("Play Count", "PlayCount,SortName", "Descending"),
+}
+
+/** Watched filter, as in the Jellyfin IsPlayed / IsUnplayed item filters. */
+enum class WatchFilter(val label: String, val jellyfin: String?) {
+    All("All", null), Unwatched("Unwatched", "IsUnplayed"), Watched("Watched", "IsPlayed");
+    fun next() = values()[(ordinal + 1) % values().size]
+}
+
+/** Sections inside My Driftfin. Collections are Jellyfin box sets; Favorites are the user's Jellyfin favorites. */
+enum class MySection(val label: String) { Collections("Collections"), Favorites("Favorites") }
+
 data class LibraryUiState(
+    val sort: LibrarySort = LibrarySort.Name,
+    val reversed: Boolean = false,
+    val section: MySection = MySection.Favorites,
     val loading: Boolean = true,
     val error: String? = null,
     val items: List<BaseItemDto> = emptyList(),
+    /** Random title nobody has started, for the banner on Movies and Shows. Null hides the banner. */
+    val banner: BaseItemDto? = null,
+    val watch: WatchFilter = WatchFilter.All,
+    val genre: String? = null,
+    val year: Int? = null,
+    val genres: List<String> = emptyList(),
+    val years: List<Int> = emptyList(),
 )
 
 /** Grid of every Movie (or Series) across all libraries of that type. */
@@ -49,23 +84,108 @@ class LibraryViewModel(val repo: JellyfinRepository) : ViewModel() {
     private val _state = MutableStateFlow(LibraryUiState())
     val state = _state.asStateFlow()
 
+    private var sort = LibrarySort.Name
+    private var reversed = false
+    private var section = MySection.Favorites
+    private var bannerTab: JetflixTab? = null
+    private var collectionId: String? = null
+    private var watch = WatchFilter.All
+    private var genre: String? = null
+    private var year: Int? = null
+    private var knownGenres = emptyList<String>()
+    private var knownYears = emptyList<Int>()
+
+    private fun filterString(extra: String? = null) = listOfNotNull(extra, watch.jellyfin).joinToString(",").ifEmpty { null }
+
+    /** Genre and year choices come from the server's own list for the whole library, never from the filtered items. */
+    private suspend fun loadOptions(tab: JetflixTab, api: tv.jetflix.app.data.JellyfinApi, userId: String, parents: List<String?>, types: String) {
+        if (knownGenres.isNotEmpty() || knownYears.isNotEmpty()) return
+        val all = parents.mapNotNull { p -> try { api.getItemFilters(userId, p, types).body() } catch (_: Exception) { null } }
+        knownGenres = all.flatMap { it.Genres }.distinct().sorted()
+        knownYears = all.flatMap { it.Years }.distinct().sortedDescending()
+    }
+
+    private fun order(): String = if (reversed) (if (sort.order == "Ascending") "Descending" else "Ascending") else sort.order
+
+    private fun fresh(loading: Boolean = false, error: String? = null, items: List<BaseItemDto> = emptyList(), banner: BaseItemDto? = null) =
+        LibraryUiState(sort = sort, reversed = reversed, section = section, loading = loading, error = error, items = items, banner = banner, watch = watch, genre = genre, year = year, genres = knownGenres, years = knownYears)
+
+    fun cycleWatch(tab: JetflixTab) { watch = watch.next(); _state.value = _state.value.copy(watch = watch); load(tab) }
+    fun setGenre(tab: JetflixTab, value: String?) { genre = value; _state.value = _state.value.copy(genre = value); load(tab) }
+    fun setYear(tab: JetflixTab, value: Int?) { year = value; _state.value = _state.value.copy(year = value); load(tab) }
+
+    fun setReversed(tab: JetflixTab, value: Boolean) {
+        if (value == reversed) return
+        reversed = value
+        _state.value = _state.value.copy(reversed = value)
+        load(tab)
+    }
+
+    fun setSection(tab: JetflixTab, newSection: MySection) {
+        if (newSection == section) return
+        section = newSection
+        _state.value = fresh(loading = true)
+        load(tab)
+    }
+
+    /** Items inside one Jellyfin collection (box set), in the server's own order unless a sort is picked. */
+    fun loadCollection(id: String) {
+        collectionId = id
+        load(JetflixTab.MY_LIST)
+    }
+
+    fun setSort(tab: JetflixTab, newSort: LibrarySort) {
+        if (newSort == sort) return
+        sort = newSort
+        _state.value = _state.value.copy(sort = newSort)
+        load(tab)
+    }
+
     fun load(tab: JetflixTab) {
         val session = SessionManager.session.value ?: return
         val api = repo.apiFor(session.serverUrl)
         val includeTypes = if (tab == JetflixTab.MOVIES) "Movie" else "Series"
         viewModelScope.launch {
-            if (_state.value.items.isEmpty()) _state.value = LibraryUiState(loading = true)
+            if (_state.value.items.isEmpty()) _state.value = fresh(loading = true)
             try {
-                if (tab == JetflixTab.MY_LIST) {
-                    val favs = api.getItems(
+                val inCollection = collectionId
+                if (inCollection != null) {
+                    val kids = api.getItems(
                         userId = session.userId,
-                        includeItemTypes = "Movie,Series",
-                        recursive = true,
-                        sortBy = "SortName",
-                        sortOrder = "Ascending",
-                        filters = "IsFavorite",
+                        parentId = inCollection,
+                        sortBy = sort.sortBy,
+                        sortOrder = order(),
+                        fields = "Overview,Genres",
+                        filters = filterString(), genres = genre, years = year?.toString(),
                     ).body()?.Items ?: emptyList()
-                    _state.value = LibraryUiState(loading = false, items = favs)
+                    loadOptions(tab, api, session.userId, listOf(null), "Movie,Series")
+                    _state.value = fresh(items = kids)
+                    return@launch
+                }
+                if (tab == JetflixTab.MY_LIST) {
+                    val mine = if (section == MySection.Collections) {
+                        api.getItems(
+                            userId = session.userId,
+                            includeItemTypes = "BoxSet",
+                            recursive = true,
+                            sortBy = sort.sortBy,
+                            sortOrder = order(),
+                            fields = "Overview,Genres,ChildCount",
+                            filters = filterString(), genres = genre, years = year?.toString(),
+                        )
+                    } else {
+                        api.getItems(
+                            userId = session.userId,
+                            includeItemTypes = "Movie,Series",
+                            recursive = true,
+                            sortBy = sort.sortBy,
+                            sortOrder = order(),
+                            fields = "Overview,Genres",
+                            filters = filterString("IsFavorite"), genres = genre, years = year?.toString(),
+                        )
+                    }.body()?.Items ?: emptyList()
+                    loadOptions(tab, api, session.userId, listOf(null), "Movie,Series")
+                    _state.value = fresh(items = mine)
                     return@launch
                 }
                 val views = api.getUserViews(session.userId).body()?.Items ?: emptyList()
@@ -79,14 +199,22 @@ class LibraryViewModel(val repo: JellyfinRepository) : ViewModel() {
                             parentId = view.Id,
                             includeItemTypes = includeTypes,
                             recursive = true,
-                            sortBy = "SortName",
-                            sortOrder = "Ascending",
+                            sortBy = sort.sortBy,
+                            sortOrder = order(),
+                            fields = "Overview,Genres",
+                            filters = filterString(), genres = genre, years = year?.toString(),
                         ).body()?.Items ?: emptyList()
                     }
                 }.flatMap { it.await() }.distinctBy { it.Id }
-                _state.value = LibraryUiState(loading = false, items = merged)
+                loadOptions(tab, api, session.userId, wanted.map { it.Id }, includeTypes)
+                val keep = _state.value.banner?.takeIf { b -> bannerTab == tab && merged.any { it.Id == b.Id } }
+                bannerTab = tab
+                val banner = keep ?: tv.jetflix.app.data.BannerPicks.randomUnwatched(
+                    merged, isShows = tab == JetflixTab.SHOWS, hasBackdrop = { repo.backdropUrl(it) != null },
+                )
+                _state.value = fresh(items = merged, banner = banner)
             } catch (e: Exception) {
-                _state.value = LibraryUiState(loading = false, error = "Couldn't load (${e.javaClass.simpleName})")
+                _state.value = fresh(error = "Couldn't load (${e.javaClass.simpleName})")
             }
         }
     }
@@ -100,11 +228,21 @@ fun LibraryScreen(
     onTabSelected: (JetflixTab) -> Unit,
     onItemClick: (BaseItemDto) -> Unit,
     onSignOut: () -> Unit,
+    onPlay: (BaseItemDto) -> Unit = {},
+    collectionId: String? = null,
+    collectionTitle: String? = null,
 ) {
     val state by viewModel.state.collectAsState()
-    LibraryContent(state, viewModel.repo, tab, userName, onTabSelected, onItemClick, onSignOut)
+    LibraryContent(
+        state, viewModel.repo, tab, userName, onTabSelected, onItemClick, onSignOut,
+        onSort = { viewModel.setSort(tab, it) }, onPlay = onPlay,
+        onReverse = { viewModel.setReversed(tab, it) }, onSection = { viewModel.setSection(tab, it) },
+        onWatch = { viewModel.cycleWatch(tab) }, onGenre = { viewModel.setGenre(tab, it) }, onYear = { viewModel.setYear(tab, it) },
+        collectionTitle = collectionTitle,
+    )
 }
 
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun LibraryContent(
     state: LibraryUiState,
@@ -114,6 +252,14 @@ fun LibraryContent(
     onTabSelected: (JetflixTab) -> Unit,
     onItemClick: (BaseItemDto) -> Unit,
     onSignOut: () -> Unit,
+    onSort: (LibrarySort) -> Unit = {},
+    onPlay: (BaseItemDto) -> Unit = {},
+    onReverse: (Boolean) -> Unit = {},
+    onSection: (MySection) -> Unit = {},
+    onWatch: () -> Unit = {},
+    onGenre: (String?) -> Unit = {},
+    onYear: (Int?) -> Unit = {},
+    collectionTitle: String? = null,
 ) {
     val focusMemory = rememberFocusMemory()
     val gridState = androidx.compose.foundation.lazy.grid.rememberLazyGridState()
@@ -124,33 +270,173 @@ fun LibraryContent(
             try { firstFocus.requestFocus() } catch (_: Exception) { }
         }
     }
+    val sortFocus = remember { FocusRequester() }
+    val filterFocus = remember { FocusRequester() }
+    var picker by remember { androidx.compose.runtime.mutableStateOf<String?>(null) }
+    if (picker == "genre") {
+        OptionPicker("Genre", state.genres.map { it to it }, state.genre, { picker = null }) { onGenre(it); picker = null }
+    } else if (picker == "year") {
+        OptionPicker("Year", state.years.map { it.toString() to it }, state.year, { picker = null }) { onYear(it); picker = null }
+    }
+    var focusedItem by remember { androidx.compose.runtime.mutableStateOf<BaseItemDto?>(null) }
+    val navFocus = remember { FocusRequester() }
+    var navHasFocus by remember { androidx.compose.runtime.mutableStateOf(false) }
+    // Back from the grid goes to the top menu first, as on Netflix TV; Back from the menu leaves.
+    androidx.activity.compose.BackHandler(enabled = !navHasFocus && collectionTitle == null) {
+        try { navFocus.requestFocus() } catch (_: Exception) { }
+    }
+    val isMine = tab == JetflixTab.MY_LIST && collectionTitle == null
+    val showSort = (tab != JetflixTab.MY_LIST || collectionTitle != null || isMine) && (state.items.isNotEmpty() || state.sort != LibrarySort.Name || isMine || state.watch != WatchFilter.All || state.genre != null || state.year != null)
+    val sectionFocus = remember { FocusRequester() }
+    val banner = if (tab != JetflixTab.MY_LIST) state.banner else null
+    val bannerFocus = remember { FocusRequester() }
+    LaunchedEffect(banner?.Id) {
+        if (banner != null && startedFresh) {
+            repeat(10) { try { bannerFocus.requestFocus(); return@LaunchedEffect } catch (_: Exception) { kotlinx.coroutines.delay(60) } }
+        }
+    }
     Box(Modifier.fillMaxSize().background(JetflixColors.Background)) {
-        if (state.items.isNotEmpty()) {
+        if (state.items.isNotEmpty() || isMine) {
+            val barPx = with(androidx.compose.ui.platform.LocalDensity.current) { 76.dp.toPx() }
+            val scrollSpec = remember(barPx) { tv.jetflix.app.ui.home.MenuAwareScrollSpec(barPx) }
+            androidx.compose.runtime.CompositionLocalProvider(androidx.compose.foundation.gestures.LocalBringIntoViewSpec provides scrollSpec) {
             LazyVerticalGrid(
-                columns = GridCells.Fixed(6),
+                columns = GridCells.Fixed(tv.jetflix.app.data.AppSettings.posterSize.collectAsState().value.gridColumns),
                 state = gridState,
                 modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(start = 48.dp, end = 48.dp, top = 96.dp, bottom = 48.dp),
+                contentPadding = PaddingValues(start = 48.dp, end = 48.dp, top = 76.dp, bottom = 48.dp),
                 horizontalArrangement = Arrangement.spacedBy(14.dp),
                 verticalArrangement = Arrangement.spacedBy(18.dp),
             ) {
-                items(state.items, key = { it.Id }) { item ->
+                if (banner != null) {
+                    item(key = "banner", span = { androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan) }) {
+                        tv.jetflix.app.ui.home.HeroBanner(
+                            hero = banner,
+                            backdropUrl = repo.backdropUrl(banner, 1920),
+                            logoUrl = repo.logoUrl(banner.Id),
+                            onPlay = onPlay,
+                            onMoreInfo = onItemClick,
+                            playFocus = bannerFocus,
+                            upFocus = navFocus,
+                            downFocus = if (showSort) sortFocus else null,
+                            modifier = Modifier
+                                .clip(androidx.compose.foundation.shape.RoundedCornerShape(20.dp)),
+                            height = 300.dp,
+                        )
+                    }
+                }
+                if (collectionTitle != null) {
+                    item(key = "collectionTitle", span = { androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan) }) {
+                        Text(collectionTitle, style = JetflixType.heroTitle, color = JetflixColors.TextPrimary, maxLines = 1)
+                    }
+                }
+                if (isMine) {
+                    item(key = "sections", span = { androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan) }) {
+                        androidx.compose.foundation.layout.Row(
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            modifier = Modifier.focusProperties { down = sortFocus },
+                        ) {
+                            MySection.values().forEach { sec ->
+                                val selected = sec == state.section
+                                androidx.tv.material3.Button(
+                                    onClick = { onSection(sec) },
+                                    modifier = if (selected) Modifier.focusRequester(sectionFocus) else Modifier,
+                                    colors = androidx.tv.material3.ButtonDefaults.colors(
+                                        containerColor = if (selected) androidx.compose.ui.graphics.Color(0xFF3A3A3A) else androidx.compose.ui.graphics.Color.Transparent,
+                                        contentColor = androidx.compose.ui.graphics.Color.White,
+                                        focusedContainerColor = androidx.compose.ui.graphics.Color.White,
+                                        focusedContentColor = androidx.compose.ui.graphics.Color.Black,
+                                    ),
+                                ) { Text(sec.label, style = JetflixType.body) }
+                            }
+                        }
+                    }
+                }
+                if (showSort) {
+                    item(key = "sort", span = { androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan) }) {
+                        androidx.compose.foundation.layout.Row(
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            modifier = Modifier
+                                .then(Modifier.focusProperties { down = filterFocus })
+                                .then(if (banner != null) Modifier.focusProperties { up = bannerFocus } else Modifier)
+                                .then(if (isMine) Modifier.focusProperties { up = sectionFocus } else Modifier),
+                        ) {
+                            val ascending = (state.sort.order == "Ascending") != state.reversed
+                            androidx.tv.material3.Button(
+                                onClick = { onReverse(!state.reversed) },
+                                colors = androidx.tv.material3.ButtonDefaults.colors(
+                                    containerColor = androidx.compose.ui.graphics.Color.Transparent,
+                                    contentColor = androidx.compose.ui.graphics.Color.White,
+                                    focusedContainerColor = androidx.compose.ui.graphics.Color.White,
+                                    focusedContentColor = androidx.compose.ui.graphics.Color.Black,
+                                ),
+                            ) { Text(if (ascending) "Ascending" else "Descending", style = JetflixType.body) }
+                            Text("Sort by", style = JetflixType.body, color = JetflixColors.TextSecondary, modifier = Modifier.padding(top = 8.dp, end = 4.dp))
+                            LibrarySort.values().forEach { option ->
+                                val selected = option == state.sort
+                                androidx.tv.material3.Button(
+                                    onClick = { onSort(option) },
+                                    modifier = if (selected) Modifier.focusRequester(sortFocus) else Modifier,
+                                    colors = androidx.tv.material3.ButtonDefaults.colors(
+                                        containerColor = if (selected) androidx.compose.ui.graphics.Color(0xFF3A3A3A) else androidx.compose.ui.graphics.Color.Transparent,
+                                        contentColor = androidx.compose.ui.graphics.Color.White,
+                                        focusedContainerColor = androidx.compose.ui.graphics.Color.White,
+                                        focusedContentColor = androidx.compose.ui.graphics.Color.Black,
+                                    ),
+                                ) { Text(option.label, style = JetflixType.body) }
+                            }
+                        }
+                    }
+                }
+                if (showSort) {
+                    item(key = "filter", span = { androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan) }) {
+                        androidx.compose.foundation.layout.Row(
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            modifier = Modifier
+                                .focusProperties { up = sortFocus }
+                                .then(if (startedFresh && state.items.isNotEmpty()) Modifier.focusProperties { down = firstFocus } else Modifier),
+                        ) {
+                            Text("Filter", style = JetflixType.body, color = JetflixColors.TextSecondary, modifier = Modifier.padding(top = 8.dp, end = 4.dp))
+                            val chips = listOf(
+                                "Watched: ${state.watch.label}" to onWatch,
+                                "Genre: ${state.genre ?: "All"}" to { picker = "genre" },
+                                "Year: ${state.year ?: "All"}" to { picker = "year" },
+                            )
+                            chips.forEachIndexed { i, (label, click) ->
+                                androidx.tv.material3.Button(
+                                    onClick = click,
+                                    modifier = if (i == 0) Modifier.focusRequester(filterFocus) else Modifier,
+                                    colors = androidx.tv.material3.ButtonDefaults.colors(
+                                        containerColor = if (label.endsWith(": All")) androidx.compose.ui.graphics.Color.Transparent else androidx.compose.ui.graphics.Color(0xFF3A3A3A),
+                                        contentColor = androidx.compose.ui.graphics.Color.White,
+                                        focusedContainerColor = androidx.compose.ui.graphics.Color.White,
+                                        focusedContentColor = androidx.compose.ui.graphics.Color.Black,
+                                    ),
+                                ) { Text(label, style = JetflixType.body) }
+                            }
+                        }
+                    }
+                }
+                itemsIndexed(state.items, key = { _, it -> it.Id }) { index, item ->
                     PosterCard(
                         item = item,
                         imageUrl = repo.posterUrl(item),
-                        modifier = if (startedFresh && item.Id == state.items.first().Id) {
-                            Modifier.focusRequester(firstFocus).restoreFocus(focusMemory, item.Id)
-                        } else {
-                            Modifier.restoreFocus(focusMemory, item.Id)
-                        },
+                        modifier = (if (showSort && index < tv.jetflix.app.data.AppSettings.posterSize.value.gridColumns) Modifier.focusProperties { up = filterFocus } else Modifier)
+                            .onFocusChanged { if (it.hasFocus) focusedItem = item }
+                            .then(if (startedFresh && item.Id == state.items.first().Id) {
+                                Modifier.focusRequester(firstFocus).restoreFocus(focusMemory, item.Id)
+                            } else {
+                                Modifier.restoreFocus(focusMemory, item.Id)
+                            }),
                         onClick = { onItemClick(item) },
-                        width = 160.dp,
+                        width = 160.dp * tv.jetflix.app.data.AppSettings.posterSize.value.scale,
                     )
                 }
             }
+            }
         } else if (!state.loading) {
             Text(
-                state.error ?: if (tab == JetflixTab.MY_LIST) "Your list is empty. Open a title and choose My List to add it." else "No ${tab.label.lowercase()} found.",
+                state.error ?: if (tab == JetflixTab.MY_LIST) (if (state.section == MySection.Collections) "No collections found on this server." else "No favorites yet. Open a title and choose Add to Favorites.") else "No ${tab.label.lowercase()} found.",
                 style = JetflixType.body,
                 color = JetflixColors.TextSecondary,
                 modifier = Modifier
@@ -159,11 +445,57 @@ fun LibraryContent(
             )
         }
         TopNavBar(
+            solid = true,
             selected = tab,
             userName = userName,
             onTabSelected = onTabSelected,
             onSignOut = onSignOut,
             modifier = Modifier.align(Alignment.TopCenter),
+            downFocus = if (banner != null) bannerFocus else if (isMine) sectionFocus else if (showSort) sortFocus else null,
+            selectedFocus = navFocus,
+            blurArtUrl = (focusedItem ?: banner)?.let { repo.backdropUrl(it, 960) },
+            onNavFocusChange = { navHasFocus = it },
         )
     }
+}
+
+/** Pick one value (or All) from the server's full list. Back closes it without changing anything. */
+@Composable
+fun <T> OptionPicker(title: String, options: List<Pair<String, T>>, selected: T?, onDismiss: () -> Unit, onPick: (T?) -> Unit) {
+    val focus = remember { FocusRequester() }
+    androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
+        androidx.compose.foundation.layout.Column(
+            Modifier
+                .background(androidx.compose.ui.graphics.Color(0xFF222222), androidx.compose.foundation.shape.RoundedCornerShape(16.dp))
+                .padding(24.dp)
+                .width(760.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            Text(title, style = JetflixType.sectionTitle, color = androidx.compose.ui.graphics.Color.White)
+            if (options.isEmpty()) Text("The server returned no ${title.lowercase()} values.", style = JetflixType.body, color = JetflixColors.TextSecondary)
+            androidx.compose.foundation.lazy.grid.LazyVerticalGrid(
+                columns = androidx.compose.foundation.lazy.grid.GridCells.Fixed(4),
+                modifier = Modifier.height(320.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                val all: List<Pair<String, T?>> = listOf<Pair<String, T?>>("All" to null) + options
+                items(all.size) { i ->
+                    val (label, value) = all[i]
+                    val isSel = value == selected
+                    androidx.tv.material3.Button(
+                        onClick = { onPick(value) },
+                        modifier = if (isSel) Modifier.focusRequester(focus) else Modifier,
+                        colors = androidx.tv.material3.ButtonDefaults.colors(
+                            containerColor = if (isSel) androidx.compose.ui.graphics.Color(0xFF3A3A3A) else androidx.compose.ui.graphics.Color.Transparent,
+                            contentColor = androidx.compose.ui.graphics.Color.White,
+                            focusedContainerColor = androidx.compose.ui.graphics.Color.White,
+                            focusedContentColor = androidx.compose.ui.graphics.Color.Black,
+                        ),
+                    ) { Text(label, style = JetflixType.body, maxLines = 1) }
+                }
+            }
+        }
+    }
+    LaunchedEffect(Unit) { repeat(10) { try { focus.requestFocus(); return@LaunchedEffect } catch (_: Exception) { kotlinx.coroutines.delay(60) } } }
 }

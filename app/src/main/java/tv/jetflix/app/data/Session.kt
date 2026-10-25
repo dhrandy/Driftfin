@@ -131,7 +131,7 @@ object SessionManager {
     fun signOut() { _session.value = null }
 
     fun authorizationHeader(token: String? = null, deviceId: String? = null): String {
-        val base = "MediaBrowser Client=\"Jetflix\", Device=\"Android TV\", " +
+        val base = "MediaBrowser Client=\"Driftfin\", Device=\"Android TV\", " +
             "DeviceId=\"${deviceId ?: _session.value?.deviceId ?: "jetflix"}\", Version=\"0.1.0\""
         val t = token ?: _session.value?.token
         return if (t != null) "$base, Token=\"$t\"" else base
