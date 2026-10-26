@@ -45,7 +45,8 @@ class FrameReadoutSnapshotTest {
         val lines = listOf("Frame timing, last 20 seconds") + s.lines() + listOf(
             FrameStageMath.line("all frames ms:", FrameStageMath.averages(rows), true),
             FrameStageMath.line("slow frames ms:", FrameStageMath.averages(rows, 16.7), true),
-            "runs: home 1234 navBar 1234 cards 12345 imgLoads 1234",
+            "runs: home 1234 navBar 1234 cards 12345 details 1234",
+            "images: started 1234 memory 1200 disk 12 network 22 cancelled 123 failed 4",
             "gc runs 123 | blocking gc 12 (345 ms)",
             "blur off",
         )

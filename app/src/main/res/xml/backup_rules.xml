@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Auto-backup of API 30 and lower: keep the encrypted login out of backups. Its Keystore key never restores. -->
+<full-backup-content>
+    <exclude domain="sharedpref" path="jetflix_session.xml" />
+</full-backup-content>

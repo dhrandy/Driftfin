@@ -381,7 +381,7 @@ fun LibraryContent(
     var focusedItem by remember { androidx.compose.runtime.mutableStateOf<BaseItemDto?>(null) }
     val navFocus = remember { FocusRequester() }
     var navHasFocus by remember { androidx.compose.runtime.mutableStateOf(false) }
-    // Back from the grid goes to the top menu first, as on Netflix TV; Back from the menu leaves.
+    // Back from the grid goes to the top menu first, as on most TV apps; Back from the menu leaves.
     androidx.activity.compose.BackHandler(enabled = !navHasFocus && collectionTitle == null) {
         try { navFocus.requestFocus() } catch (_: Exception) { }
     }
@@ -406,12 +406,16 @@ fun LibraryContent(
             val barPx = with(androidx.compose.ui.platform.LocalDensity.current) { 76.dp.toPx() }
             val bottomPx = with(androidx.compose.ui.platform.LocalDensity.current) { 56.dp.toPx() }
             val scrollSpec = remember(barPx, bottomPx) { tv.jetflix.app.ui.home.MenuAwareScrollSpec(barPx, bottomPx) }
+            // Derived so the screen recomposes when this flips, not on every scrolled pixel.
+            val scrolledAway by androidx.compose.runtime.remember {
+                androidx.compose.runtime.derivedStateOf { gridState.firstVisibleItemIndex > 0 || gridState.firstVisibleItemScrollOffset > 0 }
+            }
             androidx.compose.runtime.CompositionLocalProvider(androidx.compose.foundation.gestures.LocalBringIntoViewSpec provides scrollSpec) {
             LazyVerticalGrid(
                 columns = GridCells.Fixed(tv.jetflix.app.data.AppSettings.posterSize.collectAsState().value.gridColumns),
                 state = gridState,
                 modifier = Modifier.fillMaxSize()
-                    .fadeUnderMenuBar(gridState.firstVisibleItemIndex > 0 || gridState.firstVisibleItemScrollOffset > 0),
+                    .fadeUnderMenuBar(scrolledAway),
                 contentPadding = PaddingValues(start = 32.dp, end = 32.dp, top = 76.dp, bottom = 48.dp),
                 horizontalArrangement = Arrangement.spacedBy(14.dp),
                 verticalArrangement = Arrangement.spacedBy(18.dp),

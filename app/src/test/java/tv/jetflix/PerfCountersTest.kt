@@ -14,7 +14,8 @@ class PerfCountersTest {
         val lines = PerfCounters.end()
         PerfCounters.inc("home")
         assertEquals("runs: cards 1 home 3".split(" ").sorted(), lines[0].split(" ").sorted())
-        assertTrue(lines[1].startsWith("gc runs"))
+        assertEquals("images: started 0 memory 0 disk 0 network 0 cancelled 0 failed 0", lines[1])
+        assertTrue(lines[2].startsWith("gc runs"))
         PerfCounters.begin()
         assertEquals("runs: none", PerfCounters.end()[0])
     }

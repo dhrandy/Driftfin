@@ -1,8 +1,8 @@
-# Driftfin (formerly Jetflix)
+# Driftfin
 
-An Android TV client for your own Jellyfin server, with a Netflix-style layout (home rows, hero banner, My List, details, search, player). Original branding only: no Netflix assets. Not affiliated with Netflix or Jellyfin.
+An Android TV client for your own Jellyfin server, with a TV-first layout (home rows, hero banner, My List, details, search, player). Not affiliated with Jellyfin.
 
-**Status: early, TV-only.** Built and unit-tested, but not yet verified on a real TV. Playback, HLS transcodes, subtitle loading and remote-control focus behavior have not been exercised on a device.
+**Status: alpha, TV-only.** Expect rough edges and bugs. It is unit-tested and snapshot-tested, and it has had hands-on use on one Android TV, but that is not broad device coverage. Playback, HLS transcodes, subtitle loading, remote-control focus and scrolling smoothness are still being checked on real hardware, and known issues are open. Do not rely on it as your only way to watch.
 
 ## What it does
 
@@ -15,8 +15,10 @@ An Android TV client for your own Jellyfin server, with a Netflix-style layout (
 ## Limits
 
 - Text subtitles only (SRT, WebVTT, ASS/SSA). Picture subtitles are not supported.
-- No trailers, downloads, skip-intro, kids/PIN profiles. No Netflix catalog or recommendations; "More like" is Jellyfin's similar-items list.
-- Unverified on devices.
+- No downloads, skip-intro, kids/PIN profiles. No recommendation engine; "More like" is Jellyfin's similar-items list.
+- Trailers play from the details page when the server has them.
+- Device coverage is thin (see Status). Performance on older or low-power TVs is not measured.
+- Server addresses may use plain `http://`, which is common on a home network. Sign-in details and the access token then travel unencrypted on that network, so use `https://` for anything outside your own LAN.
 
 ## Build
 
@@ -28,4 +30,4 @@ The workflow in `.github/workflows/android.yml` builds a signed release APK from
 
 ## License
 
-MIT. See LICENSE. Driftfin is an independent project, not affiliated with Netflix or Jellyfin.
+MIT. See LICENSE. Driftfin is an independent project, not affiliated with Jellyfin.

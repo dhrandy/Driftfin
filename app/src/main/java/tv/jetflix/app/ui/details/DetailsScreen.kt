@@ -73,6 +73,9 @@ data class DetailsUiState(
     val selectedSeasonId: String? = null,
     val similar: List<BaseItemDto> = emptyList(),
     val trailer: tv.jetflix.app.data.TrailerSource? = null,
+    val is4k: Boolean = false,
+    /** Episodes the server says have a 4K version (one small query per show page). Empty when unknown or on error. */
+    val fourKEpisodeIds: Set<String> = emptySet(),
 )
 
 class DetailsViewModel(val repo: JellyfinRepository) : ViewModel() {
@@ -110,7 +113,7 @@ class DetailsViewModel(val repo: JellyfinRepository) : ViewModel() {
                 }
                 if (!item.isSeries) {
                     // Movies show the page as soon as the title itself arrives; "More like this" fills in when ready.
-                    _state.value = DetailsUiState(loading = false, item = item, playTarget = item)
+                    _state.value = DetailsUiState(loading = false, item = item, playTarget = item, is4k = tv.jetflix.app.data.Resolution4K.badge(item))
                     val trailer = trailerDef.await()
                     if (_state.value.item?.Id == item.Id) _state.value = _state.value.copy(trailer = trailer)
                     val similar = similarDef.await()
@@ -129,6 +132,16 @@ class DetailsViewModel(val repo: JellyfinRepository) : ViewModel() {
                 val episodesDef = async {
                     api.getEpisodes(item.Id, session.userId, fields = "Overview", limit = 2000).body()?.Items ?: emptyList()
                 }
+                // Which episodes have a 4K version: the server's own is4K filter, IDs only, one request per page open.
+                // A failure just means no episode badges.
+                val fourKDef = async {
+                    try {
+                        api.getItems(
+                            userId = session.userId, parentId = item.Id, includeItemTypes = "Episode",
+                            recursive = true, is4K = true, fields = "", enableImages = false, enableUserData = false,
+                        ).body()?.Items?.map { it.Id }?.toSet() ?: emptySet<String>()
+                    } catch (_: Exception) { emptySet<String>() }
+                }
                 val seasons = seasonsDef.await()
                 allEpisodes = episodesDef.await()
                 val target = allEpisodes.firstOrNull { it.Id == focusId } ?: EpisodeTarget.pick(allEpisodes)
@@ -144,6 +157,8 @@ class DetailsViewModel(val repo: JellyfinRepository) : ViewModel() {
                     selectedSeasonId = selectedSeasonId,
                     similar = emptyList(),
                 )
+                val fourK = fourKDef.await()
+                if (_state.value.item?.Id == item.Id) _state.value = _state.value.copy(fourKEpisodeIds = fourK)
                 val trailer = trailerDef.await()
                 if (_state.value.item?.Id == item.Id) _state.value = _state.value.copy(trailer = trailer)
                 val similar = similarDef.await()
@@ -288,7 +303,7 @@ fun DetailsContent(
                             overflow = TextOverflow.Ellipsis,
                         )
                         Spacer(Modifier.height(8.dp))
-                        MetaRow(item)
+                        MetaRow(item, state.is4k)
                         Spacer(Modifier.height(14.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                             val target = state.playTarget ?: item
@@ -421,6 +436,7 @@ fun DetailsContent(
             items(state.episodes, key = { "ep-" + it.Id }) { ep ->
                 EpisodeRow(
                     episode = ep,
+                    is4k = ep.Id in state.fourKEpisodeIds,
                     thumbUrl = repo.thumbUrl(ep, 480),
                     onClick = { onPlay(ep) },
                 )
@@ -471,7 +487,7 @@ fun DetailsContent(
 }
 
 @Composable
-private fun MetaRow(item: BaseItemDto) {
+private fun MetaRow(item: BaseItemDto, is4k: Boolean = false) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -505,6 +521,19 @@ private fun MetaRow(item: BaseItemDto) {
                 Text("%.1f".format(rating), style = JetflixType.body, color = JetflixColors.TextSecondary)
             }
         }
+        if (is4k) FourKTag()
+    }
+}
+
+/** Small outlined "4K" tag: this title (or episode) has a 4K version. */
+@Composable
+private fun FourKTag() {
+    Box(
+        Modifier
+            .border(1.dp, JetflixColors.TextMuted, RoundedCornerShape(3.dp))
+            .padding(horizontal = 6.dp, vertical = 1.dp),
+    ) {
+        Text("4K", style = JetflixType.caption, color = JetflixColors.TextSecondary)
     }
 }
 
@@ -525,7 +554,7 @@ private fun SeasonChip(season: BaseItemDto, selected: Boolean, onClick: () -> Un
 }
 
 @Composable
-private fun EpisodeRow(episode: BaseItemDto, thumbUrl: String?, onClick: () -> Unit) {
+private fun EpisodeRow(episode: BaseItemDto, thumbUrl: String?, onClick: () -> Unit, is4k: Boolean = false) {
     androidx.tv.material3.Surface(
         onClick = onClick,
         modifier = Modifier
@@ -566,6 +595,10 @@ private fun EpisodeRow(episode: BaseItemDto, thumbUrl: String?, onClick: () -> U
                     episode.runtimeLabel()?.let {
                         Spacer(Modifier.width(12.dp))
                         Text(it, style = JetflixType.caption, color = JetflixColors.TextMuted)
+                    }
+                    if (is4k) {
+                        Spacer(Modifier.width(10.dp))
+                        FourKTag()
                     }
                     if (episode.UserData?.Played == true) {
                         Spacer(Modifier.width(10.dp))

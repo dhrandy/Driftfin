@@ -69,6 +69,9 @@ interface JellyfinApi {
         @Query("filters") filters: String? = null,
         @Query("genres") genres: String? = null,
         @Query("years") years: String? = null,
+        @Query("is4K") is4K: Boolean? = null,
+        @Query("enableImages") enableImages: Boolean? = null,
+        @Query("enableUserData") enableUserData: Boolean? = null,
     ): Response<BaseItemDtoQueryResult>
 
     @GET("Items/{itemId}")

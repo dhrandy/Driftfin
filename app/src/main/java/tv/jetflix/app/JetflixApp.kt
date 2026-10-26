@@ -28,14 +28,7 @@ class JetflixApp : Application(), ImageLoaderFactory {
 
     /** Coil image loader that authenticates image requests with the Jellyfin token. */
     override fun newImageLoader(): ImageLoader {
-        val client = OkHttpClient.Builder()
-            .addInterceptor { chain ->
-                chain.proceed(
-                    chain.request().newBuilder()
-                        .header("Authorization", SessionManager.authorizationHeader())
-                        .build(),
-                )
-            }
+        val client = SessionManager.authenticatedClientBuilder()
             .build()
         return ImageLoader.Builder(this)
             .okHttpClient(client)

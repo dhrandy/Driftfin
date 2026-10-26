@@ -107,14 +107,7 @@ fun PlayerScreen(
     var mediaSourceId by remember { mutableStateOf<String?>(null) }
 
     val player = remember {
-        val httpClient = OkHttpClient.Builder()
-            .addInterceptor { chain ->
-                chain.proceed(
-                    chain.request().newBuilder()
-                        .header("Authorization", SessionManager.authorizationHeader())
-                        .build(),
-                )
-            }
+        val httpClient = SessionManager.authenticatedClientBuilder()
             .build()
         val dataSourceFactory = OkHttpDataSource.Factory(httpClient)
         ExoPlayer.Builder(context)
@@ -314,7 +307,20 @@ fun PlayerScreen(
                         player.seekTo(player.currentPosition + 10_000)
                         true
                     }
-                    KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_MENU -> {
+                    KeyEvent.KEYCODE_DPAD_DOWN -> {
+                        // First Down only brings up the progress bar and title; a second press opens audio and subtitles.
+                        when (PlayerKeys.downAction(controlsVisible, nativeEvent.repeatCount)) {
+                            PlayerKeys.DownAction.RevealControls -> controlsVisible = true
+                            PlayerKeys.DownAction.Ignore -> Unit
+                            PlayerKeys.DownAction.OpenPanel -> {
+                                panelOptions = TrackCycler.options(player)
+                                panelIndex = panelOptions.indexOfFirst { it.selected }.coerceAtLeast(0)
+                                panelOpen = true
+                            }
+                        }
+                        true
+                    }
+                    KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_MENU -> {
                         controlsVisible = true
                         panelOptions = TrackCycler.options(player)
                         panelIndex = panelOptions.indexOfFirst { it.selected }.coerceAtLeast(0)

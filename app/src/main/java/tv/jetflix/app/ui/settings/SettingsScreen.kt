@@ -6,10 +6,13 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -49,6 +52,8 @@ fun SettingsScreen(
         onTabSelected, onSignOut,
         posterSize = AppSettings.posterSize.collectAsState().value,
         onCyclePosterSize = { AppSettings.setPosterSize(AppSettings.posterSize.value.next()) },
+        continueWatchingPosters = AppSettings.continueWatchingPosters.collectAsState().value,
+        onToggleContinueWatchingPosters = { AppSettings.setContinueWatchingPosters(!AppSettings.continueWatchingPosters.value) },
         liveBlur = AppSettings.liveBlur.collectAsState().value,
         onToggleLiveBlur = { AppSettings.setLiveBlur(!AppSettings.liveBlur.value) },
         onStartFrameTest = { (context as? android.app.Activity)?.let { tv.jetflix.app.ui.components.FrameStats.start(it) } },
@@ -80,19 +85,22 @@ fun SettingsContent(
     onStartFrameTest: () -> Unit = {},
     liveBlur: Boolean = true,
     onToggleLiveBlur: () -> Unit = {},
+    continueWatchingPosters: Boolean = false,
+    onToggleContinueWatchingPosters: () -> Unit = {},
 ) {
     val menuBack = tv.jetflix.app.ui.components.rememberMenuBack()
     val first = remember { FocusRequester() }
     LaunchedEffect(Unit) { try { first.requestFocus() } catch (_: Exception) { } }
     Box(Modifier.fillMaxSize().background(JetflixColors.Background)) {
         Column(
-            Modifier.align(Alignment.TopStart).padding(start = 48.dp, top = 110.dp).width(760.dp),
+            Modifier.align(Alignment.TopStart).fillMaxHeight().verticalScroll(rememberScrollState()).padding(start = 48.dp, top = 110.dp, bottom = 40.dp).width(760.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             Text("Settings", style = JetflixType.sectionTitle, color = JetflixColors.TextPrimary)
             SettingRow("Autoplay next episode", "Starts the next episode after a 5 second countdown.", autoplay, onToggleAutoplay, Modifier.focusRequester(first))
             SettingRow("Show My List on Home", "My List uses your Jellyfin favorites for this user.", showMyList, onToggleMyList)
             SettingRow("Poster size", "Small, Medium or Large cards on Home and in libraries. Press OK to change.", true, onCyclePosterSize, valueText = posterSize.label)
+            SettingRow("Continue Watching art", "Scene images (the wide look) or posters for the Continue Watching row. Press OK to change.", true, onToggleContinueWatchingPosters, valueText = if (continueWatchingPosters) "Posters" else "Scene images")
             SettingRow("Button sound", "A quiet sound when you move and when you select. Press OK to try the next one.", true, onCycleButtonSound, valueText = buttonSound.label)
             SettingRow("Live blur", "On is the normal look. Off swaps the live blur for a pre-softened picture, to see whether blur is what slows scrolling. Takes effect when you open the next screen.", liveBlur, onToggleLiveBlur)
             SettingRow("Frame timing test", "Press OK, then move around for 20 seconds (tiny REC counter in the corner). A result card shows afterward. Nothing is saved or sent.", true, onStartFrameTest, valueText = "Start")

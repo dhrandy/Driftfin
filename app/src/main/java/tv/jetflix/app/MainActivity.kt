@@ -111,7 +111,12 @@ fun JetflixRoot() {
         val vm: LoginViewModel = viewModel(
             factory = viewModelFactory { LoginViewModel(app.repo, app.tokenStore) },
         )
-        LoginScreen(viewModel = vm, onLoggedIn = { backStack = listOf(Screen.Home) })
+        LoginScreen(viewModel = vm, onLoggedIn = {
+            if (vm.state.value.sessionNotSaved) {
+                android.widget.Toast.makeText(context, "Signed in, but this device could not save the login securely. You will need to sign in again next time.", android.widget.Toast.LENGTH_LONG).show()
+            }
+            backStack = listOf(Screen.Home)
+        })
         return
     }
 

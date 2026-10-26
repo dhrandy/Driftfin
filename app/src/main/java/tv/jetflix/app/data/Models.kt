@@ -89,6 +89,8 @@ data class MediaStreamInfo(
     val IsExternal: Boolean? = null,
     val Language: String? = null,
     val DisplayTitle: String? = null,
+    val Width: Int? = null,
+    val Height: Int? = null,
 )
 
 @Serializable
@@ -136,6 +138,7 @@ data class BaseItemDto(
     val UserData: UserItemDataDto? = null,
     val RemoteTrailers: List<MediaUrl> = emptyList(),
     val LocalTrailerCount: Int? = null,
+    val MediaSources: List<MediaSourceInfo> = emptyList(),
 ) {
     val isMovie get() = Type == "Movie"
     val isSeries get() = Type == "Series"
@@ -209,4 +212,28 @@ object EpisodeTarget {
         }
         return episodes.firstOrNull { it.UserData?.Played != true } ?: episodes.first()
     }
+}
+
+/**
+ * Whether a title offers a 4K version, read from the server's own video stream sizes (never from the title or artwork).
+ * "4K" uses the same cut-off as Jellyfin's web client: width of 3800 or more, or height of 2000 or more.
+ * This says a 4K version exists; it does not promise which version plays.
+ */
+object Resolution4K {
+    /** True when any of the item's media sources has a 4K video stream; false when none does; null when no source gave a size. */
+    fun of(item: BaseItemDto): Boolean? {
+        var known = false
+        for (source in item.MediaSources) {
+            val video = source.MediaStreams?.firstOrNull { it.Type == "Video" } ?: continue
+            val w = video.Width ?: 0
+            val h = video.Height ?: 0
+            if (w <= 0 && h <= 0) continue
+            known = true
+            if (w >= 3800 || h >= 2000) return true
+        }
+        return if (known) false else null
+    }
+
+    /** Movie badge: shown when any of the movie's own versions is 4K. Episodes use the server's is4K filter instead; shows get none. */
+    fun badge(item: BaseItemDto): Boolean = item.Type == "Movie" && of(item) == true
 }

@@ -57,6 +57,7 @@ data class LoginUiState(
     val error: String? = null,
     val profiles: List<String> = emptyList(),
     val profilesNote: String? = null,
+    val sessionNotSaved: Boolean = false,
 )
 
 class LoginViewModel(
@@ -123,7 +124,7 @@ class LoginViewModel(
                     _state.value = _state.value.copy(connecting = false, error = "Sign-in failed. Check the username and password.")
                     return@launch
                 }
-                tokenStore.save(normalized, user.Id, user.Name ?: s.username.trim(), token)
+                val saved = tokenStore.save(normalized, user.Id, user.Name ?: s.username.trim(), token)
                 SessionManager.signIn(
                     Session(
                         serverUrl = normalized,
@@ -133,7 +134,7 @@ class LoginViewModel(
                         deviceId = tokenStore.deviceId(),
                     ),
                 )
-                _state.value = _state.value.copy(connecting = false)
+                _state.value = _state.value.copy(connecting = false, sessionNotSaved = !saved)
                 onSuccess()
             } catch (e: Exception) {
                 _state.value = _state.value.copy(

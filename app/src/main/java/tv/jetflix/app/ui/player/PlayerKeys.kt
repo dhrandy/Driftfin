@@ -39,6 +39,20 @@ fun KeyCaptureBox(
 }
 
 object PlayerKeys {
+    /** What a Down press does during playback. */
+    enum class DownAction { RevealControls, OpenPanel, Ignore }
+
+    /**
+     * First Down with the controls hidden only reveals them (progress bar, title). Down again, as a fresh press,
+     * opens the audio/subtitle panel. Auto-repeat events of a held key never act, so the press that revealed the
+     * controls cannot also move on to the panel.
+     */
+    fun downAction(controlsVisible: Boolean, repeatCount: Int): DownAction = when {
+        !controlsVisible -> DownAction.RevealControls
+        repeatCount > 0 -> DownAction.Ignore
+        else -> DownAction.OpenPanel
+    }
+
     /** Pause when the player is meant to be playing (even if still buffering); otherwise play, restarting if ended. */
     fun togglePlayback(player: Player) {
         if (player.playWhenReady && player.playbackState != Player.STATE_ENDED) {

@@ -49,8 +49,8 @@ fun Wordmark(modifier: Modifier = Modifier) {
 }
 
 /**
- * Netflix-style top bar: wordmark left, tab labels center-left, user name right.
- * Tabs report focus+click so D-pad navigation works like Netflix's.
+ * TV-style top bar: wordmark left, tab labels center-left, user name right.
+ * Tabs report focus+click so D-pad navigation works with the remote.
  */
 @Composable
 fun TopNavBar(
@@ -105,7 +105,7 @@ fun TopNavBar(
         ) {
         Wordmark()
         Spacer(Modifier.weight(1f))
-        // Search is a magnifier icon at the start of the menu, as on the current Netflix TV menu.
+        // Search is a magnifier icon at the start of the menu, the usual TV-menu pattern.
         SearchIconTab(
             selected = selected == JetflixTab.SEARCH,
             onClick = { onTabSelected(JetflixTab.SEARCH) },

@@ -45,6 +45,11 @@ fun ArtImage(
         model = ImageRequest.Builder(LocalContext.current)
             .data(url)
             .crossfade(150)
+            .listener(
+                onCancel = { PerfCounters.inc("imgCancel") },
+                onError = { _, _ -> PerfCounters.inc("imgError") },
+                onSuccess = { _, r -> PerfCounters.inc("img" + PerfCounters.sourceName(r.dataSource)) },
+            )
             .build(),
     )
     Image(painter = painter, contentDescription = contentDescription, modifier = modifier, contentScale = contentScale)

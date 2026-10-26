@@ -23,16 +23,26 @@ object PerfCounters {
     private fun gcNow(): LongArray = longArrayOf(stat("art.gc.gc-count"), stat("art.gc.blocking-gc-count"), stat("art.gc.blocking-gc-time"))
     private fun stat(key: String): Long = try { android.os.Debug.getRuntimeStat(key).toLong() } catch (_: Throwable) { 0L }
 
+    /** Where a finished image request got its pixels: memory (already decoded), disk cache, or the network. */
+    fun sourceName(src: coil.decode.DataSource): String = when (src) {
+        coil.decode.DataSource.MEMORY_CACHE, coil.decode.DataSource.MEMORY -> "Mem"
+        coil.decode.DataSource.DISK -> "Disk"
+        coil.decode.DataSource.NETWORK -> "Net"
+    }
+
     fun begin() { counts.clear(); gcStart = gcNow(); recording = true }
 
     /** Stops counting and returns two result lines. Block-time is the runtime's blocking GC total in ms. */
     fun end(): List<String> {
         recording = false
-        val order = listOf("home", "navBar", "cards", "imgLoads", "details")
+        val order = listOf("home", "navBar", "cards", "details")
         val parts = order.mapNotNull { k -> counts[k]?.let { "$k ${it.get()}" } }
+        val imgOrder = listOf("imgLoads" to "started", "imgMem" to "memory", "imgDisk" to "disk", "imgNet" to "network", "imgCancel" to "cancelled", "imgError" to "failed")
+        val imgParts = imgOrder.map { (k, label) -> "$label ${counts[k]?.get() ?: 0}" }
         val gc = gcNow()
         return listOf(
             "runs: " + (if (parts.isEmpty()) "none" else parts.joinToString(" ")),
+            "images: " + imgParts.joinToString(" "),
             "gc runs ${gc[0] - gcStart[0]} | blocking gc ${gc[1] - gcStart[1]} (${gc[2] - gcStart[2]} ms)",
         )
     }

@@ -62,4 +62,15 @@ class NewScreensSnapshotTest {
             }
         }
     }
+
+    @Test fun detailsWith4kBadge() {
+        val movie = items.first { it.Name == "Sahara" }
+        paparazzi.snapshot(name = "details_4k_badge") {
+            CompositionLocalProvider(LocalTestArtwork provides { art(it) }) {
+                tv.jetflix.app.ui.theme.JetflixTheme {
+                    DetailsContent(DetailsUiState(loading = false, item = movie, playTarget = movie, similar = items.take(8), is4k = true), JellyfinRepository().apply { apiFor("http://demo.test") }, {}, { _, _ -> }, {}, {}, {})
+                }
+            }
+        }
+    }
 }

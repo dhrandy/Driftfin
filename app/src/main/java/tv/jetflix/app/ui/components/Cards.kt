@@ -52,7 +52,7 @@ fun BaseItemDto.resumePercent(): Double? {
     return d.PlayedPercentage ?: RunTimeTicks?.takeIf { it > 0 }?.let { d.PlaybackPositionTicks * 100.0 / it }
 }
 
-/** Progress bar at the bottom of resumable cards, like Netflix's red bar. */
+/** Progress bar at the bottom of resumable cards, red bar. */
 @Composable
 fun ResumeProgressBar(percent: Double?, modifier: Modifier = Modifier) {
     if (percent == null || percent <= 0.0 || percent >= 100.0) return

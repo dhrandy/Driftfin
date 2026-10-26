@@ -281,12 +281,18 @@ fun HomeContent(
             }
         }
     }
+    val continueWatchingPosters by tv.jetflix.app.data.AppSettings.continueWatchingPosters.collectAsState()
     val navSolid by androidx.compose.runtime.remember {
         androidx.compose.runtime.derivedStateOf { listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 200 }
     }
+    // True once the list has moved off the very top. Derived, so Home recomposes when this flips, not on every scrolled pixel.
+    val scrolledAway by androidx.compose.runtime.remember {
+        androidx.compose.runtime.derivedStateOf { listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 0 }
+    }
     val focusedItemState = androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<BaseItemDto?>(previewFocusedItem) }
     var focusedItem by focusedItemState
-    var heroHasFocus by androidx.compose.runtime.mutableStateOf(false)
+    var heroHasFocus by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    // True while focus is anywhere inside Home (menu, banner or a card). Used to notice focus lost when a card disappears.
     // Coming back up to the banner (or the menu) shows the whole banner again, title and synopsis included.
     // The focus scroll for the Play button would otherwise stop with the banner's title above the screen, so the banner
     // is corrected here: once the banner has focus, the list goes back to the very top.
@@ -370,7 +376,7 @@ fun HomeContent(
         LazyColumn(
             state = listState,
             modifier = Modifier.fillMaxSize().padding(bottom = stripSpace)
-                .fadeUnderMenuBar(listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 0),
+                .fadeUnderMenuBar(scrolledAway),
             contentPadding = PaddingValues(bottom = 140.dp),
             verticalArrangement = Arrangement.spacedBy(28.dp),
         ) {
@@ -414,12 +420,14 @@ fun HomeContent(
             }
             state.sections.forEach { section ->
                 item(key = section.title) {
+                    // Continue Watching can show posters instead of scene images (Settings); every other row keeps its own shape.
+                    val wide = section.wide && !(section.title == "Continue Watching" && continueWatchingPosters)
                     MediaRow(
                         title = section.title,
                         items = section.items,
-                        wide = section.wide,
+                        wide = wide,
                         imageUrlFor = { item ->
-                            if (section.wide) repo.backdropUrl(item, 480) else repo.posterUrl(item)
+                            if (wide) repo.backdropUrl(item, 480) else repo.posterUrl(item)
                         },
                         onItemClick = onItemClick,
                         focusMemory = focusMemory,

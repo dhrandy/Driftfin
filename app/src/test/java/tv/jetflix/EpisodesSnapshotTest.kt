@@ -62,4 +62,23 @@ class EpisodesSnapshotTest {
             }
         }
     }
+
+    @Test fun detailsSeriesWith4kEpisodes() {
+        val series = items.first { it.isSeries }
+        val eps = items.filter { it.isMovie }.take(5).mapIndexed { i, m ->
+            m.copy(Overview = "Episode summary text from the server shows here on two lines when it is long enough to wrap across the row.", Type = "Episode", SeriesName = series.Name, ParentIndexNumber = 1, IndexNumber = i + 1, SeriesId = series.Id)
+        }
+        paparazzi.snapshot(name = "details_series_4k_episodes") {
+            CompositionLocalProvider(LocalTestArtwork provides { art(it) }) {
+                tv.jetflix.app.ui.theme.JetflixTheme {
+                    DetailsContent(
+                        DetailsUiState(loading = false, item = series, playTarget = eps[0], episodes = eps,
+                            seasons = listOf(BaseItemDto(Id = "s1", Name = "Season 1", Type = "Season")),
+                            selectedSeasonId = "s1", similar = items.take(8), fourKEpisodeIds = setOf(eps[1].Id, eps[3].Id)),
+                        repo(), {}, { _, _ -> }, {}, {}, {},
+                    )
+                }
+            }
+        }
+    }
 }

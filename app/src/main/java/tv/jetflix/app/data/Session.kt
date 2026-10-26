@@ -2,6 +2,7 @@ package tv.jetflix.app.data
 
 import android.content.Context
 import android.content.SharedPreferences
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
@@ -32,10 +33,16 @@ class TokenStore(context: Context) {
     private val prefs: SharedPreferences =
         context.getSharedPreferences("jetflix_session", Context.MODE_PRIVATE)
 
-    fun save(serverUrl: String, userId: String, userName: String, token: String) {
+    /** Returns false when the login could not be encrypted and saved, so the caller can tell the user. */
+    fun save(serverUrl: String, userId: String, userName: String, token: String): Boolean {
         val payload = listOf(serverUrl, userId, userName, token).joinToString("\u0001")
-        val encrypted = encrypt(payload) ?: return
+        val encrypted = encrypt(payload)
+        if (encrypted == null) {
+            prefs.edit().remove(KEY_BLOB).apply() // never leave an older login behind that no longer matches
+            return false
+        }
         prefs.edit().putString(KEY_BLOB, encrypted).putString("last_server", serverUrl).apply()
+        return true
     }
 
     fun load(): Session? {
@@ -130,9 +137,28 @@ object SessionManager {
     fun signIn(session: Session) { _session.value = session }
     fun signOut() { _session.value = null }
 
+    /**
+     * Adds the auth header only when the request goes to the signed-in server (same scheme, host and port).
+     * Absolute URLs that come back in server metadata (subtitles, transcode links, artwork) can point
+     * anywhere, and the token must not travel to those hosts.
+     */
+    fun authorize(request: okhttp3.Request): okhttp3.Request {
+        val server = _session.value?.serverUrl?.toHttpUrlOrNull() ?: return request
+        val url = request.url
+        return if (url.scheme == server.scheme && url.host.equals(server.host, ignoreCase = true) && url.port == server.port) {
+            request.newBuilder().header("Authorization", authorizationHeader()).build()
+        } else {
+            request
+        }
+    }
+
+    /** HTTP client builder for image and media requests: carries the token to the signed-in server only. */
+    fun authenticatedClientBuilder(): okhttp3.OkHttpClient.Builder =
+        okhttp3.OkHttpClient.Builder().addInterceptor { chain -> chain.proceed(authorize(chain.request())) }
+
     fun authorizationHeader(token: String? = null, deviceId: String? = null): String {
         val base = "MediaBrowser Client=\"Driftfin\", Device=\"Android TV\", " +
-            "DeviceId=\"${deviceId ?: _session.value?.deviceId ?: "jetflix"}\", Version=\"0.1.0\""
+            "DeviceId=\"${deviceId ?: _session.value?.deviceId ?: "jetflix"}\", Version=\"${tv.jetflix.app.BuildConfig.VERSION_NAME}.${tv.jetflix.app.BuildConfig.VERSION_CODE}\""
         val t = token ?: _session.value?.token
         return if (t != null) "$base, Token=\"$t\"" else base
     }
