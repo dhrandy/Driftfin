@@ -28,7 +28,13 @@ data class Session(
  * Stores the Jellyfin access token encrypted with an AES/GCM key held in the
  * Android Keystore. The plaintext token is never written to disk or logs.
  */
-class TokenStore(context: Context) {
+/** Encrypts saved logins. The real one uses the Android Keystore; tests supply a stand-in. */
+interface TokenCrypto {
+    fun encrypt(plain: String): String?
+    fun decrypt(blob: String): String?
+}
+
+class TokenStore(context: Context, private val crypto: TokenCrypto? = null) {
 
     private val prefs: SharedPreferences =
         context.getSharedPreferences("jetflix_session", Context.MODE_PRIVATE)
@@ -37,29 +43,59 @@ class TokenStore(context: Context) {
     fun save(serverUrl: String, userId: String, userName: String, token: String): Boolean {
         val payload = listOf(serverUrl, userId, userName, token).joinToString("\u0001")
         val encrypted = encrypt(payload)
+        val pk = profileKey(serverUrl, userId)
         if (encrypted == null) {
-            prefs.edit().remove(KEY_BLOB).apply() // never leave an older login behind that no longer matches
+            prefs.edit().remove(KEY_BLOB).remove(pk).apply() // never leave an older login behind that no longer matches
             return false
         }
-        prefs.edit().putString(KEY_BLOB, encrypted).putString("last_server", serverUrl).apply()
+        // The active login, plus a saved copy so this profile can be picked again later without a password.
+        prefs.edit().putString(KEY_BLOB, encrypted).putString(pk, encrypted).putString("last_server", serverUrl).apply()
         return true
     }
+
+    private fun profileKey(serverUrl: String, userId: String): String {
+        val h = java.security.MessageDigest.getInstance("SHA-256").digest("$serverUrl\u0001$userId".toByteArray())
+        return PROFILE_PREFIX + h.joinToString("") { "%02x".format(it) }.take(32)
+    }
+
+    private fun parse(plain: String): Session? {
+        val parts = plain.split("\u0001")
+        if (parts.size != 4) return null
+        return Session(serverUrl = parts[0], userId = parts[1], userName = parts[2], token = parts[3], deviceId = deviceId())
+    }
+
+    /** Saved profiles for one server only. A login saved for another server is never returned. */
+    fun profiles(serverUrl: String): List<Session> =
+        prefs.all.filterKeys { it.startsWith(PROFILE_PREFIX) }.values.mapNotNull { v ->
+            (v as? String)?.let { decrypt(it) }?.let { parse(it) }
+        }.plus(listOfNotNull(load())).distinctBy { it.userId + "\u0001" + it.serverUrl }
+            .filter { it.serverUrl == serverUrl }.sortedBy { it.userName.lowercase() }
+
+    /** Removes one saved profile (and the active login if it is that profile). */
+    fun forget(serverUrl: String, userId: String) {
+        val e = prefs.edit().remove(profileKey(serverUrl, userId))
+        val active = load()
+        if (active != null && active.serverUrl == serverUrl && active.userId == userId) e.remove(KEY_BLOB)
+        e.apply()
+    }
+
+    /** Makes a saved profile the active login for the next launch. */
+    fun activate(session: Session): Boolean = save(session.serverUrl, session.userId, session.userName, session.token)
 
     fun load(): Session? {
         val blob = prefs.getString(KEY_BLOB, null) ?: return null
         val plain = decrypt(blob) ?: return null
-        val parts = plain.split("\u0001")
-        if (parts.size != 4) return null
-        return Session(
-            serverUrl = parts[0],
-            userId = parts[1],
-            userName = parts[2],
-            token = parts[3],
-            deviceId = deviceId(),
-        )
+        return parse(plain)
     }
 
-    fun clear() = prefs.edit().remove(KEY_BLOB).apply()
+    /** Signs out of this device's active login. Other saved profiles stay, so they can be picked again. */
+    fun clear() {
+        // Make sure the profile being signed out stays pickable (older installs only had the active login).
+        val active = load()
+        val e = prefs.edit()
+        if (active != null) prefs.getString(KEY_BLOB, null)?.let { e.putString(profileKey(active.serverUrl, active.userId), it) }
+        e.remove(KEY_BLOB).apply()
+    }
 
     /** Server address only (not secret) so "switch profile" can skip retyping it. */
     fun lastServer(): String = prefs.getString("last_server", "") ?: ""
@@ -95,7 +131,10 @@ class TokenStore(context: Context) {
         }
     }
 
-    private fun encrypt(plain: String): String? {
+    private fun encrypt(plain: String): String? = if (crypto != null) crypto.encrypt(plain) else keystoreEncrypt(plain)
+    private fun decrypt(blob: String): String? = if (crypto != null) crypto.decrypt(blob) else keystoreDecrypt(blob)
+
+    private fun keystoreEncrypt(plain: String): String? {
         val k = key() ?: return null
         return try {
             val cipher = Cipher.getInstance("AES/GCM/NoPadding")
@@ -108,7 +147,7 @@ class TokenStore(context: Context) {
         }
     }
 
-    private fun decrypt(blob: String): String? {
+    private fun keystoreDecrypt(blob: String): String? {
         val k = key() ?: return null
         return try {
             val raw = Base64.decode(blob, Base64.NO_WRAP)
@@ -126,6 +165,7 @@ class TokenStore(context: Context) {
         private const val ANDROID_KEYSTORE = "AndroidKeyStore"
         private const val KEY_ALIAS = "jetflix_token_key"
         private const val KEY_BLOB = "session_blob"
+        private const val PROFILE_PREFIX = "profile_"
         private const val KEY_DEVICE_ID = "device_id"
     }
 }

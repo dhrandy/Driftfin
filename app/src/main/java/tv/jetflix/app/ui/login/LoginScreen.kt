@@ -1,6 +1,7 @@
 package tv.jetflix.app.ui.login
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -58,6 +59,8 @@ data class LoginUiState(
     val profiles: List<String> = emptyList(),
     val profilesNote: String? = null,
     val sessionNotSaved: Boolean = false,
+    /** Names of profiles already signed in on this TV for the typed server. Picking one needs no password. */
+    val savedProfiles: List<String> = emptyList(),
 )
 
 class LoginViewModel(
@@ -68,7 +71,44 @@ class LoginViewModel(
     private val _state = MutableStateFlow(LoginUiState(serverUrl = tokenStore.lastServer()))
     val state = _state.asStateFlow()
 
-    init { if (tokenStore.lastServer().isNotEmpty()) loadProfiles() }
+    init {
+        if (tokenStore.lastServer().isNotEmpty()) loadProfiles()
+        refreshSaved()
+    }
+
+    private fun refreshSaved() {
+        val normalized = repo.normalizeServerUrl(_state.value.serverUrl)
+        val names = if (normalized.isEmpty()) emptyList() else tokenStore.profiles(normalized).map { it.userName }
+        _state.value = _state.value.copy(savedProfiles = names)
+    }
+
+    /**
+     * Picks a profile. A saved one signs straight in with its own stored token after the server confirms the token
+     * still works; an expired or revoked token is dropped and the password is asked for. Anything else just fills the name.
+     */
+    fun selectProfile(name: String, onSuccess: () -> Unit) {
+        val normalized = repo.normalizeServerUrl(_state.value.serverUrl)
+        val saved = tokenStore.profiles(normalized).firstOrNull { it.userName.equals(name, ignoreCase = true) }
+        if (saved == null) { update(username = name); return }
+        _state.value = _state.value.copy(username = name, password = "", connecting = true, error = null)
+        viewModelScope.launch {
+            val ok = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { repo.validateToken(saved) }
+            when (ok) {
+                true -> {
+                    val persisted = tokenStore.activate(saved)
+                    SessionManager.signIn(saved)
+                    _state.value = _state.value.copy(connecting = false, sessionNotSaved = !persisted)
+                    onSuccess()
+                }
+                false -> {
+                    tokenStore.forget(saved.serverUrl, saved.userId)
+                    refreshSaved()
+                    _state.value = _state.value.copy(connecting = false, error = "Your saved sign-in for $name expired. Enter the password.")
+                }
+                null -> _state.value = _state.value.copy(connecting = false, error = "Could not reach $normalized to switch to $name. Check the connection and try again.")
+            }
+        }
+    }
 
     /** "Who's watching?": the server's public user list. Admins can hide it, so this can come back empty. */
     fun loadProfiles() {
@@ -94,6 +134,7 @@ class LoginViewModel(
             password = password ?: _state.value.password,
             error = null,
         )
+        if (serverUrl != null) refreshSaved()
     }
 
     fun connect(onSuccess: () -> Unit) {
@@ -125,6 +166,7 @@ class LoginViewModel(
                     return@launch
                 }
                 val saved = tokenStore.save(normalized, user.Id, user.Name ?: s.username.trim(), token)
+                refreshSaved()
                 SessionManager.signIn(
                     Session(
                         serverUrl = normalized,
@@ -156,6 +198,7 @@ fun LoginScreen(viewModel: LoginViewModel, onLoggedIn: () -> Unit) {
         },
         onConnect = { viewModel.connect(onLoggedIn) },
         onLoadProfiles = { viewModel.loadProfiles() },
+        onSelectProfile = { viewModel.selectProfile(it, onLoggedIn) },
     )
 }
 
@@ -165,6 +208,7 @@ fun LoginContent(
     onUpdate: (String?, String?, String?) -> Unit,
     onConnect: () -> Unit,
     onLoadProfiles: () -> Unit = {},
+    onSelectProfile: (String) -> Unit = {},
 ) {
     val serverFocus = remember { FocusRequester() }
 
@@ -190,19 +234,25 @@ fun LoginContent(
                 keyboardType = KeyboardType.Uri,
                 modifier = Modifier.focusRequester(serverFocus),
             )
-            if (state.profiles.isNotEmpty()) {
+            val names = (state.savedProfiles + state.profiles).distinctBy { it.lowercase() }
+            if (names.isNotEmpty()) {
                 Text("Who's watching?", style = JetflixType.caption, color = JetflixColors.TextSecondary)
-                androidx.compose.foundation.layout.Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    state.profiles.take(4).forEach { name ->
+                androidx.compose.foundation.layout.Row(
+                    modifier = Modifier.horizontalScroll(androidx.compose.foundation.rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    names.forEach { name ->
+                        val isSaved = state.savedProfiles.any { it.equals(name, ignoreCase = true) }
                         Button(
-                            onClick = { onUpdate(null, name, null) },
+                            onClick = { if (isSaved) onSelectProfile(name) else onUpdate(null, name, null) },
+                            enabled = !state.connecting,
                             colors = ButtonDefaults.colors(
                                 containerColor = if (state.username == name) JetflixColors.Red else JetflixColors.SurfaceLight,
                                 contentColor = JetflixColors.TextPrimary,
                                 focusedContainerColor = JetflixColors.Red,
                                 focusedContentColor = JetflixColors.TextPrimary,
                             ),
-                        ) { Text(name, style = JetflixType.caption) }
+                        ) { Text(if (isSaved) "\u2713 $name" else name, style = JetflixType.caption) }
                     }
                 }
             } else {
@@ -230,6 +280,9 @@ fun LoginContent(
                 imeAction = ImeAction.Done,
                 onDone = { onConnect() },
             )
+            if (tv.jetflix.app.data.ServerAddress.isCleartext(state.serverUrl)) {
+                Text(tv.jetflix.app.data.ServerAddress.HTTP_WARNING, style = JetflixType.caption, color = JetflixColors.TextMuted)
+            }
             state.error?.let {
                 Text(it, style = JetflixType.caption, color = androidx.tv.material3.MaterialTheme.colorScheme.error)
             }

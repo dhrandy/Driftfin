@@ -122,7 +122,12 @@ fun JetflixRoot() {
 
     val userName = session?.userName
     val onSignOut = {
+        // Switch profile: leaves other saved profiles in place so they can be picked again without a password.
         app.tokenStore.clear()
+        SessionManager.signOut()
+    }
+    val onForgetProfile = {
+        session?.let { app.tokenStore.forget(it.serverUrl, it.userId) }
         SessionManager.signOut()
     }
     val onTabSelected: (JetflixTab) -> Unit = { tab ->
@@ -199,6 +204,7 @@ fun JetflixRoot() {
                 serverUrl = session?.serverUrl,
                 onTabSelected = onTabSelected,
                 onSignOut = onSignOut,
+                onForgetProfile = onForgetProfile,
             )
         }
         Screen.Search -> {

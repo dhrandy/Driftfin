@@ -22,6 +22,7 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -100,6 +101,8 @@ fun PlayerScreen(
     val hostView = androidx.compose.ui.platform.LocalView.current
     androidx.compose.runtime.SideEffect { hostView.keepScreenOn = keepAwake }
     androidx.compose.runtime.DisposableEffect(hostView) { onDispose { hostView.keepScreenOn = false } }
+    var introSegments by remember { mutableStateOf(emptyList<tv.jetflix.app.data.MediaSegmentDto>()) }
+    val skipIntroEnabled by tv.jetflix.app.data.AppSettings.skipIntro.collectAsState()
     var positionTicks by remember { mutableLongStateOf(item.UserData?.PlaybackPositionTicks ?: 0L) }
     var durationTicks by remember { mutableLongStateOf(item.RunTimeTicks ?: 0L) }
     var bufferedTicks by remember { mutableLongStateOf(0L) }
@@ -195,6 +198,14 @@ fun PlayerScreen(
         } catch (_: Exception) { }
     }
 
+    // Intro spans the server knows about (Jellyfin 10.10+ Media Segments). A server without them returns none.
+    LaunchedEffect(item.Id) {
+        introSegments = try { api.getMediaSegments(item.Id).body()?.Items.orEmpty() } catch (_: Exception) { emptyList() }
+    }
+    val skipSegment = if (skipIntroEnabled && upNext == null && !panelOpen) {
+        tv.jetflix.app.data.SkipIntro.active(introSegments, positionTicks / 10_000)
+    } else null
+
     // Poll player state + report progress every 10s.
     LaunchedEffect(Unit) {
         while (isActive) {
@@ -288,8 +299,11 @@ fun PlayerScreen(
                 }
                 when (nativeEvent.keyCode) {
                     KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER -> {
-                        controlsVisible = true
-                        PlayerKeys.togglePlayback(player)
+                        when (PlayerKeys.centerAction(skipSegment != null, nativeEvent.repeatCount)) {
+                            PlayerKeys.CenterAction.SkipIntro -> skipSegment?.let { player.seekTo(tv.jetflix.app.data.SkipIntro.endMs(it)) }
+                            PlayerKeys.CenterAction.TogglePlayback -> { controlsVisible = true; PlayerKeys.togglePlayback(player) }
+                            PlayerKeys.CenterAction.Ignore -> Unit
+                        }
                         true
                     }
                     KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE -> {
@@ -355,6 +369,9 @@ fun PlayerScreen(
                 color = Color.White,
                 modifier = Modifier.align(androidx.compose.ui.Alignment.Center).padding(48.dp),
             )
+        }
+        if (skipSegment != null) {
+            SkipIntroPrompt(Modifier.align(androidx.compose.ui.Alignment.BottomEnd).padding(end = 48.dp, bottom = 120.dp))
         }
         upNext?.let { n ->
             androidx.tv.material3.Text(
@@ -571,3 +588,15 @@ fun PlayerBottomBar(positionTicks: Long, bufferedTicks: Long, durationTicks: Lon
 internal fun shouldKeepScreenOn(playWhenReady: Boolean, playbackState: Int): Boolean =
     playWhenReady && (playbackState == androidx.media3.common.Player.STATE_BUFFERING ||
         playbackState == androidx.media3.common.Player.STATE_READY)
+
+/** The bottom-right prompt. OK is handled by the player's key handler; this only shows what OK will do. */
+@Composable
+fun SkipIntroPrompt(modifier: Modifier = Modifier) {
+    androidx.tv.material3.Text(
+        text = "Skip Intro  (press OK)",
+        color = Color.Black,
+        modifier = modifier
+            .background(Color.White, androidx.compose.foundation.shape.RoundedCornerShape(8.dp))
+            .padding(horizontal = 24.dp, vertical = 14.dp),
+    )
+}

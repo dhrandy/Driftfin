@@ -110,6 +110,12 @@ interface JellyfinApi {
         @Body body: kotlinx.serialization.json.JsonObject = kotlinx.serialization.json.JsonObject(emptyMap()),
     ): Response<PlaybackInfoResponse>
 
+    @GET("MediaSegments/{itemId}")
+    suspend fun getMediaSegments(
+        @Path("itemId") itemId: String,
+        @Query("includeSegmentTypes") types: String = "Intro",
+    ): Response<MediaSegmentsResponse>
+
     @POST("Sessions/Playing")
     suspend fun reportPlaybackStart(@Body info: PlaybackStartInfo): Response<Unit>
 

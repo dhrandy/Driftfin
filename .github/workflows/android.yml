@@ -62,7 +62,7 @@ jobs:
           gh release create "$TAG" jetflix-release.apk jetflix-release.apk.sha256 \
             --target "${GITHUB_SHA}" \
             --title "Jetflix $TAG" \
-            --notes "Untested on a TV at release time. See README for limits."
+            --notes "Automated build. Unit tests ran in CI, but this build was not run on a TV by CI. Known limits are listed in the README."
 
       - uses: actions/upload-artifact@v4
         with:

@@ -29,12 +29,13 @@ fun ArtImage(
     modifier: Modifier = Modifier,
     contentScale: ContentScale = ContentScale.Crop,
     fallbackColor: Color = Color(0xFF2F2F2F),
+    alignment: androidx.compose.ui.Alignment = androidx.compose.ui.Alignment.Center,
 ) {
     val testProvider = LocalTestArtwork.current
     if (testProvider != null) {
         val painter = url?.let { testProvider(it) }
         if (painter != null) {
-            Image(painter = painter, contentDescription = contentDescription, modifier = modifier, contentScale = contentScale)
+            Image(painter = painter, contentDescription = contentDescription, modifier = modifier, alignment = alignment, contentScale = contentScale)
         } else {
             Box(modifier.background(fallbackColor))
         }
@@ -52,7 +53,7 @@ fun ArtImage(
             )
             .build(),
     )
-    Image(painter = painter, contentDescription = contentDescription, modifier = modifier, contentScale = contentScale)
+    Image(painter = painter, contentDescription = contentDescription, modifier = modifier, alignment = alignment, contentScale = contentScale)
 }
 
 /**

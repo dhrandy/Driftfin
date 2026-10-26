@@ -11,11 +11,15 @@ An Android TV client for your own Jellyfin server, with a TV-first layout (home 
 - Details with seasons and episodes, Play/Resume, mark watched, My List.
 - Search, Shows, Movies, My List, Settings tabs.
 - Player: seek, audio and text subtitle selection, playback speed, autoplay next episode (switchable).
+- Skip Intro: shows a bottom-right button during an intro that your Jellyfin server has marked (Media Segments, server 10.10 or newer), and only skips when you press OK. It appears only where the server has segment data. Switchable in Settings.
+- Title logos on Home and Details where Jellyfin has a logo image, with plain text otherwise. Switchable in Settings.
+- Saved profiles: a profile you signed in with stays on the TV (encrypted) so you can switch back without the password. "Sign out and forget this profile" removes it. It does not revoke the token on the server.
+- Check for updates (bottom of Settings): only when you ask. It reads the latest GitHub release, downloads the APK, checks its checksum, package name, version and signing certificate, and then opens Android's installer, which asks you to confirm. Android may first ask you to allow installs from Driftfin. The installer step has not been tested on a TV.
 
 ## Limits
 
 - Text subtitles only (SRT, WebVTT, ASS/SSA). Picture subtitles are not supported.
-- No downloads, skip-intro, kids/PIN profiles. No recommendation engine; "More like" is Jellyfin's similar-items list.
+- No downloads or kids/PIN profiles. No recommendation engine; "More like" is Jellyfin's similar-items list.
 - Trailers play from the details page when the server has them.
 - Device coverage is thin (see Status). Performance on older or low-power TVs is not measured.
 - Server addresses may use plain `http://`, which is common on a home network. Sign-in details and the access token then travel unencrypted on that network, so use `https://` for anything outside your own LAN.

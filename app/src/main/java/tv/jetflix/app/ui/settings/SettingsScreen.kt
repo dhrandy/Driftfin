@@ -17,6 +17,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -39,21 +41,54 @@ fun SettingsScreen(
     serverUrl: String?,
     onTabSelected: (JetflixTab) -> Unit,
     onSignOut: () -> Unit,
+    onForgetProfile: () -> Unit = {},
 ) {
     val autoplay by AppSettings.autoplayNext.collectAsState()
     val myList by AppSettings.showMyList.collectAsState()
     val nextUp by AppSettings.showNextUp.collectAsState()
     val context = androidx.compose.ui.platform.LocalContext.current
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    var update by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<tv.jetflix.app.update.UpdateUi>(tv.jetflix.app.update.UpdateUi.Idle) }
+    val flow = remember {
+        tv.jetflix.app.update.UpdateFlow(
+            updater = tv.jetflix.app.update.Updater(),
+            installedBuild = tv.jetflix.app.BuildConfig.VERSION_CODE,
+            installed = { tv.jetflix.app.update.AndroidUpdate.installed(context) },
+            readApk = { tv.jetflix.app.update.AndroidUpdate.readApk(context, it) },
+            install = { tv.jetflix.app.update.AndroidUpdate.install(context, it) },
+            cacheFile = tv.jetflix.app.update.AndroidUpdate.cacheFile(context),
+        )
+    }
     SettingsContent(
         autoplay, myList, nextUp, userName, serverUrl,
         { AppSettings.setAutoplayNext(!autoplay) },
         { AppSettings.setShowMyList(!myList) },
         { AppSettings.setShowNextUp(!nextUp) },
         onTabSelected, onSignOut,
+        onForgetProfile = onForgetProfile,
         posterSize = AppSettings.posterSize.collectAsState().value,
         onCyclePosterSize = { AppSettings.setPosterSize(AppSettings.posterSize.value.next()) },
         continueWatchingPosters = AppSettings.continueWatchingPosters.collectAsState().value,
         onToggleContinueWatchingPosters = { AppSettings.setContinueWatchingPosters(!AppSettings.continueWatchingPosters.value) },
+        skipIntro = AppSettings.skipIntro.collectAsState().value,
+        onToggleSkipIntro = { AppSettings.setSkipIntro(!AppSettings.skipIntro.value) },
+        update = update,
+        onUpdateClick = {
+            val cur = update
+            if (cur !is tv.jetflix.app.update.UpdateUi.Checking && cur !is tv.jetflix.app.update.UpdateUi.Downloading) {
+                scope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                    if (cur is tv.jetflix.app.update.UpdateUi.Available) {
+                        update = tv.jetflix.app.update.UpdateUi.Downloading
+                        update = flow.downloadAndInstall(cur.info)
+                    } else {
+                        update = tv.jetflix.app.update.UpdateUi.Checking
+                        update = flow.check()
+                    }
+                }
+            }
+        },
+        titleLogos = AppSettings.titleLogos.collectAsState().value,
+        onToggleTitleLogos = { AppSettings.setTitleLogos(!AppSettings.titleLogos.value) },
         liveBlur = AppSettings.liveBlur.collectAsState().value,
         onToggleLiveBlur = { AppSettings.setLiveBlur(!AppSettings.liveBlur.value) },
         onStartFrameTest = { (context as? android.app.Activity)?.let { tv.jetflix.app.ui.components.FrameStats.start(it) } },
@@ -87,6 +122,13 @@ fun SettingsContent(
     onToggleLiveBlur: () -> Unit = {},
     continueWatchingPosters: Boolean = false,
     onToggleContinueWatchingPosters: () -> Unit = {},
+    skipIntro: Boolean = true,
+    onToggleSkipIntro: () -> Unit = {},
+    onForgetProfile: () -> Unit = {},
+    update: tv.jetflix.app.update.UpdateUi = tv.jetflix.app.update.UpdateUi.Idle,
+    onUpdateClick: () -> Unit = {},
+    titleLogos: Boolean = true,
+    onToggleTitleLogos: () -> Unit = {},
 ) {
     val menuBack = tv.jetflix.app.ui.components.rememberMenuBack()
     val first = remember { FocusRequester() }
@@ -101,6 +143,8 @@ fun SettingsContent(
             SettingRow("Show My List on Home", "My List uses your Jellyfin favorites for this user.", showMyList, onToggleMyList)
             SettingRow("Poster size", "Small, Medium or Large cards on Home and in libraries. Press OK to change.", true, onCyclePosterSize, valueText = posterSize.label)
             SettingRow("Continue Watching art", "Scene images (the wide look) or posters for the Continue Watching row. Press OK to change.", true, onToggleContinueWatchingPosters, valueText = if (continueWatchingPosters) "Posters" else "Scene images")
+            SettingRow("Title logos", "Shows a show's own title lettering on Home and Details when Jellyfin has it. Falls back to plain text.", titleLogos, onToggleTitleLogos)
+            SettingRow("Skip Intro button", "Shows a Skip Intro button in the player when your Jellyfin server has marked an intro. It only skips when you press OK.", skipIntro, onToggleSkipIntro)
             SettingRow("Button sound", "A quiet sound when you move and when you select. Press OK to try the next one.", true, onCycleButtonSound, valueText = buttonSound.label)
             SettingRow("Live blur", "On is the normal look. Off swaps the live blur for a pre-softened picture, to see whether blur is what slows scrolling. Takes effect when you open the next screen.", liveBlur, onToggleLiveBlur)
             SettingRow("Frame timing test", "Press OK, then move around for 20 seconds (tiny REC counter in the corner). A result card shows afterward. Nothing is saved or sent.", true, onStartFrameTest, valueText = "Start")
@@ -119,7 +163,18 @@ fun SettingsContent(
                     focusedContainerColor = JetflixColors.Red,
                     focusedContentColor = Color.White,
                 ),
-            ) { Text("Switch profile / sign out") }
+            ) { Text("Switch profile") }
+            Button(
+                onClick = onForgetProfile,
+                colors = ButtonDefaults.colors(
+                    containerColor = JetflixColors.SurfaceLight.copy(alpha = 0.7f),
+                    contentColor = Color.White,
+                    focusedContainerColor = JetflixColors.Red,
+                    focusedContentColor = Color.White,
+                ),
+            ) { Text("Sign out and forget this profile") }
+            val (uValue, uDetail) = updateTexts(update)
+            SettingRow("Check for updates", uDetail, true, onUpdateClick, valueText = uValue)
         }
         TopNavBar(
             solid = true,
@@ -135,7 +190,7 @@ fun SettingsContent(
 }
 
 @Composable
-private fun SettingRow(title: String, detail: String, on: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier, valueText: String? = null) {
+internal fun SettingRow(title: String, detail: String, on: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier, valueText: String? = null) {
     Button(
         onClick = onClick,
         modifier = modifier.fillMaxWidth(),
@@ -153,5 +208,19 @@ private fun SettingRow(title: String, detail: String, on: Boolean, onClick: () -
             }
             Text(valueText ?: if (on) "On" else "Off", style = JetflixType.body, color = if (on) JetflixColors.Red else JetflixColors.TextMuted)
         }
+    }
+}
+
+/** Row value and explanation for each update step. Updates only ever start when the user presses OK. */
+fun updateTexts(u: tv.jetflix.app.update.UpdateUi): Pair<String, String> {
+    val base = "Looks for a newer Driftfin release on GitHub. Nothing is downloaded until you press OK on an available update, and Android asks you to confirm the install."
+    return when (u) {
+        is tv.jetflix.app.update.UpdateUi.Idle -> "Check" to base
+        is tv.jetflix.app.update.UpdateUi.Checking -> "Checking..." to base
+        is tv.jetflix.app.update.UpdateUi.UpToDate -> "Up to date" to "You have the latest build (${u.build})."
+        is tv.jetflix.app.update.UpdateUi.Available -> "Download" to "Build ${u.info.build} is available. Press OK to download it, verify it, and hand it to Android's installer."
+        is tv.jetflix.app.update.UpdateUi.Downloading -> "Downloading..." to "Downloading and verifying the update."
+        is tv.jetflix.app.update.UpdateUi.ReadyToInstall -> "Installer open" to "Build ${u.build} was verified and passed to Android's installer. Confirm there to finish."
+        is tv.jetflix.app.update.UpdateUi.Error -> "Retry" to u.message
     }
 }

@@ -34,14 +34,15 @@ class SettingsScrollReachTest {
         rule.waitForIdle()
         val seen = mutableListOf<String>()
         var lastBottom = 0f
-        repeat(14) {
+        repeat(20) {
             press(Key.DirectionDown)
             val n = rule.onAllNodes(isFocused()).fetchSemanticsNodes().firstOrNull() ?: return@repeat
             val label = n.config.getOrNull(SemanticsProperties.Text)?.joinToString(",") { it.text } ?: n.children.joinToString { c -> c.config.getOrNull(SemanticsProperties.Text)?.joinToString(",") { it.text } ?: "?" }
             seen += label
             lastBottom = n.boundsInRoot.bottom
         }
-        assertTrue("never focused sign out; focus visited: $seen", seen.any { it.contains("sign out") })
+        assertTrue("never focused sign out; focus visited: $seen", seen.any { it.contains("Sign out and forget") })
+        assertTrue("never focused Check for updates (the last row); focus visited: $seen", seen.any { it.contains("Check for updates") })
         val rootH = rule.onRoot().fetchSemanticsNode().boundsInRoot.height
         assertTrue("focused row is below the visible area: bottom=$lastBottom of $rootH; visited $seen", lastBottom <= rootH + 1f)
     }

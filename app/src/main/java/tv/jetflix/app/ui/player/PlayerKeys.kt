@@ -53,6 +53,15 @@ object PlayerKeys {
         else -> DownAction.OpenPanel
     }
 
+    enum class CenterAction { SkipIntro, TogglePlayback, Ignore }
+
+    /** OK while the Skip Intro prompt is showing skips; otherwise it pauses or plays. A held key never repeats the action. */
+    fun centerAction(skipIntroVisible: Boolean, repeatCount: Int): CenterAction = when {
+        repeatCount > 0 -> CenterAction.Ignore
+        skipIntroVisible -> CenterAction.SkipIntro
+        else -> CenterAction.TogglePlayback
+    }
+
     /** Pause when the player is meant to be playing (even if still buffering); otherwise play, restarting if ended. */
     fun togglePlayback(player: Player) {
         if (player.playWhenReady && player.playbackState != Player.STATE_ENDED) {

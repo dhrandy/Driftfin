@@ -26,6 +26,15 @@ object AppSettings {
     val continueWatchingPosters: StateFlow<Boolean> = _continueWatchingPosters
     fun setContinueWatchingPosters(v: Boolean) { _continueWatchingPosters.value = v; prefs?.edit()?.putBoolean("continue_watching_posters", v)?.apply() }
 
+    /** Show a "Skip Intro" prompt while the server reports an Intro segment. On by default. */
+    private val _titleLogos = MutableStateFlow(true)
+    val titleLogos: StateFlow<Boolean> = _titleLogos
+    fun setTitleLogos(v: Boolean) { _titleLogos.value = v; prefs?.edit()?.putBoolean("title_logos", v)?.apply() }
+
+    private val _skipIntro = MutableStateFlow(true)
+    val skipIntro: StateFlow<Boolean> = _skipIntro
+    fun setSkipIntro(v: Boolean) { _skipIntro.value = v; prefs?.edit()?.putBoolean("skip_intro", v)?.apply() }
+
     private val _buttonSound = MutableStateFlow(tv.jetflix.app.ui.components.ButtonSound.Off)
     val buttonSound: StateFlow<tv.jetflix.app.ui.components.ButtonSound> = _buttonSound
     fun setButtonSound(v: tv.jetflix.app.ui.components.ButtonSound) {
@@ -55,6 +64,8 @@ object AppSettings {
         _showNextUp.value = p.getBoolean("show_next_up", true)
         _liveBlur.value = p.getBoolean("live_blur", true)
         _continueWatchingPosters.value = p.getBoolean("continue_watching_posters", false)
+        _skipIntro.value = p.getBoolean("skip_intro", true)
+        _titleLogos.value = p.getBoolean("title_logos", true)
         _buttonSound.value = tv.jetflix.app.ui.components.ButtonSound.values().firstOrNull { it.name == p.getString("button_sound", null) } ?: tv.jetflix.app.ui.components.ButtonSound.Off
         tv.jetflix.app.ui.components.ButtonSounds.style = _buttonSound.value
         _posterSize.value = PosterSize.values().firstOrNull { it.name == p.getString("poster_size", null) } ?: PosterSize.Medium

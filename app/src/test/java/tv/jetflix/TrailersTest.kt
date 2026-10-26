@@ -2,6 +2,7 @@ package tv.jetflix
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import tv.jetflix.app.data.BaseItemDto
@@ -47,6 +48,12 @@ class TrailersTest {
     @Test fun unnamedRemoteTrailerGetsATitle() {
         val item = BaseItemDto(Id = "m1", Name = "Movie", RemoteTrailers = listOf(MediaUrl(null, "https://youtu.be/$id")))
         assertEquals(TrailerSource.YouTube(id, "Movie trailer"), Trailers.pick(item, emptyList()))
+    }
+
+    @Test fun pageAsksPlayerToUnloadCaptionsAndNeverForcesThemOn() {
+        val html = YouTubeTrailerPage.html(id, YouTubeTrailerPage.origin("tv.jetflix.app"))
+        assertTrue(html.contains("unloadModule('captions')"))
+        assertFalse(html.contains("cc_load_policy"))
     }
 
     @Test fun pageIdentifiesTheAppAndRejectsBadIds() {

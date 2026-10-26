@@ -29,6 +29,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.FavoriteBorder
+import androidx.compose.foundation.layout.size
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
@@ -275,6 +280,7 @@ fun DetailsContent(
                         contentDescription = null,
                         modifier = Modifier.fillMaxSize(),
                         contentScale = ContentScale.Crop,
+                        alignment = HeaderArtAlignment,
                     )
                 }
                 Box(
@@ -295,12 +301,9 @@ fun DetailsContent(
                             .padding(start = 48.dp, bottom = 12.dp)
                             .fillMaxWidth(0.8f),
                     ) {
-                        Text(
-                            text = item.displayTitle(),
-                            style = JetflixType.heroTitle,
-                            color = JetflixColors.TextPrimary,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis,
+                        tv.jetflix.app.ui.components.TitleOrLogo(
+                            title = item.displayTitle(),
+                            logoUrl = repo.logoUrl(item.Id),
                         )
                         Spacer(Modifier.height(8.dp))
                         MetaRow(item, state.is4k)
@@ -344,7 +347,7 @@ fun DetailsContent(
                                         focusedContentColor = Color.White,
                                     ),
                                 ) {
-                                    Text("Trailer")
+                                    Icon(TrailerIcon, contentDescription = "Watch trailer", modifier = Modifier.size(24.dp))
                                 }
                             }
                             Button(
@@ -356,11 +359,12 @@ fun DetailsContent(
                                     focusedContentColor = Color.White,
                                 ),
                             ) {
-                                if (item.UserData?.Played == true) {
-                                    Icon(Icons.Filled.Check, contentDescription = null)
-                                    Spacer(Modifier.width(6.dp))
-                                }
-                                Text(if (item.UserData?.Played == true) "Watched" else "Mark Watched")
+                                val played = item.UserData?.Played == true
+                                Icon(
+                                    if (played) Icons.Filled.CheckCircle else Icons.Outlined.CheckCircle,
+                                    contentDescription = if (played) "Watched. Press OK to mark unwatched" else "Mark as watched",
+                                    modifier = Modifier.size(24.dp),
+                                )
                             }
                             Button(
                                 onClick = { onToggleFavorite() },
@@ -371,11 +375,12 @@ fun DetailsContent(
                                     focusedContentColor = Color.White,
                                 ),
                             ) {
-                                if (item.UserData?.IsFavorite == true) {
-                                    Icon(Icons.Filled.Check, contentDescription = null)
-                                    Spacer(Modifier.width(6.dp))
-                                }
-                                Text(if (item.UserData?.IsFavorite == true) "In Favorites" else "Add to Favorites")
+                                val fav = item.UserData?.IsFavorite == true
+                                Icon(
+                                    if (fav) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
+                                    contentDescription = if (fav) "In favorites. Press OK to remove" else "Add to favorites",
+                                    modifier = Modifier.size(24.dp),
+                                )
                             }
                         }
                     }
@@ -643,4 +648,22 @@ fun playLabel(target: BaseItemDto): String {
     val verb = if (target.isResumeable) "Resume" else "Play"
     val ep = target.episodeLabel()
     return if (ep != null) "$verb $ep" else verb
+}
+
+/** Where the wide backdrop sits inside the fixed header box: a little above centre, so faces stay in view. */
+val HeaderArtAlignment: Alignment = androidx.compose.ui.BiasAlignment(0f, -0.4f)
+
+/** A framed play triangle, for "Watch trailer". */
+val TrailerIcon: androidx.compose.ui.graphics.vector.ImageVector by lazy {
+    androidx.compose.ui.graphics.vector.ImageVector.Builder("Trailer", 24.dp, 24.dp, 24f, 24f).apply {
+        addPath(
+            pathData = androidx.compose.ui.graphics.vector.PathData {
+                moveTo(4f, 5f); horizontalLineTo(20f); quadTo(22f, 5f, 22f, 7f); verticalLineTo(17f); quadTo(22f, 19f, 20f, 19f)
+                horizontalLineTo(4f); quadTo(2f, 19f, 2f, 17f); verticalLineTo(7f); quadTo(2f, 5f, 4f, 5f); close()
+                moveTo(10f, 8.5f); verticalLineTo(15.5f); lineTo(16f, 12f); close()
+            },
+            pathFillType = androidx.compose.ui.graphics.PathFillType.EvenOdd,
+            fill = androidx.compose.ui.graphics.SolidColor(Color.Black),
+        )
+    }.build()
 }

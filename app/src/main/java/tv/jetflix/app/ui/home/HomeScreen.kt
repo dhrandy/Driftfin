@@ -537,12 +537,9 @@ fun HeroBanner(
                     .padding(start = 48.dp, bottom = 24.dp)
                     .fillMaxWidth(0.45f),
             ) {
-                Text(
-                    text = hero.displayTitle(),
-                    style = JetflixType.heroTitle,
-                    color = JetflixColors.TextPrimary,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
+                tv.jetflix.app.ui.components.TitleOrLogo(
+                    title = hero.displayTitle(),
+                    logoUrl = logoUrl,
                 )
                 Spacer(Modifier.height(10.dp))
                 hero.Overview?.let {

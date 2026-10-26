@@ -3,6 +3,7 @@ package tv.jetflix.app.data
 import kotlinx.serialization.json.Json
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import retrofit2.Retrofit
 import com.jakewharton.retrofit2.converter.kotlinx.serialization.asConverterFactory
 import java.util.concurrent.TimeUnit
@@ -19,11 +20,28 @@ class JellyfinRepository {
     fun normalizeServerUrl(input: String): String {
         var url = input.trim()
         if (url.isEmpty()) return url
-        if (!url.startsWith("http://") && !url.startsWith("https://")) url = "http://$url"
+        if (!url.startsWith("http://", true) && !url.startsWith("https://", true)) url = "http://$url"
         url = url.trimEnd('/')
         if (url.endsWith("/web")) url = url.dropLast(4)
         return url
     }
+
+    /**
+     * Asks the saved profile's own server whether its token still works, without touching the active session.
+     * true = accepted, false = rejected (expired or revoked), null = could not tell (offline, server error).
+     * The token is sent only to that profile's server and redirects are not followed.
+     */
+    fun validateToken(session: Session, client: OkHttpClient = OkHttpClient.Builder().followRedirects(false).followSslRedirects(false).connectTimeout(10, TimeUnit.SECONDS).readTimeout(15, TimeUnit.SECONDS).build()): Boolean? = try {
+        val url = (session.serverUrl.trimEnd('/') + "/Users/Me").toHttpUrlOrNull() ?: return null
+        val req = okhttp3.Request.Builder().url(url).header("Authorization", SessionManager.authorizationHeader(session.token, session.deviceId)).build()
+        client.newCall(req).execute().use { r ->
+            when {
+                r.isSuccessful -> true
+                r.code == 401 || r.code == 403 -> false
+                else -> null
+            }
+        }
+    } catch (_: Exception) { null }
 
     fun apiFor(baseUrl: String): JellyfinApi {
         val existing = api

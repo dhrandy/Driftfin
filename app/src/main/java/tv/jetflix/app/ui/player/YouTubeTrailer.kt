@@ -49,7 +49,7 @@ function onYouTubeIframeAPIReady(){
   player=new YT.Player('player',{width:'100%',height:'100%',videoId:'$videoId',
     playerVars:{autoplay:1,playsinline:1,rel:0,enablejsapi:1,origin:'$origin'},
     events:{
-      onReady:function(e){e.target.playVideo();},
+      onReady:function(e){try{e.target.unloadModule('captions');}catch(x){} e.target.playVideo();},
       onStateChange:function(e){Bridge.onState(e.data);},
       onError:function(e){Bridge.onError(e.data);}
     }});
