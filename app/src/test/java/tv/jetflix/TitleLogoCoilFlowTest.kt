@@ -4,6 +4,7 @@ import android.graphics.Bitmap
 import android.graphics.drawable.BitmapDrawable
 import android.net.Uri
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.test.core.app.ApplicationProvider
@@ -59,8 +60,12 @@ class TitleLogoCoilFlowTest {
         while (fetches.get() == 0 && System.currentTimeMillis() < end) Thread.sleep(20)
         assertTrue("the logo fetcher was never called: the request deadlocked behind the success-only Image", fetches.get() > 0)
         rule.waitUntil(timeoutMillis = 5000) { fetches.get() > 0 }
-        rule.waitForIdle()
-        // On Success the logo Image (contentDescription = title) replaces the text.
+        // On Success the logo Image (contentDescription = title) replaces the text. The fetch
+        // finishing and the Success state reaching composition are separate steps, so wait for the
+        // node itself (condition based, not a fixed sleep) before asserting.
+        rule.waitUntil(timeoutMillis = 10_000) {
+            rule.onAllNodesWithContentDescription("Demo Title").fetchSemanticsNodes().isNotEmpty()
+        }
         rule.onNodeWithContentDescription("Demo Title").assertIsDisplayed()
     }
 }
