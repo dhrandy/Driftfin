@@ -121,6 +121,9 @@ class JellyfinRepository {
         return imageUrl(id, "Primary", maxWidth, tag)
     }
 
-    fun logoUrl(itemId: String, maxWidth: Int = 600): String =
-        imageUrl(itemId, "Logo", maxWidth)
+    /** Title logo. Episodes never carry their own Logo image, so theirs is the series logo. */
+    fun logoUrl(item: BaseItemDto, maxWidth: Int = 600): String {
+        val id = if (item.isEpisode && item.SeriesId != null) item.SeriesId else item.Id
+        return imageUrl(id, "Logo", maxWidth)
+    }
 }

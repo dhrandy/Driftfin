@@ -26,6 +26,10 @@ import tv.jetflix.app.ui.theme.JetflixType
  * The show's own title logo (Jellyfin "Logo" image) when it exists and the setting is on; plain text otherwise,
  * including while the logo loads and whenever the server has none. The title stays available to screen readers.
  */
+internal fun logoRequest(context: android.content.Context, logoUrl: String, widthPx: Int, heightPx: Int): ImageRequest =
+    // Without an explicit size Coil 2.7 waits for the painter's first draw (AsyncImagePainter.onDraw sets drawSize),
+    // but the Image is only composed on Success - so the request would never start and the logo would never show.
+    ImageRequest.Builder(context).data(logoUrl).size(widthPx, heightPx).crossfade(150).build()
 @Composable
 fun TitleOrLogo(
     title: String,
@@ -50,8 +54,9 @@ fun TitleOrLogo(
         if (p == null) text() else Image(p, null, logoModifier, alignment = Alignment.CenterStart, contentScale = ContentScale.Fit)
         return
     }
+    val density = androidx.compose.ui.platform.LocalDensity.current
     val painter = rememberAsyncImagePainter(
-        ImageRequest.Builder(LocalContext.current).data(logoUrl).crossfade(150).build(),
+        logoRequest(LocalContext.current, logoUrl, with(density) { maxLogoWidth.roundToPx() }, with(density) { maxLogoHeight.roundToPx() }),
     )
     when (painter.state) {
         is AsyncImagePainter.State.Success ->

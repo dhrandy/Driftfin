@@ -291,14 +291,14 @@ fun LibraryScreen(
     userName: String?,
     onTabSelected: (JetflixTab) -> Unit,
     onItemClick: (BaseItemDto) -> Unit,
-    onSignOut: () -> Unit,
+    onUserClick: () -> Unit,
     onPlay: (BaseItemDto) -> Unit = {},
     collectionId: String? = null,
     collectionTitle: String? = null,
 ) {
     val state by viewModel.state.collectAsState()
     LibraryContent(
-        state, viewModel.repo, tab, userName, onTabSelected, onItemClick, onSignOut,
+        state, viewModel.repo, tab, userName, onTabSelected, onItemClick, onUserClick,
         onSort = { viewModel.setSort(tab, it) }, onPlay = onPlay,
         onReverse = { viewModel.setReversed(tab, it) }, onSection = { viewModel.setSection(tab, it) },
         onWatch = { viewModel.cycleWatch(tab) }, onGenre = { viewModel.setGenre(tab, it) }, onYear = { viewModel.setYear(tab, it) }, onLibrary = { viewModel.setLibrary(tab, it) },
@@ -315,7 +315,7 @@ fun LibraryContent(
     userName: String?,
     onTabSelected: (JetflixTab) -> Unit,
     onItemClick: (BaseItemDto) -> Unit,
-    onSignOut: () -> Unit,
+    onUserClick: () -> Unit,
     onSort: (LibrarySort) -> Unit = {},
     onPlay: (BaseItemDto) -> Unit = {},
     onReverse: (Boolean) -> Unit = {},
@@ -425,7 +425,7 @@ fun LibraryContent(
                         tv.jetflix.app.ui.home.HeroBanner(
                             hero = banner,
                             backdropUrl = repo.backdropUrl(banner, 1920),
-                            logoUrl = repo.logoUrl(banner.Id),
+                            logoUrl = repo.logoUrl(banner),
                             onPlay = onPlay,
                             onMoreInfo = onItemClick,
                             playFocus = bannerFocus,
@@ -535,7 +535,7 @@ fun LibraryContent(
             selected = tab,
             userName = userName,
             onTabSelected = onTabSelected,
-            onSignOut = onSignOut,
+            onUserClick = onUserClick,
             modifier = Modifier.align(Alignment.TopCenter),
             downFocus = if (banner != null) bannerFocus else if (isMine) sectionFocus else if (showSort) sortFocus else null,
             selectedFocus = navFocus,

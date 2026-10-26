@@ -79,6 +79,7 @@ data class DetailsUiState(
     val similar: List<BaseItemDto> = emptyList(),
     val trailer: tv.jetflix.app.data.TrailerSource? = null,
     val is4k: Boolean = false,
+    val hdrFormats: List<String> = emptyList(),
     /** Episodes the server says have a 4K version (one small query per show page). Empty when unknown or on error. */
     val fourKEpisodeIds: Set<String> = emptySet(),
 )
@@ -118,7 +119,7 @@ class DetailsViewModel(val repo: JellyfinRepository) : ViewModel() {
                 }
                 if (!item.isSeries) {
                     // Movies show the page as soon as the title itself arrives; "More like this" fills in when ready.
-                    _state.value = DetailsUiState(loading = false, item = item, playTarget = item, is4k = tv.jetflix.app.data.Resolution4K.badge(item))
+                    _state.value = DetailsUiState(loading = false, item = item, playTarget = item, is4k = tv.jetflix.app.data.Resolution4K.badge(item), hdrFormats = tv.jetflix.app.data.HdrFormats.of(item))
                     val trailer = trailerDef.await()
                     if (_state.value.item?.Id == item.Id) _state.value = _state.value.copy(trailer = trailer)
                     val similar = similarDef.await()
@@ -226,6 +227,7 @@ fun DetailsScreen(
     onItemClick: (BaseItemDto) -> Unit,
     onBack: () -> Unit,
     onTrailer: (tv.jetflix.app.data.TrailerSource) -> Unit = {},
+    onActor: (personId: String, name: String) -> Unit = { _, _ -> },
 ) {
     val state by viewModel.state.collectAsState()
     DetailsContent(
@@ -238,6 +240,7 @@ fun DetailsScreen(
         onItemClick = onItemClick,
         onBack = onBack,
         onTrailer = onTrailer,
+        onActor = onActor,
     )
 }
 
@@ -252,6 +255,7 @@ fun DetailsContent(
     onBack: () -> Unit,
     onToggleFavorite: () -> Unit = {},
     onTrailer: (tv.jetflix.app.data.TrailerSource) -> Unit = {},
+    onActor: (personId: String, name: String) -> Unit = { _, _ -> },
 ) {
     tv.jetflix.app.ui.components.CountRecompose("details")
     val item = state.item
@@ -303,10 +307,10 @@ fun DetailsContent(
                     ) {
                         tv.jetflix.app.ui.components.TitleOrLogo(
                             title = item.displayTitle(),
-                            logoUrl = repo.logoUrl(item.Id),
+                            logoUrl = repo.logoUrl(item),
                         )
                         Spacer(Modifier.height(8.dp))
-                        MetaRow(item, state.is4k)
+                        MetaRow(item, state.is4k, state.hdrFormats)
                         Spacer(Modifier.height(14.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                             val target = state.playTarget ?: item
@@ -464,7 +468,7 @@ fun DetailsContent(
                     horizontalArrangement = Arrangement.spacedBy(14.dp),
                 ) {
                     items(cast, key = { it.Id ?: it.Name ?: "" }) { person ->
-                        CastChip(person = person, imageUrl = repo.personImageUrl(person))
+                        CastChip(person = person, imageUrl = repo.personImageUrl(person), onClick = { person.Id?.let { id -> onActor(id, person.Name.orEmpty()) } })
                     }
                 }
             }
@@ -492,7 +496,7 @@ fun DetailsContent(
 }
 
 @Composable
-private fun MetaRow(item: BaseItemDto, is4k: Boolean = false) {
+private fun MetaRow(item: BaseItemDto, is4k: Boolean = false, hdrFormats: List<String> = emptyList()) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -527,6 +531,15 @@ private fun MetaRow(item: BaseItemDto, is4k: Boolean = false) {
             }
         }
         if (is4k) FourKTag()
+        if (tv.jetflix.app.data.AppSettings.formatBadges.collectAsState().value) hdrFormats.forEach { FormatTag(it) }
+    }
+}
+
+/** Small outlined format tag, same look as the 4K tag. */
+@Composable
+private fun FormatTag(label: String) {
+    Box(Modifier.border(1.dp, JetflixColors.TextMuted, RoundedCornerShape(3.dp)).padding(horizontal = 6.dp, vertical = 1.dp)) {
+        Text(label, style = JetflixType.caption, color = JetflixColors.TextSecondary)
     }
 }
 
@@ -624,21 +637,27 @@ private fun EpisodeRow(episode: BaseItemDto, thumbUrl: String?, onClick: () -> U
     }
 }
 
+@OptIn(androidx.tv.material3.ExperimentalTvMaterial3Api::class)
 @Composable
-private fun CastChip(person: BaseItemPerson, imageUrl: String?) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(90.dp)) {
-        ArtImage(
-            url = imageUrl,
-            contentDescription = person.Name,
-            modifier = Modifier
-                .size(72.dp)
-                .clip(CircleShape),
-            contentScale = ContentScale.Crop,
-        )
-        Spacer(Modifier.height(6.dp))
-        Text(person.Name ?: "", style = JetflixType.caption, color = JetflixColors.TextPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        person.Role?.takeIf { it.isNotBlank() }?.let {
-            Text(it, style = JetflixType.caption, color = JetflixColors.TextMuted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+fun CastChip(person: BaseItemPerson, imageUrl: String?, onClick: () -> Unit = {}) {
+    androidx.tv.material3.Surface(
+        onClick = onClick,
+        enabled = person.Id != null,
+        modifier = Modifier.width(100.dp),
+        shape = androidx.tv.material3.ClickableSurfaceDefaults.shape(androidx.compose.foundation.shape.RoundedCornerShape(12.dp)),
+        colors = androidx.tv.material3.ClickableSurfaceDefaults.colors(containerColor = Color.Transparent, focusedContainerColor = JetflixColors.SurfaceLight),
+        border = androidx.tv.material3.ClickableSurfaceDefaults.border(
+            focusedBorder = androidx.tv.material3.Border(androidx.compose.foundation.BorderStroke(3.dp, JetflixColors.FocusBorder), shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp)),
+        ),
+        scale = androidx.tv.material3.ClickableSurfaceDefaults.scale(focusedScale = 1.08f),
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(5.dp)) {
+            tv.jetflix.app.ui.actor.PersonPhoto(url = imageUrl, name = person.Name.orEmpty(), size = 72.dp)
+            Spacer(Modifier.height(6.dp))
+            Text(person.Name ?: "", style = JetflixType.caption, color = JetflixColors.TextPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            person.Role?.takeIf { it.isNotBlank() }?.let {
+                Text(it, style = JetflixType.caption, color = JetflixColors.TextMuted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
         }
     }
 }

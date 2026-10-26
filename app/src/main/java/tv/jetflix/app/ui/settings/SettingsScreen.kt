@@ -42,6 +42,7 @@ fun SettingsScreen(
     onTabSelected: (JetflixTab) -> Unit,
     onSignOut: () -> Unit,
     onForgetProfile: () -> Unit = {},
+    onUserClick: () -> Unit = {},
 ) {
     val autoplay by AppSettings.autoplayNext.collectAsState()
     val myList by AppSettings.showMyList.collectAsState()
@@ -66,10 +67,13 @@ fun SettingsScreen(
         { AppSettings.setShowNextUp(!nextUp) },
         onTabSelected, onSignOut,
         onForgetProfile = onForgetProfile,
+        onUserClick = onUserClick,
         posterSize = AppSettings.posterSize.collectAsState().value,
         onCyclePosterSize = { AppSettings.setPosterSize(AppSettings.posterSize.value.next()) },
         continueWatchingPosters = AppSettings.continueWatchingPosters.collectAsState().value,
         onToggleContinueWatchingPosters = { AppSettings.setContinueWatchingPosters(!AppSettings.continueWatchingPosters.value) },
+        pauseCast = AppSettings.pauseCast.collectAsState().value,
+        onTogglePauseCast = { AppSettings.setPauseCast(!AppSettings.pauseCast.value) },
         skipIntro = AppSettings.skipIntro.collectAsState().value,
         onToggleSkipIntro = { AppSettings.setSkipIntro(!AppSettings.skipIntro.value) },
         update = update,
@@ -89,6 +93,8 @@ fun SettingsScreen(
         },
         titleLogos = AppSettings.titleLogos.collectAsState().value,
         onToggleTitleLogos = { AppSettings.setTitleLogos(!AppSettings.titleLogos.value) },
+        formatBadges = AppSettings.formatBadges.collectAsState().value,
+        onToggleFormatBadges = { AppSettings.setFormatBadges(!AppSettings.formatBadges.value) },
         liveBlur = AppSettings.liveBlur.collectAsState().value,
         onToggleLiveBlur = { AppSettings.setLiveBlur(!AppSettings.liveBlur.value) },
         onStartFrameTest = { (context as? android.app.Activity)?.let { tv.jetflix.app.ui.components.FrameStats.start(it) } },
@@ -113,6 +119,7 @@ fun SettingsContent(
     onToggleNextUp: () -> Unit,
     onTabSelected: (JetflixTab) -> Unit,
     onSignOut: () -> Unit,
+    onUserClick: () -> Unit = {},
     posterSize: tv.jetflix.app.data.PosterSize = tv.jetflix.app.data.PosterSize.Medium,
     onCyclePosterSize: () -> Unit = {},
     buttonSound: tv.jetflix.app.ui.components.ButtonSound = tv.jetflix.app.ui.components.ButtonSound.Off,
@@ -122,6 +129,8 @@ fun SettingsContent(
     onToggleLiveBlur: () -> Unit = {},
     continueWatchingPosters: Boolean = false,
     onToggleContinueWatchingPosters: () -> Unit = {},
+    pauseCast: Boolean = true,
+    onTogglePauseCast: () -> Unit = {},
     skipIntro: Boolean = true,
     onToggleSkipIntro: () -> Unit = {},
     onForgetProfile: () -> Unit = {},
@@ -129,6 +138,8 @@ fun SettingsContent(
     onUpdateClick: () -> Unit = {},
     titleLogos: Boolean = true,
     onToggleTitleLogos: () -> Unit = {},
+    formatBadges: Boolean = true,
+    onToggleFormatBadges: () -> Unit = {},
 ) {
     val menuBack = tv.jetflix.app.ui.components.rememberMenuBack()
     val first = remember { FocusRequester() }
@@ -144,6 +155,8 @@ fun SettingsContent(
             SettingRow("Poster size", "Small, Medium or Large cards on Home and in libraries. Press OK to change.", true, onCyclePosterSize, valueText = posterSize.label)
             SettingRow("Continue Watching art", "Scene images (the wide look) or posters for the Continue Watching row. Press OK to change.", true, onToggleContinueWatchingPosters, valueText = if (continueWatchingPosters) "Posters" else "Scene images")
             SettingRow("Title logos", "Shows a show's own title lettering on Home and Details when Jellyfin has it. Falls back to plain text.", titleLogos, onToggleTitleLogos)
+            SettingRow("HDR and Dolby Vision tags", "Shows HDR, HDR10, HDR10+ or Dolby Vision on a movie's Details page when the file says it has them. It shows what the file contains, not what your TV is outputting.", formatBadges, onToggleFormatBadges)
+            SettingRow("Cast while paused", "Shows the cast along the bottom when you pause. Press Down to pick an actor and OK to see their movies on your server.", pauseCast, onTogglePauseCast)
             SettingRow("Skip Intro button", "Shows a Skip Intro button in the player when your Jellyfin server has marked an intro. It only skips when you press OK.", skipIntro, onToggleSkipIntro)
             SettingRow("Button sound", "A quiet sound when you move and when you select. Press OK to try the next one.", true, onCycleButtonSound, valueText = buttonSound.label)
             SettingRow("Live blur", "On is the normal look. Off swaps the live blur for a pre-softened picture, to see whether blur is what slows scrolling. Takes effect when you open the next screen.", liveBlur, onToggleLiveBlur)
@@ -183,7 +196,7 @@ fun SettingsContent(
             selected = JetflixTab.SETTINGS,
             userName = userName,
             onTabSelected = onTabSelected,
-            onSignOut = onSignOut,
+            onUserClick = onUserClick,
             modifier = Modifier.align(Alignment.TopCenter),
         )
     }
@@ -202,7 +215,7 @@ internal fun SettingRow(title: String, detail: String, on: Boolean, onClick: () 
         ),
     ) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
+            Column(Modifier.weight(1f).padding(end = 20.dp)) {
                 Text(title, style = JetflixType.body)
                 Text(detail, style = JetflixType.caption, color = JetflixColors.TextSecondary)
             }

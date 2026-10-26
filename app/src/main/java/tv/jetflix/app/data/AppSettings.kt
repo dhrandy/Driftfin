@@ -31,6 +31,16 @@ object AppSettings {
     val titleLogos: StateFlow<Boolean> = _titleLogos
     fun setTitleLogos(v: Boolean) { _titleLogos.value = v; prefs?.edit()?.putBoolean("title_logos", v)?.apply() }
 
+    /** HDR / Dolby Vision tags on movie Details. On by default. */
+    private val _formatBadges = MutableStateFlow(true)
+    val formatBadges: StateFlow<Boolean> = _formatBadges
+    fun setFormatBadges(v: Boolean) { _formatBadges.value = v; prefs?.edit()?.putBoolean("format_badges", v)?.apply() }
+
+    /** Cast strip while paused in the player. On by default. */
+    private val _pauseCast = MutableStateFlow(true)
+    val pauseCast: StateFlow<Boolean> = _pauseCast
+    fun setPauseCast(v: Boolean) { _pauseCast.value = v; prefs?.edit()?.putBoolean("pause_cast", v)?.apply() }
+
     private val _skipIntro = MutableStateFlow(true)
     val skipIntro: StateFlow<Boolean> = _skipIntro
     fun setSkipIntro(v: Boolean) { _skipIntro.value = v; prefs?.edit()?.putBoolean("skip_intro", v)?.apply() }
@@ -66,6 +76,8 @@ object AppSettings {
         _continueWatchingPosters.value = p.getBoolean("continue_watching_posters", false)
         _skipIntro.value = p.getBoolean("skip_intro", true)
         _titleLogos.value = p.getBoolean("title_logos", true)
+        _formatBadges.value = p.getBoolean("format_badges", true)
+        _pauseCast.value = p.getBoolean("pause_cast", true)
         _buttonSound.value = tv.jetflix.app.ui.components.ButtonSound.values().firstOrNull { it.name == p.getString("button_sound", null) } ?: tv.jetflix.app.ui.components.ButtonSound.Off
         tv.jetflix.app.ui.components.ButtonSounds.style = _buttonSound.value
         _posterSize.value = PosterSize.values().firstOrNull { it.name == p.getString("poster_size", null) } ?: PosterSize.Medium

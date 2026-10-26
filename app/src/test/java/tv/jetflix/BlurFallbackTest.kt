@@ -29,7 +29,7 @@ class BlurFallbackTest {
 
     @Test fun barStillComposesOnApi28WithArtwork() {
         rule.setContent {
-            JetflixTheme { TopNavBar(solid = true, selected = JetflixTab.MOVIES, userName = "demo", onTabSelected = {}, onSignOut = {}, blurArtUrl = "http://s/Items/a/Images/Backdrop/0?maxWidth=1280") }
+            JetflixTheme { TopNavBar(solid = true, selected = JetflixTab.MOVIES, userName = "demo", onTabSelected = {}, onUserClick = {}, blurArtUrl = "http://s/Items/a/Images/Backdrop/0?maxWidth=1280") }
         }
         rule.onNodeWithText("Movies").assertIsDisplayed()
     }

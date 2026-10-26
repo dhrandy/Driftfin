@@ -103,7 +103,7 @@ fun SearchScreen(
     userName: String?,
     onTabSelected: (JetflixTab) -> Unit,
     onItemClick: (BaseItemDto) -> Unit,
-    onSignOut: () -> Unit,
+    onUserClick: () -> Unit,
 ) {
     val state by viewModel.state.collectAsState()
     SearchContent(
@@ -114,7 +114,7 @@ fun SearchScreen(
         onSearchNow = { viewModel.searchNow() },
         onTabSelected = onTabSelected,
         onItemClick = onItemClick,
-        onSignOut = onSignOut,
+        onUserClick = onUserClick,
     )
 }
 
@@ -127,7 +127,7 @@ fun SearchContent(
     onSearchNow: () -> Unit,
     onTabSelected: (JetflixTab) -> Unit,
     onItemClick: (BaseItemDto) -> Unit,
-    onSignOut: () -> Unit,
+    onUserClick: () -> Unit,
 ) {
     val menuBack = tv.jetflix.app.ui.components.rememberMenuBack()
     var fieldFocused by remember { mutableStateOf(false) }
@@ -201,7 +201,7 @@ fun SearchContent(
             selected = JetflixTab.SEARCH,
             userName = userName,
             onTabSelected = onTabSelected,
-            onSignOut = onSignOut,
+            onUserClick = onUserClick,
             modifier = Modifier.align(Alignment.TopCenter),
         )
     }

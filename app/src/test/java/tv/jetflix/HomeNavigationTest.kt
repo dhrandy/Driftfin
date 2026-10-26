@@ -57,7 +57,7 @@ class HomeNavigationTest {
         heroes: List<BaseItemDto> = emptyList(),
         opened: MutableList<String> = mutableListOf(),
         played: MutableList<String> = mutableListOf(),
-        signOuts: MutableList<Int> = mutableListOf(),
+        userClicks: MutableList<Int> = mutableListOf(),
         restoredKey: String? = null,
     ) {
         val repo = JellyfinRepository().apply { apiFor("http://demo.test") }
@@ -72,7 +72,7 @@ class HomeNavigationTest {
                 HomeSection("Popular Picks", items.reversed(), wide = false),
             ),
         )
-        rule.setContent { JetflixTheme { HomeContent(state, repo, "demo", { tabs += it.label }, { opened += it.Name.orEmpty() }, { played += it.Name.orEmpty() }, { signOuts += 1 }, restoredFocusKey = restoredKey, heroIntervalMs = 1000) } }
+        rule.setContent { JetflixTheme { HomeContent(state, repo, "demo", { tabs += it.label }, { opened += it.Name.orEmpty() }, { played += it.Name.orEmpty() }, { userClicks += 1 }, restoredFocusKey = restoredKey, heroIntervalMs = 1000) } }
         rule.waitForIdle()
         // Robolectric's window never reports focus, so the on-launch focus request cannot be observed here.
         // The first D-pad press gives the screen its initial focus on the hero Play button, as on a TV.
@@ -166,22 +166,16 @@ class HomeNavigationTest {
         assertEquals(listOf("Shows", "Movies"), picked)
     }
 
-    @Test fun signOutNeedsASecondOkAndFocusLossCancelsIt() {
-        val out = mutableListOf<Int>()
-        setHome(signOuts = out)
+    @Test fun okOnTheUserNameOpensTheProfilePicker() {
+        val clicks = mutableListOf<Int>()
+        setHome(userClicks = clicks)
         press(Key.DirectionUp)
         repeat(6) { press(Key.DirectionRight) }
         assertEquals("demo", focusedText())
         press(Key.Enter)
-        assertEquals("first OK must only ask", 0, out.size)
-        assertEquals("Sign out? Press OK again", focusedText())
-        // Moving away cancels the question.
-        press(Key.DirectionLeft); press(Key.DirectionRight)
+        assertEquals("one OK on the user name opens the picker, no confirm step", 1, clicks.size)
+        // The label never turns into a sign-out question.
         assertEquals("demo", focusedText())
-        press(Key.Enter)
-        assertEquals(0, out.size)
-        press(Key.Enter)
-        assertEquals("second OK confirms", 1, out.size)
     }
 
     @Test fun heroButtonsAndRowCardsReactToOk() {

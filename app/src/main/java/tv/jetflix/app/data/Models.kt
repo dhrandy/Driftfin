@@ -91,6 +91,8 @@ data class MediaStreamInfo(
     val DisplayTitle: String? = null,
     val Width: Int? = null,
     val Height: Int? = null,
+    val VideoRange: String? = null,
+    val VideoRangeType: String? = null,
 )
 
 @Serializable
@@ -236,4 +238,39 @@ object Resolution4K {
 
     /** Movie badge: shown when any of the movie's own versions is 4K. Episodes use the server's is4K filter instead; shows get none. */
     fun badge(item: BaseItemDto): Boolean = item.Type == "Movie" && of(item) == true
+}
+
+/**
+ * HDR / Dolby Vision labels for a movie from the server's own video stream fields (VideoRange, VideoRangeType).
+ * Says what the file contains, not what the TV outputs. Several versions list the union. Unknown or missing gives nothing;
+ * DOVIInvalid is never called Dolby Vision and shows plain HDR only when VideoRange itself says HDR.
+ */
+object HdrFormats {
+    const val DOLBY_VISION = "Dolby Vision"; const val HDR10_PLUS = "HDR10+"; const val HDR10 = "HDR10"; const val HLG = "HLG"; const val HDR = "HDR"
+    private val order = listOf(DOLBY_VISION, HDR10_PLUS, HDR10, HLG, HDR)
+    internal fun labelsFor(s: MediaStreamInfo): Set<String> {
+        val t = s.VideoRangeType?.trim().orEmpty()
+        val hdr = s.VideoRange.equals("HDR", true)
+        return when {
+            t.isEmpty() -> if (hdr) setOf(HDR) else emptySet()
+            t.equals("SDR", true) || t.equals("Unknown", true) -> emptySet()
+            t.equals("DOVIInvalid", true) -> if (hdr) setOf(HDR) else emptySet()
+            t.equals("DOVIWithSDR", true) -> setOf(DOLBY_VISION)
+            t.equals("DOVIWithHDR10Plus", true) || t.equals("DOVIWithELHDR10Plus", true) -> setOf(DOLBY_VISION, HDR10_PLUS)
+            t.equals("DOVIWithHDR10", true) -> setOf(DOLBY_VISION, HDR10)
+            t.equals("DOVIWithHLG", true) -> setOf(DOLBY_VISION, HLG)
+            t.startsWith("DOVI", true) -> setOf(DOLBY_VISION)
+            t.equals("HDR10Plus", true) -> setOf(HDR10_PLUS)
+            t.equals("HDR10", true) -> setOf(HDR10)
+            t.equals("HLG", true) -> setOf(HLG)
+            hdr -> setOf(HDR)
+            else -> emptySet()
+        }
+    }
+    fun of(item: BaseItemDto): List<String> {
+        if (item.Type != "Movie") return emptyList()
+        val found = HashSet<String>()
+        for (src in item.MediaSources) src.MediaStreams?.firstOrNull { it.Type == "Video" }?.let { found += labelsFor(it) }
+        return order.filter { it in found }
+    }
 }

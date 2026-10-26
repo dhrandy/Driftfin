@@ -191,7 +191,7 @@ fun HomeScreen(
     onTabSelected: (JetflixTab) -> Unit,
     onItemClick: (BaseItemDto) -> Unit,
     onPlay: (BaseItemDto) -> Unit,
-    onSignOut: () -> Unit,
+    onUserClick: () -> Unit,
 ) {
     val state by viewModel.state.collectAsState()
     HomeContent(
@@ -201,7 +201,7 @@ fun HomeScreen(
         onTabSelected = onTabSelected,
         onItemClick = onItemClick,
         onPlay = onPlay,
-        onSignOut = onSignOut,
+        onUserClick = onUserClick,
     )
 }
 
@@ -256,7 +256,7 @@ fun HomeContent(
     onTabSelected: (JetflixTab) -> Unit,
     onItemClick: (BaseItemDto) -> Unit,
     onPlay: (BaseItemDto) -> Unit,
-    onSignOut: () -> Unit,
+    onUserClick: () -> Unit,
     restoredFocusKey: String? = null,
     previewFocusedItem: BaseItemDto? = null,
     previewScrollIndex: Int = 0,
@@ -404,7 +404,7 @@ fun HomeContent(
                     HeroBanner(
                         hero = currentHero,
                         backdropUrl = heroBackdrop,
-                        logoUrl = currentHero?.let { repo.logoUrl(it.Id) },
+                        logoUrl = currentHero?.let { repo.logoUrl(it) },
                         onPlay = onPlay,
                         onMoreInfo = onItemClick,
                         playFocus = heroPlayFocus,
@@ -457,7 +457,7 @@ fun HomeContent(
             selected = JetflixTab.HOME,
             userName = userName,
             onTabSelected = onTabSelected,
-            onSignOut = onSignOut,
+            onUserClick = onUserClick,
             modifier = Modifier.align(Alignment.TopCenter),
             downFocus = if (state.hero != null) heroPlayFocus else if (state.sections.isNotEmpty()) firstRowFocus else null,
             selectedFocus = navFocus,

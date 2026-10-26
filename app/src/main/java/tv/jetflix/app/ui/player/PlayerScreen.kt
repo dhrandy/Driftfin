@@ -6,6 +6,8 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.border
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -88,6 +90,9 @@ fun PlayerScreen(
     repo: JellyfinRepository,
     onFinished: () -> Unit,
     onPlayNext: (BaseItemDto) -> Unit = {},
+    onOpenActor: (personId: String, name: String) -> Unit = { _, _ -> },
+    /** False while the actor page is over the player: playback stays paused where it was, keys go to the page. */
+    interactive: Boolean = true,
 ) {
     val context = LocalContext.current
     val session = SessionManager.session.value ?: return
@@ -101,6 +106,21 @@ fun PlayerScreen(
     val hostView = androidx.compose.ui.platform.LocalView.current
     androidx.compose.runtime.SideEffect { hostView.keepScreenOn = keepAwake }
     androidx.compose.runtime.DisposableEffect(hostView) { onDispose { hostView.keepScreenOn = false } }
+    // Cast strip while paused: people are fetched once, the first time the video is paused.
+    val pauseCastOn by tv.jetflix.app.data.AppSettings.pauseCast.collectAsState()
+    val isPausedNow by tv.jetflix.app.ui.components.PlaybackPause.paused.collectAsState()
+    var cast by remember { mutableStateOf(emptyList<tv.jetflix.app.data.BaseItemPerson>()) }
+    var castFetched by remember { mutableStateOf(false) }
+    var castIndex by remember { mutableStateOf<Int?>(null) }
+    LaunchedEffect(isPausedNow, pauseCastOn) {
+        if (isPausedNow && pauseCastOn && !castFetched) {
+            castFetched = true
+            cast = try {
+                api.getItem(item.Id, session.userId).body()?.People.orEmpty().filter { it.Type == "Actor" && it.Id != null }.take(15)
+            } catch (_: Exception) { emptyList() }
+        }
+    }
+    LaunchedEffect(isPausedNow, pauseCastOn) { if (!isPausedNow || !pauseCastOn) castIndex = null }
     var introSegments by remember { mutableStateOf(emptyList<tv.jetflix.app.data.MediaSegmentDto>()) }
     val skipIntroEnabled by tv.jetflix.app.data.AppSettings.skipIntro.collectAsState()
     var positionTicks by remember { mutableLongStateOf(item.UserData?.PlaybackPositionTicks ?: 0L) }
@@ -274,6 +294,7 @@ fun PlayerScreen(
     }
 
     KeyCaptureBox(
+        enabled = interactive,
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Black),
@@ -284,6 +305,15 @@ fun PlayerScreen(
                 upNext?.let { n ->
                     if (nativeEvent.keyCode in listOf(KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER)) onPlayNext(n)
                     return@run nativeEvent.keyCode != KeyEvent.KEYCODE_BACK
+                }
+                castIndex?.let { idx ->
+                    when (val step = PlayerKeys.castStep(nativeEvent.keyCode, idx, cast.size)) {
+                        is PlayerKeys.CastStep.Move -> castIndex = step.index
+                        PlayerKeys.CastStep.Open -> cast.getOrNull(idx)?.let { p -> p.Id?.let { onOpenActor(it, p.Name.orEmpty()) } }
+                        PlayerKeys.CastStep.Exit -> castIndex = null
+                        PlayerKeys.CastStep.Consume -> Unit
+                    }
+                    return@run true
                 }
                 if (panelOpen) {
                     when (nativeEvent.keyCode) {
@@ -323,9 +353,10 @@ fun PlayerScreen(
                     }
                     KeyEvent.KEYCODE_DPAD_DOWN -> {
                         // First Down only brings up the progress bar and title; a second press opens audio and subtitles.
-                        when (PlayerKeys.downAction(controlsVisible, nativeEvent.repeatCount)) {
+                        when (PlayerKeys.downAction(controlsVisible, nativeEvent.repeatCount, PlayerKeys.castReady(isPausedNow, controlsVisible, pauseCastOn, cast.size))) {
                             PlayerKeys.DownAction.RevealControls -> controlsVisible = true
                             PlayerKeys.DownAction.Ignore -> Unit
+                            PlayerKeys.DownAction.OpenCast -> castIndex = 0
                             PlayerKeys.DownAction.OpenPanel -> {
                                 panelOptions = TrackCycler.options(player)
                                 panelIndex = panelOptions.indexOfFirst { it.selected }.coerceAtLeast(0)
@@ -400,48 +431,76 @@ fun PlayerScreen(
                     .padding(horizontal = 16.dp, vertical = 8.dp),
             )
         }
-        AnimatedVisibility(visible = controlsVisible, enter = fadeIn(), exit = fadeOut()) {
-            Box(Modifier.fillMaxSize()) {
-                // Top: title
-                Column(
-                    Modifier
-                        .fillMaxWidth()
-                        .background(
-                            Brush.verticalGradient(
-                                listOf(Color.Black.copy(alpha = 0.7f), Color.Transparent),
-                            ),
-                        )
-                        .padding(horizontal = 48.dp, vertical = 24.dp),
-                ) {
+        PlayerOverlay(
+            visible = controlsVisible, item = item, isPlaying = isPlaying,
+            positionTicks = positionTicks, bufferedTicks = bufferedTicks, durationTicks = durationTicks,
+            castVisible = PlayerKeys.castReady(isPausedNow, true, pauseCastOn, cast.size),
+            cast = cast, castSelected = castIndex, personImageUrl = { repo.personImageUrl(it) },
+        )
+    }
+}
+
+/** Title, pause icon, progress bar and (while paused) the cast strip. Public so renders show the real overlay. */
+@Composable
+fun PlayerOverlay(
+    visible: Boolean,
+    item: BaseItemDto,
+    isPlaying: Boolean,
+    positionTicks: Long,
+    bufferedTicks: Long,
+    durationTicks: Long,
+    castVisible: Boolean,
+    cast: List<tv.jetflix.app.data.BaseItemPerson>,
+    castSelected: Int?,
+    personImageUrl: (tv.jetflix.app.data.BaseItemPerson) -> String?,
+) {
+AnimatedVisibility(visible = visible, enter = fadeIn(), exit = fadeOut()) {
+        Box(Modifier.fillMaxSize()) {
+            // Top: title
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .background(
+                        Brush.verticalGradient(
+                            listOf(Color.Black.copy(alpha = 0.7f), Color.Transparent),
+                        ),
+                    )
+                    .padding(horizontal = 48.dp, vertical = 24.dp),
+            ) {
+                Text(
+                    text = if (item.isEpisode) item.SeriesName ?: item.displayTitle() else item.displayTitle(),
+                    style = JetflixType.sectionTitle,
+                    color = Color.White,
+                )
+                if (item.isEpisode) {
                     Text(
-                        text = if (item.isEpisode) item.SeriesName ?: item.displayTitle() else item.displayTitle(),
-                        style = JetflixType.sectionTitle,
-                        color = Color.White,
-                    )
-                    if (item.isEpisode) {
-                        Text(
-                            text = listOfNotNull(item.episodeLabel(), item.Name).joinToString(" · "),
-                            style = JetflixType.body,
-                            color = JetflixColors.TextSecondary,
-                        )
-                    }
-                }
-
-                // Center: big pause indicator
-                if (!isPlaying) {
-                    Icon(
-                        PauseIcon,
-                        contentDescription = "Paused",
-                        tint = Color.White.copy(alpha = 0.9f),
-                        modifier = Modifier
-                            .align(Alignment.Center)
-                            .size(72.dp),
+                        text = listOfNotNull(item.episodeLabel(), item.Name).joinToString(" · "),
+                        style = JetflixType.body,
+                        color = JetflixColors.TextSecondary,
                     )
                 }
+            }
 
-                PlayerBottomBar(
-                    positionTicks, bufferedTicks, durationTicks,
-                    Modifier.align(Alignment.BottomCenter),
+            // Center: big pause indicator
+            if (!isPlaying) {
+                Icon(
+                    PauseIcon,
+                    contentDescription = "Paused",
+                    tint = Color.White.copy(alpha = 0.9f),
+                    modifier = Modifier
+                        .align(Alignment.Center)
+                        .size(72.dp),
+                )
+            }
+
+            PlayerBottomBar(
+                positionTicks, bufferedTicks, durationTicks,
+                Modifier.align(Alignment.BottomCenter),
+            )
+            if (castVisible) {
+                PauseCastStrip(
+                    cast = cast, selected = castSelected, imageUrlFor = personImageUrl,
+                    modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 96.dp),
                 )
             }
         }
@@ -599,4 +658,39 @@ fun SkipIntroPrompt(modifier: Modifier = Modifier) {
             .background(Color.White, androidx.compose.foundation.shape.RoundedCornerShape(8.dp))
             .padding(horizontal = 24.dp, vertical = 14.dp),
     )
+}
+
+/** Cast along the bottom while paused. Nothing is selected until Down is pressed, so the controls stay first. */
+@Composable
+fun PauseCastStrip(
+    cast: List<tv.jetflix.app.data.BaseItemPerson>,
+    selected: Int?,
+    imageUrlFor: (tv.jetflix.app.data.BaseItemPerson) -> String?,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier.fillMaxWidth().padding(horizontal = 48.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(if (selected == null) "Cast   \u25BC to browse" else "Cast   \u25C0 \u25B6 choose   OK movies   \u25B2 back", style = JetflixType.caption, color = JetflixColors.TextSecondary)
+        val listState = androidx.compose.foundation.lazy.rememberLazyListState(initialFirstVisibleItemIndex = ((selected ?: 0) - 3).coerceAtLeast(0))
+        // Keep the chosen actor on screen when the row is longer than the screen.
+        LaunchedEffect(selected) { selected?.let { listState.animateScrollToItem((it - 3).coerceAtLeast(0)) } }
+        androidx.compose.foundation.lazy.LazyRow(
+            state = listState,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            userScrollEnabled = false,
+        ) {
+            itemsIndexed(cast, key = { _, p -> p.Id ?: p.Name ?: "" }) { i, p ->
+                val sel = selected == i
+                Column(
+                    Modifier.width(96.dp)
+                        .then(Modifier.border(if (sel) 3.dp else 0.dp, if (sel) Color.White else Color.Transparent, RoundedCornerShape(12.dp)))
+                        .background(if (sel) Color(0x55FFFFFF) else Color.Transparent, RoundedCornerShape(12.dp))
+                        .padding(5.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    tv.jetflix.app.ui.actor.PersonPhoto(url = imageUrlFor(p), name = p.Name.orEmpty(), size = 56.dp)
+                    Text(p.Name ?: "", style = JetflixType.caption, color = Color.White, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                }
+            }
+        }
+    }
 }

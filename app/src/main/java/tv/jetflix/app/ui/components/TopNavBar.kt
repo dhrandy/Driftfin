@@ -57,7 +57,8 @@ fun TopNavBar(
     selected: JetflixTab,
     userName: String?,
     onTabSelected: (JetflixTab) -> Unit,
-    onSignOut: () -> Unit,
+    /** OK on the user name opens the profile picker. */
+    onUserClick: () -> Unit,
     modifier: Modifier = Modifier,
     downFocus: androidx.compose.ui.focus.FocusRequester? = null,
     selectedFocus: androidx.compose.ui.focus.FocusRequester? = null,
@@ -122,16 +123,11 @@ fun TopNavBar(
         }
         Spacer(Modifier.weight(1f))
         if (userName != null) {
-            // Signing out loses the session, so the first OK only asks; a second OK within 5 seconds confirms.
-            var confirming by remember { mutableStateOf(false) }
-            androidx.compose.runtime.LaunchedEffect(confirming) {
-                if (confirming) { kotlinx.coroutines.delay(5_000); confirming = false }
-            }
+            // OK on your name opens the profile picker: switch profile or sign out.
             NavTab(
-                label = if (confirming) "Sign out? Press OK again" else userName,
+                label = userName,
                 selected = false,
-                onClick = { if (confirming) { confirming = false; onSignOut() } else confirming = true },
-                onFocusLost = { confirming = false },
+                onClick = onUserClick,
             )
         }
         }

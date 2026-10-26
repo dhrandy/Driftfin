@@ -22,16 +22,17 @@ import kotlinx.coroutines.delay
 fun KeyCaptureBox(
     onKey: (KeyEvent) -> Boolean,
     modifier: Modifier = Modifier,
+    /** False while another screen (the actor page) is drawn over this one: it then takes no focus and no keys. */
+    enabled: Boolean = true,
     content: @Composable androidx.compose.foundation.layout.BoxScope.() -> Unit,
 ) {
     val requester = remember { FocusRequester() }
     Box(
         modifier
-            .onKeyEvent { onKey(it.nativeKeyEvent) }
-            .focusRequester(requester)
-            .focusable(),
+            .then(if (enabled) Modifier.onKeyEvent { onKey(it.nativeKeyEvent) }.focusRequester(requester).focusable() else Modifier),
     ) { content() }
-    LaunchedEffect(Unit) {
+    LaunchedEffect(enabled) {
+        if (!enabled) return@LaunchedEffect
         repeat(20) {
             try { requester.requestFocus(); return@LaunchedEffect } catch (_: Exception) { delay(50) }
         }
@@ -40,17 +41,38 @@ fun KeyCaptureBox(
 
 object PlayerKeys {
     /** What a Down press does during playback. */
-    enum class DownAction { RevealControls, OpenPanel, Ignore }
+    enum class DownAction { RevealControls, OpenPanel, OpenCast, Ignore }
 
     /**
      * First Down with the controls hidden only reveals them (progress bar, title). Down again, as a fresh press,
      * opens the audio/subtitle panel. Auto-repeat events of a held key never act, so the press that revealed the
      * controls cannot also move on to the panel.
      */
-    fun downAction(controlsVisible: Boolean, repeatCount: Int): DownAction = when {
+    fun downAction(controlsVisible: Boolean, repeatCount: Int, castReady: Boolean = false): DownAction = when {
         !controlsVisible -> DownAction.RevealControls
         repeatCount > 0 -> DownAction.Ignore
+        castReady -> DownAction.OpenCast
         else -> DownAction.OpenPanel
+    }
+
+    /** The cast strip can be entered only while paused, with the controls up, the setting on and cast known. */
+    fun castReady(paused: Boolean, controlsVisible: Boolean, settingOn: Boolean, castCount: Int) =
+        paused && controlsVisible && settingOn && castCount > 0
+
+    sealed class CastStep {
+        data class Move(val index: Int) : CastStep()
+        data object Open : CastStep()
+        data object Exit : CastStep()
+        data object Consume : CastStep()
+    }
+
+    /** Keys while the cast strip has focus: Left/Right move, OK opens the actor, Up/Back leave. Everything else is swallowed. */
+    fun castStep(keyCode: Int, index: Int, count: Int): CastStep = when (keyCode) {
+        KeyEvent.KEYCODE_DPAD_LEFT -> CastStep.Move((index - 1).coerceAtLeast(0))
+        KeyEvent.KEYCODE_DPAD_RIGHT -> CastStep.Move((index + 1).coerceAtMost((count - 1).coerceAtLeast(0)))
+        KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER -> CastStep.Open
+        KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_BACK -> CastStep.Exit
+        else -> CastStep.Consume
     }
 
     enum class CenterAction { SkipIntro, TogglePlayback, Ignore }
@@ -70,5 +92,17 @@ object PlayerKeys {
             if (player.playbackState == Player.STATE_ENDED) player.seekTo(0)
             player.play()
         }
+    }
+}
+
+/** Whether the player is on screen and who owns the remote: decided only from the top two screens of the back stack. */
+object PlayerHost {
+    enum class Layer { Absent, Interactive, CoveredByActor }
+
+    /** The player is drawn for itself, or kept (paused, not rebuilt) under an actor page opened from it. Anything else drops it. */
+    fun layer(top: String, below: String?): Layer = when {
+        top == "Player" -> Layer.Interactive
+        top == "Actor" && below == "Player" -> Layer.CoveredByActor
+        else -> Layer.Absent
     }
 }

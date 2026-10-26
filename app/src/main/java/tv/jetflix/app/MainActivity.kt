@@ -45,6 +45,7 @@ private sealed class Screen {
     data object Search : Screen()
     data object Settings : Screen()
     data class Details(val itemId: String, val focusEpisodeId: String? = null) : Screen()
+    data class Actor(val personId: String, val name: String) : Screen()
     data class Player(val item: BaseItemDto) : Screen()
     data class Trailer(val videoId: String, val title: String) : Screen()
 }
@@ -130,6 +131,9 @@ fun JetflixRoot() {
         session?.let { app.tokenStore.forget(it.serverUrl, it.userId) }
         SessionManager.signOut()
     }
+    // OK on the user name in the top bar opens the profile picker (switch profile / sign out).
+    var showProfiles by remember { mutableStateOf(false) }
+    val onUserClick = { showProfiles = true }
     val onTabSelected: (JetflixTab) -> Unit = { tab ->
         backStack = listOf(
             when (tab) {
@@ -143,9 +147,42 @@ fun JetflixRoot() {
         )
     }
 
+    // The profile picker, opened by OK on the user name in the top bar. Switching reuses the login flow's
+    // saved-profile path: the server confirms the saved login first, an expired one is dropped and asked for again.
+    if (showProfiles) {
+        val sess = session
+        if (sess == null) {
+            showProfiles = false
+        } else {
+            val switchVm: LoginViewModel = viewModel(
+                factory = viewModelFactory { LoginViewModel(app.repo, app.tokenStore) },
+            )
+            LaunchedEffect(sess.serverUrl) { switchVm.update(serverUrl = sess.serverUrl) }
+            val switchState = switchVm.state.collectAsState().value
+            tv.jetflix.app.ui.components.ProfilePickerDialog(
+                profiles = switchState.savedProfiles.ifEmpty { listOf(sess.userName) },
+                currentName = sess.userName,
+                connecting = switchState.connecting,
+                error = switchState.error,
+                onSelect = { name ->
+                    if (name.equals(sess.userName, ignoreCase = true)) {
+                        showProfiles = false
+                    } else if (!switchState.connecting) {
+                        switchVm.selectProfile(name) {
+                            showProfiles = false
+                            backStack = listOf(Screen.Home)
+                        }
+                    }
+                },
+                onSignOut = { showProfiles = false; onSignOut() },
+                onDismiss = { if (!switchState.connecting) showProfiles = false },
+            )
+        }
+    }
+
     // In-app screensaver: after 5 idle minutes on any screen or while the player is paused (never while playing) rotate unwatched movie backdrops fullscreen.
     tv.jetflix.app.ui.components.IdleScreensaverHost(
-        blocked = (current is Screen.Player && !tv.jetflix.app.ui.components.PlaybackPause.paused.collectAsState().value) || confirmExit,
+        blocked = (current is Screen.Player && !tv.jetflix.app.ui.components.PlaybackPause.paused.collectAsState().value) || confirmExit || showProfiles,
         loadSlides = {
             val sess = session
             if (sess == null) emptyList() else {
@@ -155,6 +192,28 @@ fun JetflixRoot() {
             }
         },
     ) {
+    // The player stays composed (paused, not re-created) while the actor page is open over it.
+    val hostLayer = tv.jetflix.app.ui.player.PlayerHost.layer(
+        top = when (current) { is Screen.Player -> "Player"; is Screen.Actor -> "Actor"; else -> "" },
+        below = if (backStack.getOrNull(backStack.size - 2) is Screen.Player) "Player" else null,
+    )
+    val playerScreen: Screen.Player? = when (hostLayer) {
+        tv.jetflix.app.ui.player.PlayerHost.Layer.Interactive -> current as Screen.Player
+        tv.jetflix.app.ui.player.PlayerHost.Layer.CoveredByActor -> backStack[backStack.size - 2] as Screen.Player
+        tv.jetflix.app.ui.player.PlayerHost.Layer.Absent -> null
+    }
+    playerScreen?.let { ps ->
+        androidx.compose.runtime.key(ps.item.Id) {
+            PlayerScreen(
+                item = ps.item,
+                repo = app.repo,
+                onFinished = { pop() },
+                onPlayNext = { next -> if (current is Screen.Player) backStack = backStack.dropLast(1) + Screen.Player(next) },
+                onOpenActor = { id, name -> push(Screen.Actor(id, name)) },
+                interactive = hostLayer == tv.jetflix.app.ui.player.PlayerHost.Layer.Interactive,
+            )
+        }
+    }
     val stateHolder = androidx.compose.runtime.saveable.rememberSaveableStateHolder()
     stateHolder.SaveableStateProvider(key = current.toString()) {
     when (val screen = current) {
@@ -168,7 +227,7 @@ fun JetflixRoot() {
                 onTabSelected = onTabSelected,
                 onItemClick = { push(Screen.Details(it.seriesOrSelfId(), if (it.isEpisode) it.Id else null)) },
                 onPlay = { push(Screen.Player(it)) },
-                onSignOut = onSignOut,
+                onUserClick = onUserClick,
             )
         }
         is Screen.Library -> {
@@ -180,7 +239,7 @@ fun JetflixRoot() {
                 userName = userName,
                 onTabSelected = onTabSelected,
                 onItemClick = { if (it.Type == "BoxSet") push(Screen.Collection(it.Id, it.Name.orEmpty())) else push(Screen.Details(it.seriesOrSelfId())) },
-                onSignOut = onSignOut,
+                onUserClick = onUserClick,
                 onPlay = { push(Screen.Player(it)) },
             )
         }
@@ -193,7 +252,7 @@ fun JetflixRoot() {
                 userName = userName,
                 onTabSelected = onTabSelected,
                 onItemClick = { if (it.Type == "BoxSet") push(Screen.Collection(it.Id, it.Name.orEmpty())) else push(Screen.Details(it.seriesOrSelfId())) },
-                onSignOut = onSignOut,
+                onUserClick = onUserClick,
                 onPlay = { push(Screen.Player(it)) },
                 collectionTitle = screen.title,
             )
@@ -205,6 +264,7 @@ fun JetflixRoot() {
                 onTabSelected = onTabSelected,
                 onSignOut = onSignOut,
                 onForgetProfile = onForgetProfile,
+                onUserClick = onUserClick,
             )
         }
         Screen.Search -> {
@@ -214,7 +274,7 @@ fun JetflixRoot() {
                 userName = userName,
                 onTabSelected = onTabSelected,
                 onItemClick = { push(Screen.Details(it.seriesOrSelfId())) },
-                onSignOut = onSignOut,
+                onUserClick = onUserClick,
             )
         }
         is Screen.Details -> {
@@ -225,6 +285,7 @@ fun JetflixRoot() {
                 onPlay = { push(Screen.Player(it)) },
                 onItemClick = { push(Screen.Details(it.seriesOrSelfId())) },
                 onBack = { pop() },
+                onActor = { id, name -> push(Screen.Actor(id, name)) },
                 onTrailer = { t ->
                     when (t) {
                         is tv.jetflix.app.data.TrailerSource.Local -> push(Screen.Player(t.item))
@@ -233,17 +294,15 @@ fun JetflixRoot() {
                 },
             )
         }
+        is Screen.Actor -> {
+            val vm: tv.jetflix.app.ui.actor.ActorViewModel = viewModel(key = "actor-${session?.serverUrl}-${session?.userId}-${screen.personId}", factory = viewModelFactory { tv.jetflix.app.ui.actor.ActorViewModel(app.repo) })
+            vm.onOpenMovie = { push(Screen.Details(it.Id)) }
+            tv.jetflix.app.ui.actor.ActorScreen(viewModel = vm, personId = screen.personId, name = screen.name)
+        }
         is Screen.Trailer -> {
             tv.jetflix.app.ui.player.YouTubeTrailerScreen(videoId = screen.videoId, title = screen.title, onClose = { pop() })
         }
-        is Screen.Player -> {
-            PlayerScreen(
-                item = screen.item,
-                repo = app.repo,
-                onFinished = { pop() },
-                onPlayNext = { next -> backStack = backStack.dropLast(1) + Screen.Player(next) },
-            )
-        }
+        is Screen.Player -> Unit // drawn above, so it stays alive under the actor page
     }
     }
     }
