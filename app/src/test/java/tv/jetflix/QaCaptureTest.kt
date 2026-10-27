@@ -123,9 +123,13 @@ class QaCaptureTest {
     }
 
 
+
+
+
+
     @Test fun libraryForReadme() {
         AppSettings.setPosterSize(PosterSize.Medium)
-        val items = base.mapIndexed { i, m -> m.copy(Id = "lib$i") }
+        val items = base.sortedBy { (it.Name ?: "").removePrefix("The ") }.mapIndexed { i, m -> m.copy(Id = "lib$i") }
         rule.setContent {
             CompositionLocalProvider(LocalTestArtwork provides { art(it) }) {
                 JetflixTheme { LibraryContent(LibraryUiState(loading = false, items = items), JellyfinRepository().apply { apiFor("http://demo.test") }, JetflixTab.MOVIES, "demo", {}, {}, {}) }
@@ -147,8 +151,6 @@ class QaCaptureTest {
             }
         }
         rule.waitForIdle(); rule.mainClock.advanceTimeBy(1500); rule.waitForIdle()
-        key(Key.DirectionDown) // into the Continue Watching row so the capture shows populated rows
-        key(Key.DirectionRight)
         capture("home_readme")
     }
 }
