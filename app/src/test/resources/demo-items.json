@@ -1,32 +1,32 @@
 {
  "Items": [
   {
-   "Name": "The Gold Rush",
+   "Name": "Dune: Part Two",
    "ServerId": "f0b3381645f04afb9a0e392e74b6a1b0",
    "Id": "e16725e2c1c4367ec596cf93c38bbe4f",
    "Container": "mov,mp4,m4a,3gp,3g2,mj2",
-   "PremiereDate": "1925-06-16T00:00:00.0000000Z",
-   "CriticRating": 54,
-   "OfficialRating": "NR",
+   "PremiereDate": "2024-02-06T00:00:00.0000000Z",
+   "CriticRating": null,
+   "OfficialRating": "PG-13",
    "ChannelId": null,
-   "Overview": "A lone prospector ventures into the Klondike gold fields, where he falls for a dance-hall girl and endures blizzards, hunger and a memorable dancing-rolls dinner.",
+   "Overview": "Paul Atreides unites with the Fremen and wages war against House Harkonnen, torn between the love of his life and the fate of the known universe.",
    "Genres": [
-    "Comedy",
-    "Adventure"
+    "Adventure",
+    "Science Fiction"
    ],
-   "CommunityRating": 8.1,
-   "RunTimeTicks": 57000000000,
-   "ProductionYear": 1925,
+   "CommunityRating": null,
+   "RunTimeTicks": null,
+   "ProductionYear": 2024,
    "IsFolder": false,
    "Type": "Movie",
    "GenreItems": [
     {
-     "Name": "Comedy",
-     "Id": "00000000000000000cf8d226ea6448b6"
+     "Name": "Adventure",
+     "Id": "000000000000000062f6a0e309fac5de"
     },
     {
-     "Name": "Adventure",
-     "Id": "0000000000000000723dd02535d167cb"
+     "Name": "Science Fiction",
+     "Id": "00000000000000005d229680cd5a1b6b"
     }
    ],
    "UserData": {
@@ -66,32 +66,32 @@
    "MediaType": "Video"
   },
   {
-   "Name": "The Phantom of the Opera",
+   "Name": "Furiosa: A Mad Max Saga",
    "ServerId": "f0b3381645f04afb9a0e392e74b6a1b0",
    "Id": "5e6e8380563c5211106652362c5c6843",
    "Container": "mov,mp4,m4a,3gp,3g2,mj2",
-   "PremiereDate": "1925-09-06T00:00:00.0000000Z",
-   "CriticRating": 95,
-   "OfficialRating": "NR",
+   "PremiereDate": "2024-05-15T00:00:00.0000000Z",
+   "CriticRating": null,
+   "OfficialRating": "R",
    "ChannelId": null,
-   "Overview": "A disfigured musical genius haunts the Paris Opera House, tutoring a young singer from the shadows and unleashing terror when his demands are ignored.",
+   "Overview": "Snatched from the Green Place of Many Mothers, young Furiosa falls into the hands of warlord Dementus and fights her way across the Wasteland toward home and vengeance.",
    "Genres": [
-    "Horror",
-    "Drama"
+    "Action",
+    "Science Fiction"
    ],
-   "CommunityRating": 7.5,
-   "RunTimeTicks": 55800000000,
-   "ProductionYear": 1925,
+   "CommunityRating": null,
+   "RunTimeTicks": null,
+   "ProductionYear": 2024,
    "IsFolder": false,
    "Type": "Movie",
    "GenreItems": [
     {
-     "Name": "Horror",
-     "Id": "0000000000000000062ff157c3bfb95b"
+     "Name": "Action",
+     "Id": "00000000000000000044bf6cc25ecbf2"
     },
     {
-     "Name": "Drama",
-     "Id": "000000000000000058f91b6f4a951a27"
+     "Name": "Science Fiction",
+     "Id": "00000000000000005d229680cd5a1b6b"
     }
    ],
    "UserData": {
@@ -130,31 +130,36 @@
    "MediaType": "Video"
   },
   {
-   "Name": "Safety Last!",
+   "Name": "Inside Out 2",
    "ServerId": "f0b3381645f04afb9a0e392e74b6a1b0",
    "Id": "70853c7dde5e5759b151cd76876ab6c2",
    "Container": "mov,mp4,m4a,3gp,3g2,mj2",
-   "PremiereDate": "1923-04-01T00:00:00.0000000Z",
-   "CriticRating": 92,
+   "PremiereDate": "2024-06-10T00:00:00.0000000Z",
+   "CriticRating": null,
    "ChannelId": null,
-   "Overview": "A country boy heads to the big city to make good, and a department-store publicity stunt leaves him clinging to the side of a skyscraper.",
+   "Overview": "Riley turns thirteen and headquarters gets a demolition: Joy, Sadness and the crew are pushed aside as Anxiety and a squad of new emotions take over the console.",
    "Genres": [
+    "Animation",
     "Comedy",
-    "Romance"
+    "Family"
    ],
-   "CommunityRating": 8.1,
-   "RunTimeTicks": 42000000000,
-   "ProductionYear": 1923,
+   "CommunityRating": null,
+   "RunTimeTicks": null,
+   "ProductionYear": 2024,
    "IsFolder": false,
    "Type": "Movie",
    "GenreItems": [
     {
-     "Name": "Comedy",
-     "Id": "00000000000000000cf8d226ea6448b6"
+     "Name": "Animation",
+     "Id": "00000000000000000553dd4f226dcbc7"
     },
     {
-     "Name": "Romance",
-     "Id": "000000000000000028434feb7f6703c4"
+     "Name": "Comedy",
+     "Id": "00000000000000001d4975bc8df202ab"
+    },
+    {
+     "Name": "Family",
+     "Id": "00000000000000003f7b54557f704d0f"
     }
    ],
    "UserData": {
@@ -188,33 +193,38 @@
    },
    "LocationType": "FileSystem",
    "MediaType": "Video",
-   "OfficialRating": "NR"
+   "OfficialRating": "PG"
   },
   {
-   "Name": "Sherlock Jr.",
+   "Name": "Kingdom of the Planet of the Apes",
    "ServerId": "f0b3381645f04afb9a0e392e74b6a1b0",
    "Id": "c7eb95d14156c803611cf4a78ac469f6",
    "Container": "mov,mp4,m4a,3gp,3g2,mj2",
-   "PremiereDate": "1924-04-21T00:00:00.0000000Z",
+   "PremiereDate": "2024-05-02T00:00:00.0000000Z",
    "ChannelId": null,
-   "Overview": "A mild-mannered film projectionist, falsely accused of theft, falls asleep in the booth and dreams himself into the movie on screen as the great detective Sherlock Jr.",
+   "Overview": "Generations after Caesar's reign, a young chimpanzee named Noa sets out beyond his clan and discovers what apes and humans have both become.",
    "Genres": [
-    "Comedy",
-    "Mystery"
+    "Action",
+    "Adventure",
+    "Science Fiction"
    ],
-   "CommunityRating": 8.2,
-   "RunTimeTicks": 27000000000,
-   "ProductionYear": 1924,
+   "CommunityRating": null,
+   "RunTimeTicks": null,
+   "ProductionYear": 2024,
    "IsFolder": false,
    "Type": "Movie",
    "GenreItems": [
     {
-     "Name": "Comedy",
-     "Id": "00000000000000000cf8d226ea6448b6"
+     "Name": "Action",
+     "Id": "00000000000000000044bf6cc25ecbf2"
     },
     {
-     "Name": "Mystery",
-     "Id": "000000000000000070a034ad439f1593"
+     "Name": "Adventure",
+     "Id": "000000000000000062f6a0e309fac5de"
+    },
+    {
+     "Name": "Science Fiction",
+     "Id": "00000000000000005d229680cd5a1b6b"
     }
    ],
    "UserData": {
@@ -243,33 +253,44 @@
    },
    "LocationType": "FileSystem",
    "MediaType": "Video",
-   "OfficialRating": "NR"
+   "OfficialRating": "PG-13",
+   "CriticRating": null
   },
   {
-   "Name": "The General",
+   "Name": "Kung Fu Panda 4",
    "ServerId": "f0b3381645f04afb9a0e392e74b6a1b0",
    "Id": "9bd5926326d651153928e0d11c6ee7cb",
-   "PremiereDate": "1926-12-31T00:00:00.0000000Z",
-   "OfficialRating": "NR",
+   "PremiereDate": "2024-03-03T00:00:00.0000000Z",
+   "OfficialRating": "PG",
    "ChannelId": null,
-   "Overview": "When Union spies steal his beloved locomotive with the woman he loves aboard, a Southern engineer gives chase across enemy lines in a single-minded pursuit.",
+   "Overview": "Po must choose and train a successor as Dragon Warrior, but a shape-shifting sorceress called The Chameleon is raising villains from his past.",
    "Genres": [
+    "Animation",
+    "Action",
     "Comedy",
-    "Action"
+    "Family"
    ],
-   "CommunityRating": 8.1,
-   "RunTimeTicks": 45000000000,
-   "ProductionYear": 1926,
+   "CommunityRating": null,
+   "RunTimeTicks": null,
+   "ProductionYear": 2024,
    "IsFolder": true,
    "Type": "Series",
    "GenreItems": [
     {
-     "Name": "Comedy",
-     "Id": "00000000000000000cf8d226ea6448b6"
+     "Name": "Animation",
+     "Id": "00000000000000000553dd4f226dcbc7"
     },
     {
      "Name": "Action",
-     "Id": "00000000000000001ee0fc4f9e6f4fc2"
+     "Id": "00000000000000000044bf6cc25ecbf2"
+    },
+    {
+     "Name": "Comedy",
+     "Id": "00000000000000001d4975bc8df202ab"
+    },
+    {
+     "Name": "Family",
+     "Id": "00000000000000003f7b54557f704d0f"
     }
    ],
    "UserData": {
@@ -300,34 +321,40 @@
    },
    "LocationType": "FileSystem",
    "MediaType": "Unknown",
-   "EndDate": "2011-12-13T00:00:00.0000000Z"
+   "EndDate": "2011-12-13T00:00:00.0000000Z",
+   "CriticRating": null
   },
   {
-   "Name": "The Kid",
+   "Name": "The Wild Robot",
    "ServerId": "f0b3381645f04afb9a0e392e74b6a1b0",
    "Id": "edb39341c5039551a5157e51fe4a3364",
    "Container": "mov,mp4,m4a,3gp,3g2,mj2",
-   "PremiereDate": "1921-02-06T00:00:00.0000000Z",
-   "OfficialRating": "NR",
+   "PremiereDate": "2024-09-08T00:00:00.0000000Z",
+   "OfficialRating": "PG",
    "ChannelId": null,
-   "Overview": "A tramp reluctantly adopts an abandoned baby and raises him as a partner in a window-repair racket, until the authorities try to take the boy away.",
+   "Overview": "Shipwrecked robot Roz wakes on a wild island and learns to survive among the animals, becoming the adoptive mother of an orphaned gosling.",
    "Genres": [
-    "Comedy",
-    "Drama"
+    "Animation",
+    "Family",
+    "Science Fiction"
    ],
-   "CommunityRating": 8.3,
-   "RunTimeTicks": 40800000000,
-   "ProductionYear": 1921,
+   "CommunityRating": null,
+   "RunTimeTicks": null,
+   "ProductionYear": 2024,
    "IsFolder": false,
    "Type": "Movie",
    "GenreItems": [
     {
-     "Name": "Comedy",
-     "Id": "00000000000000000cf8d226ea6448b6"
+     "Name": "Animation",
+     "Id": "00000000000000000553dd4f226dcbc7"
     },
     {
-     "Name": "Drama",
-     "Id": "000000000000000058f91b6f4a951a27"
+     "Name": "Family",
+     "Id": "00000000000000003f7b54557f704d0f"
+    },
+    {
+     "Name": "Science Fiction",
+     "Id": "00000000000000005d229680cd5a1b6b"
     }
    ],
    "UserData": {
@@ -363,33 +390,34 @@
     }
    },
    "LocationType": "FileSystem",
-   "MediaType": "Video"
+   "MediaType": "Video",
+   "CriticRating": null
   },
   {
-   "Name": "The Lodger: A Story of the London Fog",
+   "Name": "Barbie",
    "ServerId": "f0b3381645f04afb9a0e392e74b6a1b0",
    "Id": "c541e7545e58b28cd4d0da7aac89d7e8",
    "Container": "mov,mp4,m4a,3gp,3g2,mj2",
-   "PremiereDate": "1927-02-14T00:00:00.0000000Z",
+   "PremiereDate": "2023-07-09T00:00:00.0000000Z",
    "ChannelId": null,
-   "Overview": "As a killer stalks fogbound London, a family's enigmatic new lodger arouses suspicion that he may be the murderer the whole city is hunting.",
+   "Overview": "Barbie leaves Barbieland for the real world to find the source of her sudden existential thoughts - and Ken discovers the patriarchy.",
    "Genres": [
-    "Thriller",
-    "Mystery"
+    "Comedy",
+    "Fantasy"
    ],
-   "CommunityRating": 7.3,
-   "RunTimeTicks": 54600000000,
-   "ProductionYear": 1927,
+   "CommunityRating": null,
+   "RunTimeTicks": null,
+   "ProductionYear": 2023,
    "IsFolder": false,
    "Type": "Movie",
    "GenreItems": [
     {
-     "Name": "Thriller",
-     "Id": "000000000000000075d5095659ec54a5"
+     "Name": "Comedy",
+     "Id": "00000000000000001d4975bc8df202ab"
     },
     {
-     "Name": "Mystery",
-     "Id": "000000000000000070a034ad439f1593"
+     "Name": "Fantasy",
+     "Id": "00000000000000000070b9b92f55aab0"
     }
    ],
    "UserData": {
@@ -418,35 +446,46 @@
    },
    "LocationType": "FileSystem",
    "MediaType": "Video",
-   "OfficialRating": "NR"
+   "OfficialRating": "PG-13",
+   "CriticRating": null
   },
   {
-   "Name": "Ben-Hur: A Tale of the Christ",
+   "Name": "Elemental",
    "ServerId": "f0b3381645f04afb9a0e392e74b6a1b0",
    "Id": "c002f0f88ee970cce7f138bbc925de64",
    "Container": "mov,mp4,m4a,3gp,3g2,mj2",
-   "PremiereDate": "1925-12-30T00:00:00.0000000Z",
-   "CriticRating": 94,
-   "OfficialRating": "NR",
+   "PremiereDate": "2023-05-27T00:00:00.0000000Z",
+   "CriticRating": null,
+   "OfficialRating": "PG",
    "ChannelId": null,
-   "Overview": "Betrayed by his boyhood friend and sent to the galleys, Judah Ben-Hur survives to seek revenge in a chariot race for the ages.",
+   "Overview": "In a city where fire, water, earth and air live together, fiery Ember and go-with-the-flow Wade fall for each other and challenge what elements are allowed to mix.",
    "Genres": [
-    "Adventure",
-    "Drama"
+    "Animation",
+    "Comedy",
+    "Family",
+    "Romance"
    ],
-   "CommunityRating": 7.8,
-   "RunTimeTicks": 85800000000,
-   "ProductionYear": 1925,
+   "CommunityRating": null,
+   "RunTimeTicks": null,
+   "ProductionYear": 2023,
    "IsFolder": false,
    "Type": "Movie",
    "GenreItems": [
     {
-     "Name": "Adventure",
-     "Id": "0000000000000000723dd02535d167cb"
+     "Name": "Animation",
+     "Id": "00000000000000000553dd4f226dcbc7"
     },
     {
-     "Name": "Drama",
-     "Id": "000000000000000058f91b6f4a951a27"
+     "Name": "Comedy",
+     "Id": "00000000000000001d4975bc8df202ab"
+    },
+    {
+     "Name": "Family",
+     "Id": "00000000000000003f7b54557f704d0f"
+    },
+    {
+     "Name": "Romance",
+     "Id": "00000000000000002d87a2eeee6b5dff"
     }
    ],
    "UserData": {
@@ -485,31 +524,36 @@
    "MediaType": "Video"
   },
   {
-   "Name": "Steamboat Bill, Jr.",
+   "Name": "Oppenheimer",
    "ServerId": "f0b3381645f04afb9a0e392e74b6a1b0",
    "Id": "788ae1cdf3816e3441e29dd3a96ddfe1",
    "Container": "mov,mp4,m4a,3gp,3g2,mj2",
-   "PremiereDate": "1928-05-12T00:00:00.0000000Z",
-   "CriticRating": 100,
+   "PremiereDate": "2023-07-11T00:00:00.0000000Z",
+   "CriticRating": null,
    "ChannelId": null,
-   "Overview": "The effete son of a gruff riverboat captain returns home and falls for the daughter of his father's rival, just as a cyclone bears down on the town.",
+   "Overview": "The story of J. Robert Oppenheimer: his leadership of the Manhattan Project, the first nuclear test, and the political reckoning that followed.",
    "Genres": [
-    "Comedy",
-    "Romance"
+    "Drama",
+    "History",
+    "Thriller"
    ],
-   "CommunityRating": 7.8,
-   "RunTimeTicks": 42000000000,
-   "ProductionYear": 1928,
+   "CommunityRating": null,
+   "RunTimeTicks": null,
+   "ProductionYear": 2023,
    "IsFolder": false,
    "Type": "Movie",
    "GenreItems": [
     {
-     "Name": "Comedy",
-     "Id": "00000000000000000cf8d226ea6448b6"
+     "Name": "Drama",
+     "Id": "0000000000000000143b942beb4497a9"
     },
     {
-     "Name": "Romance",
-     "Id": "000000000000000028434feb7f6703c4"
+     "Name": "History",
+     "Id": "00000000000000005f0a1cbe0eed73ec"
+    },
+    {
+     "Name": "Thriller",
+     "Id": "000000000000000032abdd493a7dd787"
     }
    ],
    "UserData": {
@@ -543,34 +587,39 @@
    },
    "LocationType": "FileSystem",
    "MediaType": "Video",
-   "OfficialRating": "NR"
+   "OfficialRating": "R"
   },
   {
-   "Name": "The Cabinet of Dr. Caligari",
+   "Name": "Spider-Man: Across the Spider-Verse",
    "ServerId": "f0b3381645f04afb9a0e392e74b6a1b0",
    "Id": "b74b4d5de01b4e1a5ce43511c3684ad8",
    "Container": "mov,mp4,m4a,3gp,3g2,mj2",
-   "PremiereDate": "1920-02-26T00:00:00.0000000Z",
-   "OfficialRating": "NR",
+   "PremiereDate": "2023-05-30T00:00:00.0000000Z",
+   "OfficialRating": "PG",
    "ChannelId": null,
-   "Overview": "A hypnotist and his somnambulist Cesare arrive at a fairground, and a string of murders follows in their wake - told through jagged, dreamlike sets.",
+   "Overview": "Miles Morales is catapulted across the Multiverse, where he clashes with the Spider-Society over how to save his own family's story.",
    "Genres": [
-    "Horror",
-    "Mystery"
+    "Action",
+    "Adventure",
+    "Animation"
    ],
-   "CommunityRating": 8.0,
-   "RunTimeTicks": 46200000000,
-   "ProductionYear": 1920,
+   "CommunityRating": null,
+   "RunTimeTicks": null,
+   "ProductionYear": 2023,
    "IsFolder": false,
    "Type": "Movie",
    "GenreItems": [
     {
-     "Name": "Horror",
-     "Id": "0000000000000000062ff157c3bfb95b"
+     "Name": "Action",
+     "Id": "00000000000000000044bf6cc25ecbf2"
     },
     {
-     "Name": "Mystery",
-     "Id": "000000000000000070a034ad439f1593"
+     "Name": "Adventure",
+     "Id": "000000000000000062f6a0e309fac5de"
+    },
+    {
+     "Name": "Animation",
+     "Id": "00000000000000000553dd4f226dcbc7"
     }
    ],
    "UserData": {
@@ -607,33 +656,39 @@
     }
    },
    "LocationType": "FileSystem",
-   "MediaType": "Video"
+   "MediaType": "Video",
+   "CriticRating": null
   },
   {
-   "Name": "The Lost World",
+   "Name": "Wonka",
    "ServerId": "f0b3381645f04afb9a0e392e74b6a1b0",
    "Id": "b07f6514a3e3aa7d8c273458c9cd4c82",
    "Container": "mov,mp4,m4a,3gp,3g2,mj2",
-   "PremiereDate": "1925-02-02T00:00:00.0000000Z",
+   "PremiereDate": "2023-10-24T00:00:00.0000000Z",
    "ChannelId": null,
-   "Overview": "An expedition to a remote plateau finds living dinosaurs, and a captured brontosaurus brought back to London runs amok through the city.",
+   "Overview": "A young Willy Wonka arrives in a new city with a suitcase of dreams and recipes, and takes on the chocolate cartel to open his first shop.",
    "Genres": [
-    "Adventure",
+    "Comedy",
+    "Family",
     "Fantasy"
    ],
-   "CommunityRating": 7.0,
-   "RunTimeTicks": 63600000000,
-   "ProductionYear": 1925,
+   "CommunityRating": null,
+   "RunTimeTicks": null,
+   "ProductionYear": 2023,
    "IsFolder": false,
    "Type": "Movie",
    "GenreItems": [
     {
-     "Name": "Adventure",
-     "Id": "0000000000000000723dd02535d167cb"
+     "Name": "Comedy",
+     "Id": "00000000000000001d4975bc8df202ab"
+    },
+    {
+     "Name": "Family",
+     "Id": "00000000000000003f7b54557f704d0f"
     },
     {
      "Name": "Fantasy",
-     "Id": "00000000000000002cdd4a1b5bdb7544"
+     "Id": "00000000000000000070b9b92f55aab0"
     }
    ],
    "UserData": {
@@ -657,38 +712,39 @@
    },
    "LocationType": "FileSystem",
    "MediaType": "Video",
-   "OfficialRating": "NR"
+   "OfficialRating": "PG",
+   "CriticRating": null
   },
   {
-   "Name": "Wings",
+   "Name": "Avatar: The Way of Water",
    "ServerId": "f0b3381645f04afb9a0e392e74b6a1b0",
    "Id": "1056b7d34f0fa0b8ce635428e8b27f37",
    "Container": "mov,mp4,m4a,3gp,3g2,mj2",
-   "PremiereDate": "1927-08-12T00:00:00.0000000Z",
+   "PremiereDate": "2022-12-06T00:00:00.0000000Z",
    "ChannelId": null,
-   "Overview": "Two young men from the same town become fighter pilots in the Great War, bound by rivalry, friendship and the girl they left behind.",
+   "Overview": "Jake Sully and Neytiri's family is driven from the forest to the sea clans of Pandora as a resurrected Quaritch hunts them down.",
    "Genres": [
     "Action",
-    "Drama",
-    "War"
+    "Adventure",
+    "Science Fiction"
    ],
-   "CommunityRating": 7.5,
-   "RunTimeTicks": 68400000000,
-   "ProductionYear": 1927,
+   "CommunityRating": null,
+   "RunTimeTicks": null,
+   "ProductionYear": 2022,
    "IsFolder": false,
    "Type": "Movie",
    "GenreItems": [
     {
      "Name": "Action",
-     "Id": "00000000000000001ee0fc4f9e6f4fc2"
+     "Id": "00000000000000000044bf6cc25ecbf2"
     },
     {
-     "Name": "Drama",
-     "Id": "000000000000000058f91b6f4a951a27"
+     "Name": "Adventure",
+     "Id": "000000000000000062f6a0e309fac5de"
     },
     {
-     "Name": "War",
-     "Id": "000000000000000071abfc4646933392"
+     "Name": "Science Fiction",
+     "Id": "00000000000000005d229680cd5a1b6b"
     }
    ],
    "UserData": {
@@ -717,7 +773,8 @@
    },
    "LocationType": "FileSystem",
    "MediaType": "Video",
-   "OfficialRating": "NR"
+   "OfficialRating": "PG-13",
+   "CriticRating": null
   }
  ]
 }

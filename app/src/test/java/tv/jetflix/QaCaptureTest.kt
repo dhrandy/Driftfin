@@ -59,7 +59,12 @@ class QaCaptureTest {
             Regex("/Items/([0-9a-f]+)/Images/").find(url)?.groupValues?.get(1) ?: return null
         }
         val bytes = javaClass.classLoader!!.getResourceAsStream("art/${id}_${kind}.jpg")?.readBytes() ?: return null
-        return BitmapPainter(android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size).asImageBitmap())
+        var bmp = android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+        // Mirror the app's size-aware URLs: a 48/320px blur source must actually arrive small, or the pre-shrunk blur trick never happens in captures.
+        Regex("maxWidth=(\\d+)").find(url)?.groupValues?.get(1)?.toIntOrNull()?.let { mw ->
+            if (mw > 0 && bmp.width > mw) bmp = android.graphics.Bitmap.createScaledBitmap(bmp, mw, bmp.height * mw / bmp.width, true)
+        }
+        return BitmapPainter(bmp.asImageBitmap())
     }
 
     private fun capture(name: String) {
@@ -129,7 +134,7 @@ class QaCaptureTest {
 
     @Test fun libraryForReadme() {
         AppSettings.setPosterSize(PosterSize.Medium)
-        val items = base.sortedBy { (it.Name ?: "").removePrefix("The ") }.mapIndexed { i, m -> m.copy(Id = "lib$i") }
+        val items = base.sortedBy { (it.Name ?: "").removePrefix("The ") }
         rule.setContent {
             CompositionLocalProvider(LocalTestArtwork provides { art(it) }) {
                 JetflixTheme { LibraryContent(LibraryUiState(loading = false, items = items), JellyfinRepository().apply { apiFor("http://demo.test") }, JetflixTab.MOVIES, "demo", {}, {}, {}) }
