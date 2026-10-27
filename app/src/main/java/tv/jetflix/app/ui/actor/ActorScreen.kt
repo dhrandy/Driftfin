@@ -109,7 +109,7 @@ fun ActorContent(state: ActorUiState, imageUrlFor: (BaseItemDto) -> String?, onO
             PersonPhoto(url = state.photoUrl, name = state.name, size = 150.dp, modifier = Modifier.align(Alignment.CenterHorizontally))
             Text(state.name, style = JetflixType.sectionTitle, color = JetflixColors.TextPrimary, maxLines = 3, overflow = TextOverflow.Ellipsis)
             state.bio?.let {
-                Text(it, style = JetflixType.body.copy(fontSize = 18.sp, lineHeight = 26.sp), color = JetflixColors.TextSecondary, maxLines = 14, overflow = TextOverflow.Ellipsis)
+                Text(it, style = JetflixType.body.copy(fontSize = 16.sp, lineHeight = 24.sp), color = JetflixColors.TextSecondary, maxLines = 14, overflow = TextOverflow.Ellipsis)
             }
         }
         Box(Modifier.weight(1f).fillMaxHeight()) {

@@ -361,7 +361,14 @@ fun LibraryContent(
     val startedFresh = remember { !focusMemory.hasKey }
     // Captured at composition: the sweep handoff clears the live flag when the tab takes focus, and content
     // arriving after that must not pull focus down. Only Down or OK enters content after a sweep.
-    val openedBySweep = remember { tv.jetflix.app.ui.components.NavSweep.active }
+    val openedBySweep = remember {
+        val sweeping = tv.jetflix.app.ui.components.NavSweep.active
+        // A remembered card from an earlier visit restores focus when its grid card composes; on a sweep
+        // arrival that card composes after the handoff has cleared the live flag, so its restoreFocus guard
+        // no longer protects the tab. Consume the pending restore here, at screen composition.
+        if (sweeping) focusMemory.pending = false
+        sweeping
+    }
     LaunchedEffect(state.items.isNotEmpty()) {
         if (state.items.isNotEmpty() && startedFresh && !openedBySweep) {
             try { firstFocus.requestFocus() } catch (_: Exception) { }
@@ -504,7 +511,7 @@ fun LibraryContent(
                     item(key = "sections", span = { androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan) }) {
                         androidx.compose.foundation.layout.Row(
                             horizontalArrangement = Arrangement.spacedBy(10.dp),
-                            modifier = Modifier.focusProperties { down = sortFocus },
+                            modifier = Modifier.focusProperties { down = sortFocus; up = navFocus },
                         ) {
                             MySection.values().forEach { sec ->
                                 val selected = sec == state.section
@@ -530,7 +537,10 @@ fun LibraryContent(
                                 .onFocusChanged { if (it.hasFocus) hideBanner() }
                                 .then(if (startedFresh && state.items.isNotEmpty()) Modifier.focusProperties { down = firstFocus } else Modifier)
                                 .then(if (banner != null) Modifier.focusProperties { up = bannerFocus } else Modifier)
-                                .then(if (isMine) Modifier.focusProperties { up = sectionFocus } else Modifier),
+                                .then(if (isMine) Modifier.focusProperties { up = sectionFocus } else Modifier)
+                                // Plain Movies/Shows had no Up target here: default search landed on the Search
+                                // icon instead of the selected tab (Randy's report on build 20).
+                                .then(if (banner == null && !isMine) Modifier.focusProperties { up = navFocus } else Modifier),
                         ) {
                             val ascending = (state.sort.order == "Ascending") != state.reversed
                             val active = (if (state.watch != WatchFilter.All) 1 else 0) + (if (state.only4k) 1 else 0) + (if (state.genre != null) 1 else 0) + (if (state.year != null) 1 else 0)

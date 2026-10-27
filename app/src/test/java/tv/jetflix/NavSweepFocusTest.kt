@@ -138,6 +138,86 @@ class NavSweepFocusTest {
             afterOk.startsWith("Play") || afterOk.startsWith("Resume") || afterOk.startsWith("More"))
     }
 
+    @Test fun upFromMoviesContentReturnsToTheMoviesTab() {
+        // Reported on build 20: on Movies, Down into the grid then back Up went to Search, not Movies.
+        // (Robolectric does not render the launch focus request, so arrive by a sweep like the TV path.)
+        NavSweep.active = true; NavSweep.tab = JetflixTab.MOVIES
+        rule.setContent { JetflixTheme { LibraryContent(LibraryUiState(loading = false, items = items), repo, JetflixTab.MOVIES, "demo", {}, {}, {}) } }
+        settleSweep()
+        assertEquals("Movies", focusedLabel())
+        press(Key.DirectionDown) // tab -> sort row
+        assertTrue("Down from the tab must reach the sort row, was: ${focusedLabel()}", focusedLabel().startsWith("Sort:"))
+        press(Key.DirectionDown) // sort row -> first grid card
+        assertEquals("Title 0", focusedLabel())
+        press(Key.DirectionUp) // grid -> sort row
+        assertTrue("Up from the first grid row must reach the sort row, was: ${focusedLabel()}", focusedLabel().startsWith("Sort:"))
+        press(Key.DirectionUp) // sort row -> the tab we came from
+        assertEquals("Up from the sort row must land on the Movies tab, not Search", "Movies", focusedLabel())
+        press(Key.DirectionRight)
+        assertEquals("horizontal movement must continue across the tabs", "My Driftfin", focusedLabel())
+    }
+
+    @Test fun upFromShowsContentReturnsToTheShowsTab() {
+        NavSweep.active = true; NavSweep.tab = JetflixTab.SHOWS
+        rule.setContent { JetflixTheme { LibraryContent(LibraryUiState(loading = false, items = items), repo, JetflixTab.SHOWS, "demo", {}, {}, {}) } }
+        settleSweep()
+        assertEquals("Shows", focusedLabel())
+        press(Key.DirectionDown)
+        assertTrue("Down from the tab must reach the sort row, was: ${focusedLabel()}", focusedLabel().startsWith("Sort:"))
+        press(Key.DirectionUp)
+        assertEquals("Up from the sort row must land on the Shows tab, not Search", "Shows", focusedLabel())
+    }
+
+    @Test fun upFromMyListContentReturnsToTheMyListTab() {
+        NavSweep.active = true; NavSweep.tab = JetflixTab.MY_LIST
+        rule.setContent { JetflixTheme { LibraryContent(LibraryUiState(loading = false, items = items), repo, JetflixTab.MY_LIST, "demo", {}, {}, {}) } }
+        settleSweep()
+        assertEquals("My Driftfin", focusedLabel())
+        press(Key.DirectionDown) // tab -> sections row
+        press(Key.DirectionDown) // sections -> sort row
+        assertTrue("Down must walk tab -> sections -> sort, was: ${focusedLabel()}", focusedLabel().startsWith("Sort:"))
+        press(Key.DirectionUp) // sort -> sections
+        press(Key.DirectionUp) // sections -> the tab we came from
+        assertEquals("Up from the sections row must land on the My Driftfin tab, not Search", "My Driftfin", focusedLabel())
+    }
+
+    @Test fun sweepReturnToMoviesWithRememberedCardKeepsFocusOnTab() {
+        // Reported on build 20: after scrolling in Movies earlier, sweeping back to Movies dropped focus
+        // onto the remembered card ("down on the movies to the far right") instead of staying on the tab.
+        var tab by mutableStateOf(JetflixTab.MOVIES)
+        var libState by mutableStateOf(LibraryUiState(loading = false, items = items))
+        NavSweep.active = true; NavSweep.tab = JetflixTab.MOVIES
+        rule.setContent {
+            JetflixTheme {
+                val holder = androidx.compose.runtime.saveable.rememberSaveableStateHolder()
+                holder.SaveableStateProvider(tab.toString()) {
+                    LibraryContent(libState, repo, tab, "demo", {}, {}, {})
+                }
+            }
+        }
+        settleSweep()
+        assertEquals("Movies", focusedLabel())
+        // First Movies visit: enter the grid and focus a card deep in the row so it is remembered.
+        press(Key.DirectionDown)
+        press(Key.DirectionDown)
+        assertEquals("Title 0", focusedLabel())
+        repeat(5) { press(Key.DirectionRight) }
+        assertTrue("expected a deep card, was: ${focusedLabel()}", focusedLabel().startsWith("Title 5"))
+        // Sweep away to Shows, then back to Movies whose grid loads late, like a real server fetch.
+        NavSweep.active = true; NavSweep.tab = JetflixTab.SHOWS; tab = JetflixTab.SHOWS
+        settleSweep()
+        assertEquals("Shows", focusedLabel())
+        libState = LibraryUiState(loading = true)
+        NavSweep.active = true; NavSweep.tab = JetflixTab.MOVIES; tab = JetflixTab.MOVIES
+        settleSweep()
+        assertEquals("sweep handoff lands on the Movies tab", "Movies", focusedLabel())
+        libState = LibraryUiState(loading = false, items = items)
+        rule.waitForIdle(); rule.mainClock.advanceTimeBy(500); rule.waitForIdle()
+        assertEquals("a remembered card must not pull focus into the grid after a sweep", "Movies", focusedLabel())
+        press(Key.DirectionDown)
+        assertTrue("Down from the tab enters at the sort row, was: ${focusedLabel()}", focusedLabel().startsWith("Sort:"))
+    }
+
     @Test fun nonSweepOpenStillTakesInitialFocus() {
         // 339c831's pinned behavior: pages opened without a sweep take their own initial content focus.
         rule.setContent { JetflixTheme { SettingsContent(true, true, true, "demo", null, {}, {}, {}, {}, {}) } }

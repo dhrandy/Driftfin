@@ -4,6 +4,14 @@ Each build lists its real changes here. The CI release workflow copies the secti
 matching the build tag onto the GitHub release page and appends the standard
 automated-build footer.
 
+## build-21
+
+Fixes:
+- On Movies, Shows and My Driftfin, pressing Up out of the grid returns to the tab you came from instead of jumping to Search.
+- Switching between tabs no longer drops the selection onto an old movie or show you scrolled to earlier; it stays on the tab until you press Down or OK.
+- Search no longer pops up by accident when scrolling left: on Home, Shows, Movies and My Driftfin it takes a double press at the far left edge (holding Left just stops at the edge), and on details, actor and other pages Left never opens Search.
+- Actor pages show the biography slightly smaller.
+
 ## build-20
 
 Fixes:

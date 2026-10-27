@@ -231,10 +231,10 @@ fun JetflixRoot() {
         }
     }
     val stateHolder = androidx.compose.runtime.saveable.rememberSaveableStateHolder()
-    // One more Left at the left edge of a browsing page opens Search. Pages where Left belongs to the control
-    // (the player, a trailer, the sign-in form, Search's own text field) and Settings are left alone.
+    // One more Left at the left edge of a main section opens Search. Nested pages (details, actor,
+    // collections), the player, trailers, the sign-in form, Search itself and Settings keep Left to themselves.
     val leftOpensSearch = Modifier.onLeftEdge(
-        enabled = current !is Screen.Search && current !is Screen.Player && current !is Screen.Trailer && current !is Screen.Login && current !is Screen.Settings,
+        enabled = current is Screen.Home || current is Screen.Library,
         onEdge = { onTabSelected(JetflixTab.SEARCH) },
     )
     androidx.compose.foundation.layout.Box(leftOpensSearch) {

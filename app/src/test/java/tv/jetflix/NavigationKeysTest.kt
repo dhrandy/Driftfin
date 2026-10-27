@@ -69,7 +69,57 @@ class NavigationKeysTest {
         assertEquals("moved to the left box, no edge yet", 0, edge)
         rule.runOnIdle { assertTrue(rule.onAllNodes(isFocused()).fetchSemanticsNodes().size == 1) }
         press(Key.DirectionLeft)
-        assertEquals("one more Left at the edge", 1, edge)
+        assertEquals("the fresh press after arriving at the edge fires (double click at the far left)", 1, edge)
+    }
+
+    @Test fun aSingleAccidentalLeftAtRestOnlyArms() {
+        var edge = 0
+        val a = FocusRequester()
+        rule.setContent { Row(Modifier.onLeftEdge(enabled = true) { edge++ }) { Box(Modifier.size(40.dp).focusRequester(a).focusable()) } }
+        rule.runOnIdle { a.requestFocus() }
+        press(Key.DirectionLeft)
+        assertEquals("one accidental Left at the edge must not open Search", 0, edge)
+        press(Key.DirectionLeft)
+        assertEquals("the deliberate second press fires", 1, edge)
+    }
+
+    @Test fun anyOtherKeyDisarmsTheEdgeChain() {
+        var edge = 0
+        val a = FocusRequester()
+        rule.setContent { Row(Modifier.onLeftEdge(enabled = true) { edge++ }) { Box(Modifier.size(40.dp).focusRequester(a).focusable()) } }
+        rule.runOnIdle { a.requestFocus() }
+        press(Key.DirectionLeft) // arm
+        assertEquals(0, edge)
+        press(Key.DirectionDown) // navigate away: must disarm
+        press(Key.DirectionLeft) // an unrelated later Left only arms again
+        assertEquals("an unrelated later Left must not fire", 0, edge)
+        press(Key.DirectionLeft)
+        assertEquals("only the deliberate second press fires", 1, edge)
+    }
+
+    @Test fun holdingLeftStopsAtTheEdgeAndNeverFires() {
+        var edge = 0
+        val a = FocusRequester(); val b = FocusRequester()
+        rule.setContent {
+            Row(Modifier.onLeftEdge(enabled = true) { edge++ }) {
+                Box(Modifier.size(40.dp).focusRequester(a).focusable())
+                Box(Modifier.size(40.dp).focusRequester(b).focusable())
+            }
+        }
+        rule.runOnIdle { b.requestFocus() }
+        // A held key arrives as one KeyDown plus repeats (repeatCount > 0) without a KeyUp: it moves to
+        // the edge, then stops there. (performKeyInput refuses repeat-downs, so inject the real events.)
+        fun key(action: Int, repeat: Int) = android.view.KeyEvent(0, 0, action, android.view.KeyEvent.KEYCODE_DPAD_LEFT, repeat)
+        rule.runOnUiThread {
+            rule.activity.dispatchKeyEvent(key(android.view.KeyEvent.ACTION_DOWN, 0))
+            rule.activity.dispatchKeyEvent(key(android.view.KeyEvent.ACTION_DOWN, 1))
+            rule.activity.dispatchKeyEvent(key(android.view.KeyEvent.ACTION_DOWN, 2))
+            rule.activity.dispatchKeyEvent(key(android.view.KeyEvent.ACTION_UP, 0))
+        }
+        rule.waitForIdle()
+        assertEquals("holding Left to the boundary never opens Search", 0, edge)
+        press(Key.DirectionLeft)
+        assertEquals("a fresh press at the edge after release fires", 1, edge)
     }
 
     @Test fun leftIsIgnoredWhenDisabled() {
@@ -91,7 +141,9 @@ class NavigationKeysTest {
         }
         rule.runOnIdle { a.requestFocus() }
         press(Key.DirectionLeft)
-        assertEquals(1, edge)
+        assertEquals("first edge press at rest arms", 0, edge)
+        press(Key.DirectionLeft)
+        assertEquals("second edge press fires", 1, edge)
     }
 
     @Test fun movingAcrossTheTabsOpensEachPageWithoutOkAndKeepsFocusOnTheTabs() {
