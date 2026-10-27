@@ -122,6 +122,19 @@ class QaCaptureTest {
         capture("library_returned")
     }
 
+
+    @Test fun libraryForReadme() {
+        AppSettings.setPosterSize(PosterSize.Medium)
+        val items = base.mapIndexed { i, m -> m.copy(Id = "lib$i") }
+        rule.setContent {
+            CompositionLocalProvider(LocalTestArtwork provides { art(it) }) {
+                JetflixTheme { LibraryContent(LibraryUiState(loading = false, items = items), JellyfinRepository().apply { apiFor("http://demo.test") }, JetflixTab.MOVIES, "demo", {}, {}, {}) }
+            }
+        }
+        rule.waitForIdle(); rule.mainClock.advanceTimeBy(1500); rule.waitForIdle()
+        capture("library_readme")
+    }
+
     @Test fun homeForReadme() {
         val titles = listOf("Continue Watching", "Next Up", "Recently Added Movies", "Favorites")
         val sections = titles.mapIndexed { i, t -> HomeSection(t, base.drop(i).take(8), wide = i < 2) }

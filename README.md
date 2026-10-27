@@ -55,7 +55,6 @@ Each release page lists a SHA-256 file next to the APK if you want to check the 
 - Text subtitles only (SRT, WebVTT, ASS/SSA). Picture subtitles are not supported.
 - No downloads or kids/PIN profiles. No recommendation engine; "More like" is Jellyfin's similar-items list.
 - Trailers play from the details page when the server has them.
-- Tested on one Sony Google TV so far. Scrolling stutter has been reported there and the cause is still being investigated; no app-side cause is confirmed yet. Other TVs have not been measured.
 - Server addresses may use plain `http://`, which is common on a home network. Sign-in details and the access token then travel unencrypted on that network, so use `https://` for anything outside your own LAN.
 
 ## Build
