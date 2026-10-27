@@ -85,7 +85,7 @@ jobs:
           if [ -z "$NOTES" ]; then NOTES="See RELEASE_NOTES.md for what changed in this build."; fi
           NOTES="$NOTES
 
-Automated build. Unit tests ran in CI, but this build was not run on a TV by CI. Known limits are listed in the README."
+          Automated build. Unit tests ran in CI, but this build was not run on a TV by CI. Known limits are listed in the README."
           gh release create "$TAG" jetflix-release.apk jetflix-release.apk.sha256 \
             --target "${GITHUB_SHA}" \
             --title "Driftfin $TAG" \
