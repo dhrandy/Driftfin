@@ -25,6 +25,7 @@ import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.unit.dp
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -156,5 +157,30 @@ class NavigationKeysTest {
         press(Key.DirectionDown) // focus enters the bar on a tab that is not the selected one
         rule.mainClock.advanceTimeBy(TAB_OPEN_DELAY_MS + 300); rule.waitForIdle()
         assertEquals(1, opened)
+    }
+
+    @Test fun aCompletedSweepClearsTheSweepFlagSoLaterScreensTakeFocus() {
+        // Regression: a sweep that lands used to leave NavSweep.active set until the bar lost focus for
+        // 120ms. A screen opened in that window (Search, Settings) skipped its own initial focus, and if
+        // nothing moved focus off the hidden bar it stayed skipped. The sweep owns the flag and must
+        // release it once the target tab holds focus.
+        var selected by mutableStateOf(JetflixTab.HOME)
+        NavSweep.active = false; NavSweep.tab = null
+        rule.setContent {
+            JetflixTheme {
+                androidx.compose.runtime.key(selected) {
+                    val navFocus = remember { FocusRequester() }
+                    androidx.compose.runtime.LaunchedEffect(Unit) { if (!NavSweep.active) navFocus.requestFocus() }
+                    TopNavBar(selected = selected, userName = "Demo", onTabSelected = { selected = it }, onUserClick = {}, selectedFocus = navFocus, solid = true)
+                }
+            }
+        }
+        rule.waitForIdle()
+        assertEquals("Home", focusedText())
+        press(Key.DirectionRight)
+        rule.mainClock.advanceTimeBy(TAB_OPEN_DELAY_MS + 100); rule.waitForIdle(); rule.mainClock.advanceTimeBy(500); rule.waitForIdle()
+        assertEquals("Shows", focusedText())
+        assertFalse("a completed sweep must clear NavSweep.active", NavSweep.active)
+        assertEquals("a completed sweep must clear NavSweep.tab", null, NavSweep.tab)
     }
 }

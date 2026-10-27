@@ -107,7 +107,9 @@ fun TopNavBar(
         if (NavSweep.active) {
             if (NavSweep.tab == selected && selectedFocus != null) {
                 repeat(15) {
-                    try { selectedFocus.requestFocus(); return@LaunchedEffect } catch (_: Exception) { kotlinx.coroutines.delay(40) }
+                    // Sweep complete once the target tab holds focus: clear the flag so screens opened
+                    // afterward (Search, Settings) take their own initial focus instead of deferring forever.
+                    try { selectedFocus.requestFocus(); NavSweep.active = false; NavSweep.tab = null; return@LaunchedEffect } catch (_: Exception) { kotlinx.coroutines.delay(40) }
                 }
             }
             NavSweep.active = false; NavSweep.tab = null // never got the tab: do not leave content focus blocked
