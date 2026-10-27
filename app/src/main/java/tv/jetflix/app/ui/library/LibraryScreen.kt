@@ -73,6 +73,8 @@ data class LibraryUiState(
     /** Random title nobody has started, for the banner on Movies and Shows. Null hides the banner. */
     val banner: BaseItemDto? = null,
     val watch: WatchFilter = WatchFilter.All,
+    /** Only titles with a 4K version (Movies/Shows tabs). */
+    val only4k: Boolean = false,
     val genre: String? = null,
     val year: Int? = null,
     val genres: List<String> = emptyList(),
@@ -110,6 +112,7 @@ class LibraryViewModel(val repo: JellyfinRepository, private val store: LibraryP
     private var knownLibraries = emptyList<Pair<String, String>>()
     private var collectionId: String? = null
     private var watch = WatchFilter.All
+    private var only4k = false
     private var genre: String? = null
     private var year: Int? = null
     private var knownGenres = emptyList<String>()
@@ -125,6 +128,7 @@ class LibraryViewModel(val repo: JellyfinRepository, private val store: LibraryP
         store.put(key(userId, tab, "sort"), sort.name)
         store.put(key(userId, tab, "reversed"), reversed.toString())
         store.put(key(userId, tab, "watch"), watch.name)
+        store.put(key(userId, tab, "4k"), if (only4k) "1" else null)
         store.put(key(userId, tab, "genre"), genre)
         store.put(key(userId, tab, "year"), year?.toString())
         store.put(key(userId, tab, "library"), libraryId)
@@ -137,11 +141,12 @@ class LibraryViewModel(val repo: JellyfinRepository, private val store: LibraryP
         sort = LibrarySort.values().firstOrNull { it.name == store.get(key(userId, tab, "sort")) } ?: sort
         reversed = store.get(key(userId, tab, "reversed")) == "true"
         watch = WatchFilter.values().firstOrNull { it.name == store.get(key(userId, tab, "watch")) } ?: watch
+        only4k = store.get(key(userId, tab, "4k")) == "1"
         genre = store.get(key(userId, tab, "genre"))
         year = store.get(key(userId, tab, "year"))?.toIntOrNull()
         libraryId = store.get(key(userId, tab, "library"))
         if (tab != JetflixTab.MY_LIST) bannerTab = tab // keeps the restored library choice on the first load
-        _state.value = _state.value.copy(sort = sort, reversed = reversed, watch = watch, genre = genre, year = year, libraryId = libraryId)
+        _state.value = _state.value.copy(sort = sort, reversed = reversed, watch = watch, only4k = only4k, genre = genre, year = year, libraryId = libraryId)
     }
 
     private fun save(tab: JetflixTab) { SessionManager.session.value?.let { persistPrefs(it.userId, tab) } }
@@ -167,9 +172,10 @@ class LibraryViewModel(val repo: JellyfinRepository, private val store: LibraryP
     private fun order(): String = if (reversed) (if (sort.order == "Ascending") "Descending" else "Ascending") else sort.order
 
     private fun fresh(loading: Boolean = false, error: String? = null, items: List<BaseItemDto> = emptyList(), banner: BaseItemDto? = null) =
-        LibraryUiState(sort = sort, reversed = reversed, section = section, loading = loading, error = error, items = items, banner = banner, watch = watch, genre = genre, year = year, genres = knownGenres, years = knownYears, libraries = knownLibraries, libraryId = libraryId)
+        LibraryUiState(sort = sort, reversed = reversed, section = section, loading = loading, error = error, items = items, banner = banner, watch = watch, only4k = only4k, genre = genre, year = year, genres = knownGenres, years = knownYears, libraries = knownLibraries, libraryId = libraryId)
 
     fun cycleWatch(tab: JetflixTab) { watch = watch.next(); _state.value = _state.value.copy(watch = watch); save(tab); load(tab) }
+    fun set4k(tab: JetflixTab, value: Boolean) { if (value == only4k) return; only4k = value; _state.value = _state.value.copy(only4k = value); save(tab); load(tab) }
     fun setLibrary(tab: JetflixTab, id: String?) { libraryId = id; _state.value = _state.value.copy(libraryId = id); save(tab); load(tab) }
     fun setGenre(tab: JetflixTab, value: String?) { genre = value; _state.value = _state.value.copy(genre = value); save(tab); load(tab) }
     fun setYear(tab: JetflixTab, value: Int?) { year = value; _state.value = _state.value.copy(year = value); save(tab); load(tab) }
@@ -267,10 +273,32 @@ class LibraryViewModel(val repo: JellyfinRepository, private val store: LibraryP
                             sortOrder = order(),
                             fields = "Overview,Genres",
                             filters = filterString(), genres = genre, years = year?.toString(),
+                            is4K = if (only4k && tab == JetflixTab.MOVIES) true else null,
                         ).body()?.Items ?: emptyList()
                     }
                 }.map { (v, d) -> v to d.await() }
-                val merged = perView.flatMap { it.second }.distinctBy { it.Id }
+                val mergedAll = perView.flatMap { it.second }.distinctBy { it.Id }
+                // Shows have no server-side series 4K filter: a series stays when the server reports any 4K episode in it.
+                // A failed episode lookup is an error, not an unfiltered list - otherwise non-4K shows would appear under "4K only".
+                val merged = if (only4k && tab == JetflixTab.SHOWS) {
+                    val perLib = wanted.map { view ->
+                        async {
+                            try {
+                                api.getItems(
+                                    userId = session.userId, parentId = view.Id, includeItemTypes = "Episode",
+                                    recursive = true, is4K = true, fields = "", enableImages = false, enableUserData = false, limit = 4000,
+                                ).body()?.Items?.mapNotNull { it.SeriesId }?.toSet()
+                            } catch (_: Exception) { null }
+                        }
+                    }.map { it.await() }
+                    if (perLib.any { it == null }) {
+                        _state.value = fresh(error = "Couldn't check which shows have a 4K version. Change a filter or reopen the tab to try again.")
+                        return@launch
+                    } else {
+                        val keep = perLib.filterNotNull().flatten().toSet()
+                        mergedAll.filter { it.Id in keep }
+                    }
+                } else mergedAll
                 if (libraryId == null && watch == WatchFilter.All && genre == null && year == null) {
                     knownLibraries = perView.filter { it.second.isNotEmpty() }.map { it.first.Id to (it.first.Name ?: "Library") }
                 }
@@ -301,7 +329,7 @@ fun LibraryScreen(
         state, viewModel.repo, tab, userName, onTabSelected, onItemClick, onUserClick,
         onSort = { viewModel.setSort(tab, it) }, onPlay = onPlay,
         onReverse = { viewModel.setReversed(tab, it) }, onSection = { viewModel.setSection(tab, it) },
-        onWatch = { viewModel.cycleWatch(tab) }, onGenre = { viewModel.setGenre(tab, it) }, onYear = { viewModel.setYear(tab, it) }, onLibrary = { viewModel.setLibrary(tab, it) },
+        onWatch = { viewModel.cycleWatch(tab) }, on4k = { viewModel.set4k(tab, it) }, onGenre = { viewModel.setGenre(tab, it) }, onYear = { viewModel.setYear(tab, it) }, onLibrary = { viewModel.setLibrary(tab, it) },
         collectionTitle = collectionTitle,
     )
 }
@@ -321,6 +349,7 @@ fun LibraryContent(
     onReverse: (Boolean) -> Unit = {},
     onSection: (MySection) -> Unit = {},
     onWatch: () -> Unit = {},
+    on4k: (Boolean) -> Unit = {},
     onGenre: (String?) -> Unit = {},
     onYear: (Int?) -> Unit = {},
     onLibrary: (String?) -> Unit = {},
@@ -331,7 +360,7 @@ fun LibraryContent(
     val firstFocus = remember { FocusRequester() }
     val startedFresh = remember { !focusMemory.hasKey }
     LaunchedEffect(state.items.isNotEmpty()) {
-        if (state.items.isNotEmpty() && startedFresh) {
+        if (state.items.isNotEmpty() && startedFresh && !tv.jetflix.app.ui.components.NavSweep.active) {
             try { firstFocus.requestFocus() } catch (_: Exception) { }
         }
     }
@@ -356,15 +385,22 @@ fun LibraryContent(
     } else if (picker == "filter") {
         OptionPicker(
             "Filter",
-            listOf("Watched: ${state.watch.label}" to "watch", "Genre: ${state.genre ?: "All"}" to "genre", "Year: ${state.year ?: "All"}" to "year", "Reset filters" to "reset"),
+            listOfNotNull(
+                "Watched: ${state.watch.label}" to "watch",
+                if (tab == JetflixTab.MOVIES || tab == JetflixTab.SHOWS) "Resolution: ${if (state.only4k) "4K only" else "All"}" to "4k" else null,
+                "Genre: ${state.genre ?: "All"}" to "genre",
+                "Year: ${state.year ?: "All"}" to "year",
+                "Reset filters" to "reset",
+            ),
             null, { picker = null }, allLabel = null, columns = 2,
         ) { v ->
             when (v) {
                 "watch" -> onWatch()
+                "4k" -> on4k(!state.only4k)
                 "genre" -> picker = "genre"
                 "year" -> picker = "year"
                 "reset" -> {
-                    onGenre(null); onYear(null)
+                    onGenre(null); onYear(null); on4k(false)
                     repeat(when (state.watch) { WatchFilter.All -> 0; WatchFilter.Unwatched -> 2; WatchFilter.Watched -> 1 }) { onWatch() }
                     picker = null
                 }
@@ -386,13 +422,13 @@ fun LibraryContent(
         try { navFocus.requestFocus() } catch (_: Exception) { }
     }
     val isMine = tab == JetflixTab.MY_LIST && collectionTitle == null
-    val showSort = (tab != JetflixTab.MY_LIST || collectionTitle != null || isMine) && (state.items.isNotEmpty() || state.sort != LibrarySort.Name || isMine || state.watch != WatchFilter.All || state.genre != null || state.year != null)
+    val showSort = (tab != JetflixTab.MY_LIST || collectionTitle != null || isMine) && (state.items.isNotEmpty() || state.sort != LibrarySort.Name || isMine || state.watch != WatchFilter.All || state.only4k || state.genre != null || state.year != null)
     val sectionFocus = remember { FocusRequester() }
     // the banner belongs on Home only; Movies and Shows start straight at the sort and poster grid.
     val banner: BaseItemDto? = null
     val bannerFocus = remember { FocusRequester() }
     LaunchedEffect(banner?.Id) {
-        if (banner != null && startedFresh) {
+        if (banner != null && startedFresh && !tv.jetflix.app.ui.components.NavSweep.active) {
             repeat(10) { try { bannerFocus.requestFocus(); return@LaunchedEffect } catch (_: Exception) { kotlinx.coroutines.delay(60) } }
         }
     }
@@ -403,7 +439,7 @@ fun LibraryContent(
     }
     Box(Modifier.fillMaxSize().background(JetflixColors.Background)) {
         if (state.items.isNotEmpty() || isMine) {
-            val barPx = with(androidx.compose.ui.platform.LocalDensity.current) { 76.dp.toPx() }
+            val barPx = with(androidx.compose.ui.platform.LocalDensity.current) { 136.dp.toPx() }
             val bottomPx = with(androidx.compose.ui.platform.LocalDensity.current) { 56.dp.toPx() }
             val scrollSpec = remember(barPx, bottomPx) { tv.jetflix.app.ui.home.MenuAwareScrollSpec(barPx, bottomPx) }
             // Derived so the screen recomposes when this flips, not on every scrolled pixel.
@@ -416,7 +452,7 @@ fun LibraryContent(
                 state = gridState,
                 modifier = Modifier.fillMaxSize()
                     .fadeUnderMenuBar(scrolledAway),
-                contentPadding = PaddingValues(start = 32.dp, end = 32.dp, top = 76.dp, bottom = 48.dp),
+                contentPadding = PaddingValues(start = 32.dp, end = 32.dp, top = 92.dp, bottom = 48.dp),
                 horizontalArrangement = Arrangement.spacedBy(14.dp),
                 verticalArrangement = Arrangement.spacedBy(18.dp),
             ) {
@@ -475,7 +511,7 @@ fun LibraryContent(
                                 .then(if (isMine) Modifier.focusProperties { up = sectionFocus } else Modifier),
                         ) {
                             val ascending = (state.sort.order == "Ascending") != state.reversed
-                            val active = (if (state.watch != WatchFilter.All) 1 else 0) + (if (state.genre != null) 1 else 0) + (if (state.year != null) 1 else 0)
+                            val active = (if (state.watch != WatchFilter.All) 1 else 0) + (if (state.only4k) 1 else 0) + (if (state.genre != null) 1 else 0) + (if (state.year != null) 1 else 0)
                             val chipColors = @Composable { on: Boolean ->
                                 androidx.tv.material3.ButtonDefaults.colors(
                                     containerColor = if (on) androidx.compose.ui.graphics.Color(0xFF3A3A3A) else androidx.compose.ui.graphics.Color.Transparent,

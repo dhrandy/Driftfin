@@ -14,6 +14,15 @@ object BannerPicks {
         return (if (high.isNotEmpty()) high else pool).take(count)
     }
 
+    const val HOME_POOL = 50
+
+    /**
+     * Home banner: the same eligible titles as [topUnwatchedMovies], limited to the best [pool], then [count] of them
+     * chosen at random. Called once per Home load, so each visit to a freshly loaded Home shows a new set.
+     */
+    fun randomTopUnwatchedMovies(items: List<BaseItemDto>, hasBackdrop: (BaseItemDto) -> Boolean, count: Int, pool: Int = HOME_POOL, random: kotlin.random.Random = kotlin.random.Random): List<BaseItemDto> =
+        topUnwatchedMovies(items, hasBackdrop, pool).shuffled(random).take(count)
+
     /**
      * Movies and Shows banners: one random title nobody has started. A show counts as unwatched only when Jellyfin
      * reports no played state, no resume position and no last-played date for it; there is no fallback to watched titles.

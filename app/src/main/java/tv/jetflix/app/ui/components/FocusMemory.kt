@@ -37,7 +37,7 @@ fun rememberFocusMemory(initialKey: String? = null): FocusMemory {
 fun Modifier.restoreFocus(memory: FocusMemory, id: String): Modifier {
     val requester = remember { FocusRequester() }
     LaunchedEffect(Unit) {
-        if (memory.pending && memory.key == id) {
+        if (memory.pending && memory.key == id && !NavSweep.active) {
             try {
                 requester.requestFocus()
                 memory.pending = false

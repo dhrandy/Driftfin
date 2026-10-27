@@ -43,4 +43,55 @@ class PauseCastKeysTest {
         assertEquals(CastStep.Consume, PlayerKeys.castStep(KeyEvent.KEYCODE_DPAD_DOWN, 2, 4))
         assertEquals(CastStep.Consume, PlayerKeys.castStep(KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, 2, 4))
     }
+
+    @Test fun okOnAPersonArmsAndItsReleaseOpensOnce() {
+        val keys = PlayerKeys.CastKeySession()
+        // The press itself opens nothing.
+        assertEquals(CastStep.Consume, keys.onPress(KeyEvent.KEYCODE_DPAD_CENTER, 2, 4))
+        assertEquals(CastStep.Open, keys.onRelease(KeyEvent.KEYCODE_DPAD_CENTER))
+        // The open is spent: a later stray release opens nothing and passes through.
+        assertEquals(null, keys.onRelease(KeyEvent.KEYCODE_DPAD_CENTER))
+    }
+
+    @Test fun aHeldOkStillOpensExactlyOnce() {
+        val keys = PlayerKeys.CastKeySession()
+        // Auto-repeat presses while held: each only re-arms.
+        repeat(4) { assertEquals(CastStep.Consume, keys.onPress(KeyEvent.KEYCODE_DPAD_CENTER, 2, 4)) }
+        assertEquals(CastStep.Open, keys.onRelease(KeyEvent.KEYCODE_DPAD_CENTER))
+        assertEquals(null, keys.onRelease(KeyEvent.KEYCODE_DPAD_CENTER))
+    }
+
+    @Test fun enterKeysAllArmAndRelease() {
+        for (key in listOf(KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER)) {
+            val keys = PlayerKeys.CastKeySession()
+            assertEquals(CastStep.Consume, keys.onPress(key, 0, 4))
+            assertEquals(CastStep.Open, keys.onRelease(key))
+        }
+    }
+
+    @Test fun leavingTheStripSwallowsThatKeysRelease() {
+        for (key in listOf(KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_BACK)) {
+            val keys = PlayerKeys.CastKeySession()
+            assertEquals(CastStep.Exit, keys.onPress(key, 2, 4))
+            // The release is consumed, so closing the strip can never also trigger Back on the player.
+            assertEquals(CastStep.Consume, keys.onRelease(key))
+        }
+    }
+
+    @Test fun releasesTheStripNeverSawFallThrough() {
+        val keys = PlayerKeys.CastKeySession()
+        assertEquals(null, keys.onRelease(KeyEvent.KEYCODE_DPAD_CENTER))
+        assertEquals(null, keys.onRelease(KeyEvent.KEYCODE_BACK))
+        // Moving around the strip arms nothing.
+        keys.onPress(KeyEvent.KEYCODE_DPAD_LEFT, 2, 4)
+        assertEquals(null, keys.onRelease(KeyEvent.KEYCODE_DPAD_LEFT))
+        assertEquals(null, keys.onRelease(KeyEvent.KEYCODE_DPAD_CENTER))
+    }
+
+    @Test fun resetDropsAnythingArmed() {
+        val keys = PlayerKeys.CastKeySession()
+        keys.onPress(KeyEvent.KEYCODE_DPAD_CENTER, 2, 4)
+        keys.reset()
+        assertEquals(null, keys.onRelease(KeyEvent.KEYCODE_DPAD_CENTER))
+    }
 }

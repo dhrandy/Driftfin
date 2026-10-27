@@ -58,16 +58,18 @@ class ActorRenderTest {
 
     private fun page(state: ActorUiState) = paparazzi.snapshot {
         CompositionLocalProvider(LocalTestArtwork provides { synth(it) }) {
-            JetflixTheme { ActorContent(state, imageUrlFor = { "http://demo.test/Items/${it.Id}/Images/Primary" }, onOpenMovie = {}) }
+            JetflixTheme { ActorContent(state, imageUrlFor = { "http://demo.test/Items/${it.Id}/Images/Primary" }, onOpenTitle = {}) }
         }
     }
 
-    @Test fun actorFull() = page(ActorUiState(loading = false, name = "Alex Example", bio = bio, photoUrl = "http://demo.test/Items/p1/Images/Primary", movies = movies(18)))
-    @Test fun actorLongNameLongBioManyMovies() = page(ActorUiState(loading = false, name = "Alexandria Bartholomew Example-Hargreaves The Third", bio = longBio, photoUrl = "http://demo.test/Items/p2/Images/Primary", movies = movies(60, long = true)))
-    @Test fun actorMissingBioMissingPhoto() = page(ActorUiState(loading = false, name = "Sam Sample", bio = null, photoUrl = null, movies = movies(6)))
-    @Test fun actorOneMovie() = page(ActorUiState(loading = false, name = "Sam Sample", bio = bio, photoUrl = "http://demo.test/Items/p3/Images/Primary", movies = movies(1)))
-    @Test fun actorEmpty() = page(ActorUiState(loading = false, name = "Sam Sample", bio = bio, photoUrl = null, movies = emptyList()))
-    @Test fun actorError() = page(ActorUiState(loading = false, name = "Sam Sample", error = "Couldn't load this actor's movies"))
+    @Test fun actorFull() = page(ActorUiState(loading = false, name = "Alex Example", bio = bio, photoUrl = "http://demo.test/Items/p1/Images/Primary", titles = movies(18)))
+    @Test fun actorLongNameLongBioManyMovies() = page(ActorUiState(loading = false, name = "Alexandria Bartholomew Example-Hargreaves The Third", bio = longBio, photoUrl = "http://demo.test/Items/p2/Images/Primary", titles = movies(60, long = true)))
+    @Test fun actorMissingBioMissingPhoto() = page(ActorUiState(loading = false, name = "Sam Sample", bio = null, photoUrl = null, titles = movies(6)))
+    @Test fun actorOneMovie() = page(ActorUiState(loading = false, name = "Sam Sample", bio = bio, photoUrl = "http://demo.test/Items/p3/Images/Primary", titles = movies(1)))
+    @Test fun actorMixedMoviesAndShows() = page(ActorUiState(loading = false, name = "Alex Example", bio = bio, photoUrl = "http://demo.test/Items/p4/Images/Primary", titles = movies(9) + (1..3).map { BaseItemDto(Id = "s$it", Name = "Show $it", Type = "Series", ProductionYear = 2020 - it) }))
+    @Test fun actorShowsOnly() = page(ActorUiState(loading = false, name = "Sam Sample", bio = bio, photoUrl = "http://demo.test/Items/p5/Images/Primary", titles = (1..4).map { BaseItemDto(Id = "s$it", Name = "Show $it", Type = "Series", ProductionYear = 2022 - it) }))
+    @Test fun actorEmpty() = page(ActorUiState(loading = false, name = "Sam Sample", bio = bio, photoUrl = null, titles = emptyList()))
+    @Test fun actorError() = page(ActorUiState(loading = false, name = "Sam Sample", error = "Couldn't load this actor's titles"))
     @Test fun actorLoading() = page(ActorUiState(loading = true, name = "Sam Sample"))
 
     private val cast = listOf("Pat Example" to "Lead", "Riley Sample" to "Sidekick", "Jordan Demo" to "A very long character name here", "Casey Test" to null, "Taylor Mock" to "Villain", "Morgan Fake" to "Narrator", "Quinn Placeholder" to "Cop", "Avery Dummy" to "Waiter", "Drew Sample" to "Judge", "Jamie Example" to "Pilot", "Reese Demo" to "Chef", "Skyler Test" to "Guard")

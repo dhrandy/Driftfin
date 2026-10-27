@@ -53,7 +53,17 @@ class TrailersTest {
     @Test fun pageAsksPlayerToUnloadCaptionsAndNeverForcesThemOn() {
         val html = YouTubeTrailerPage.html(id, YouTubeTrailerPage.origin("tv.jetflix.app"))
         assertTrue(html.contains("unloadModule('captions')"))
-        assertFalse(html.contains("cc_load_policy"))
+        assertTrue(html.contains("cc_load_policy:0"))
+        assertFalse(html.contains("cc_load_policy:1"))
+    }
+
+    @Test fun captionsAreClearedAgainWhenPlaybackStarts() {
+        // YouTube loads its captions module after playback starts, so unloading only in onReady was too early.
+        val html = YouTubeTrailerPage.html(id, YouTubeTrailerPage.origin("tv.jetflix.app"))
+        assertTrue(html.contains("setOption('captions','track',{})"))
+        assertTrue(html.contains("YT.PlayerState.PLAYING"))
+        val playing = Regex("YT.PlayerState.PLAYING\\)\\{noCaptions").containsMatchIn(html)
+        assertTrue(playing)
     }
 
     @Test fun pageIdentifiesTheAppAndRejectsBadIds() {

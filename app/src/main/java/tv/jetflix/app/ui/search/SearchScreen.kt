@@ -129,10 +129,11 @@ fun SearchContent(
     onItemClick: (BaseItemDto) -> Unit,
     onUserClick: () -> Unit,
 ) {
-    val menuBack = tv.jetflix.app.ui.components.rememberMenuBack()
+    // Back from Search goes straight to the page you came from (handled by the app), not to the menu first.
+    val menuBack = remember { tv.jetflix.app.ui.components.MenuBack() }
     var fieldFocused by remember { mutableStateOf(false) }
     val fieldFocus = remember { androidx.compose.ui.focus.FocusRequester() }
-    androidx.compose.runtime.LaunchedEffect(Unit) { runCatching { fieldFocus.requestFocus() } }
+    androidx.compose.runtime.LaunchedEffect(Unit) { if (!tv.jetflix.app.ui.components.NavSweep.active) runCatching { fieldFocus.requestFocus() } }
 
     Box(Modifier.fillMaxSize().background(JetflixColors.Background)) {
         Column(Modifier.fillMaxSize().padding(top = 96.dp)) {

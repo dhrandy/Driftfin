@@ -8,11 +8,31 @@ on:
 permissions:
   contents: write   # lets the job attach the APK to a release with the built-in token
 
+# One release build at a time, so two runs can never pick the same build number.
+concurrency:
+  group: release-build
+  cancel-in-progress: false
+
 jobs:
   build:
     runs-on: ubuntu-latest   # standard runner: free for public repositories
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # full tag history: build numbers must survive release deletions
+
+      - name: Pick the next build number
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Build numbers follow the published releases (build-N), so a failed run does not use one up.
+          # Deleting a GitHub release keeps its git tag, so take the max of both: a deleted release
+          # can never lower or reuse a number. (Only deleting a tag too would break this - don't.)
+          REL=$(gh release list --limit 300 --json tagName --jq '[.[].tagName | select(test("^build-[0-9]+$")) | ltrimstr("build-") | tonumber] | max // 0')
+          TAGS=$(git tag -l 'build-*' | sed 's/^build-//' | sort -n | tail -1); TAGS=${TAGS:-0}
+          LAST=$(( REL > TAGS ? REL : TAGS ))
+          echo "BUILD_NUMBER=$((LAST + 1))" >> "$GITHUB_ENV"
+          echo "Next build number: $((LAST + 1)) (releases max $REL, tags max $TAGS)"
 
       - uses: actions/setup-java@v4
         with:
@@ -58,11 +78,18 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           TAG="${GITHUB_REF_NAME}"
-          if [ "${GITHUB_REF_TYPE}" != "tag" ]; then TAG="build-${GITHUB_RUN_NUMBER}"; fi
+          if [ "${GITHUB_REF_TYPE}" != "tag" ]; then TAG="build-${BUILD_NUMBER}"; fi
+          # Notes come from RELEASE_NOTES.md (top section under the matching heading), so every
+          # release lists its real changes. The standard footer is appended here.
+          NOTES=$(awk '/^## /{if(found)exit; if(tolower($0) ~ tolower(TAG))found=1; next} found' RELEASE_NOTES.md)
+          if [ -z "$NOTES" ]; then NOTES="See RELEASE_NOTES.md for what changed in this build."; fi
+          NOTES="$NOTES
+
+Automated build. Unit tests ran in CI, but this build was not run on a TV by CI. Known limits are listed in the README."
           gh release create "$TAG" jetflix-release.apk jetflix-release.apk.sha256 \
             --target "${GITHUB_SHA}" \
-            --title "Jetflix $TAG" \
-            --notes "Automated build. Unit tests ran in CI, but this build was not run on a TV by CI. Known limits are listed in the README."
+            --title "Driftfin $TAG" \
+            --notes "$NOTES"
 
       - uses: actions/upload-artifact@v4
         with:

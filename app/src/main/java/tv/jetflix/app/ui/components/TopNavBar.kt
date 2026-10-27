@@ -38,6 +38,15 @@ import tv.jetflix.app.ui.theme.JetflixType
 
 enum class JetflixTab(val label: String) { HOME("Home"), SHOWS("Shows"), MOVIES("Movies"), MY_LIST("My Driftfin"), SEARCH("Search"), SETTINGS("Settings") }
 
+/**
+ * True while the user is moving across the top tabs. Each page owns its own top bar, so opening a page by focus
+ * has to hand focus to the new page's bar, and the new page must not pull focus down into its content until Down.
+ */
+object NavSweep {
+    @Volatile var active: Boolean = false
+    @Volatile var tab: JetflixTab? = null
+}
+
 @Composable
 fun Wordmark(modifier: Modifier = Modifier) {
     // The approved squared DRIFTFIN lettering, same footprint as the old text (about 143 x 18 dp).
@@ -69,9 +78,47 @@ fun TopNavBar(
     blurArtUrl: String? = null,
 ) {
     CountRecompose("navBar")
+    // A focused tab opens its page after a short dwell, including the first tab focused on entering the bar.
+    var barHasFocus by remember { mutableStateOf(false) }
+    var barHadFocus by remember { mutableStateOf(false) }
+    androidx.compose.runtime.LaunchedEffect(barHasFocus) {
+        if (barHasFocus) barHadFocus = true
+        else if (barHadFocus) {
+            // Focus passes through "nobody" for an instant when it moves between tabs; only a real exit counts.
+            kotlinx.coroutines.delay(120)
+            barHadFocus = false; NavSweep.active = false; NavSweep.tab = null
+        }
+    }
+    // No first-entry exception: whatever tab holds focus when the dwell ends opens its page.
+    val onTabFocusGained: () -> Boolean = { true }
+    // One activation per tab per visit to the bar: a dwell-open followed by OK (or the reverse) must not navigate twice.
+    var lastActivated by remember { mutableStateOf<JetflixTab?>(null) }
+    val activate: (JetflixTab, Boolean) -> Unit = { tab, sweeping ->
+        if (tab != selected && tab != lastActivated) {
+            lastActivated = tab
+            if (sweeping) { NavSweep.active = true; NavSweep.tab = tab }
+            onTabSelected(tab)
+        }
+    }
+    val openTab: (JetflixTab) -> Unit = { tab -> activate(tab, true) }
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        // Arrived by moving across the tabs: the new page's selected tab takes focus so the sweep can continue.
+        // Only the page the sweep was heading to takes it, and only once - a stale sweep must not steal focus.
+        if (NavSweep.active) {
+            if (NavSweep.tab == selected && selectedFocus != null) {
+                repeat(15) {
+                    try { selectedFocus.requestFocus(); return@LaunchedEffect } catch (_: Exception) { kotlinx.coroutines.delay(40) }
+                }
+            }
+            NavSweep.active = false; NavSweep.tab = null // never got the tab: do not leave content focus blocked
+        }
+    }
     Box(
         modifier = modifier
-            .onFocusChanged { onNavFocusChange(it.hasFocus) }
+            .onFocusChanged {
+                onNavFocusChange(it.hasFocus)
+                barHasFocus = it.hasFocus
+            }
             .then(if (downFocus != null) Modifier.focusProperties { down = downFocus } else Modifier)
             .fillMaxWidth(),
     ) {
@@ -109,7 +156,8 @@ fun TopNavBar(
         // Search is a magnifier icon at the start of the menu, the usual TV-menu pattern.
         SearchIconTab(
             selected = selected == JetflixTab.SEARCH,
-            onClick = { onTabSelected(JetflixTab.SEARCH) },
+            onClick = { activate(JetflixTab.SEARCH, false) },
+            onFocusGained = onTabFocusGained, onDwell = { openTab(JetflixTab.SEARCH) },
             // On the Search page the magnifier is the selected tab, so Back from the page lands here.
             modifier = if (selected == JetflixTab.SEARCH && selectedFocus != null) Modifier.focusRequester(selectedFocus) else Modifier,
         )
@@ -117,7 +165,8 @@ fun TopNavBar(
             NavTab(
                 label = tab.label,
                 selected = tab == selected,
-                onClick = { onTabSelected(tab) },
+                onClick = { activate(tab, false) },
+                onFocusGained = onTabFocusGained, onDwell = { openTab(tab) },
                 modifier = if (tab == selected && selectedFocus != null) Modifier.focusRequester(selectedFocus) else Modifier,
             )
         }
@@ -134,11 +183,23 @@ fun TopNavBar(
     }
 }
 
+/** Runs [onFocused] once focus has rested on a tab briefly, so a quick sweep across several tabs does not open each page. */
 @Composable
-private fun SearchIconTab(selected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
+private fun FocusActivation(focused: Boolean, onFocusGained: () -> Boolean, onDwell: () -> Unit) {
+    androidx.compose.runtime.LaunchedEffect(focused) {
+        if (focused && onFocusGained()) { kotlinx.coroutines.delay(TAB_OPEN_DELAY_MS); onDwell() }
+    }
+}
+
+const val TAB_OPEN_DELAY_MS = 150L
+
+@Composable
+private fun SearchIconTab(selected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier, onFocusGained: () -> Boolean = { false }, onDwell: () -> Unit = {}) {
+    var focused by remember { mutableStateOf(false) }
+    FocusActivation(focused, onFocusGained, onDwell)
     Surface(
         onClick = onClick,
-        modifier = modifier,
+        modifier = modifier.onFocusChanged { focused = it.isFocused },
         colors = ClickableSurfaceDefaults.colors(
             containerColor = if (selected) Color.White else Color.Transparent,
             contentColor = if (selected) Color.Black else JetflixColors.TextPrimary,
@@ -162,8 +223,9 @@ private fun SearchIconTab(selected: Boolean, onClick: () -> Unit, modifier: Modi
 }
 
 @Composable
-private fun NavTab(label: String, selected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier, onFocusLost: () -> Unit = {}) {
+private fun NavTab(label: String, selected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier, onFocusLost: () -> Unit = {}, onFocusGained: () -> Boolean = { false }, onDwell: () -> Unit = {}) {
     var focused by remember { mutableStateOf(false) }
+    FocusActivation(focused, onFocusGained, onDwell)
     Surface(
         onClick = onClick,
         modifier = modifier.onFocusChanged { if (focused && !it.isFocused) onFocusLost(); focused = it.isFocused },

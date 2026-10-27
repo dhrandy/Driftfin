@@ -58,6 +58,11 @@ object AppSettings {
         prefs?.edit()?.apply { if (value == null) remove(key) else putString(key, value) }?.apply()
     }
 
+    /** Highest build number the "What's new" card was shown for. 0 = never shown. */
+    var lastSeenBuild: Int
+        get() = prefs?.getInt("last_seen_build", 0) ?: 0
+        set(v) { prefs?.edit()?.putInt("last_seen_build", v)?.apply() }
+
     private var prefs: android.content.SharedPreferences? = null
     private val _autoplayNext = MutableStateFlow(true)
     private val _showMyList = MutableStateFlow(true)

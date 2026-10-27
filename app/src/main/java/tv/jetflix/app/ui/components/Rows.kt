@@ -10,6 +10,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.onFocusChanged
@@ -41,7 +45,12 @@ fun MediaRow(
             color = JetflixColors.TextPrimary,
             modifier = Modifier.padding(start = 32.dp, bottom = 22.dp),
         )
+        // The banner's Down target must be attached to a card that is actually composed. Card 0 is not once the row
+        // has scrolled right, so the target follows the first visible card instead.
+        val rowState = rememberLazyListState()
+        val entryIndex by remember(rowState) { derivedStateOf { rowState.firstVisibleItemIndex } }
         LazyRow(
+            state = rowState,
             modifier = if (upFocus != null) Modifier.focusProperties { up = upFocus } else Modifier,
             contentPadding = PaddingValues(horizontal = 32.dp, vertical = 6.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -49,7 +58,7 @@ fun MediaRow(
             itemsIndexed(items, key = { _, it -> it.Id }) { index, item ->
                 var m: Modifier = (if (focusMemory != null) Modifier.restoreFocus(focusMemory, "$title|${item.Id}") else Modifier)
                     .onFocusChanged { if (it.hasFocus) onItemFocused(item) }
-                if (index == 0 && firstItemFocus != null) m = m.focusRequester(firstItemFocus)
+                if (index == entryIndex && firstItemFocus != null) m = m.focusRequester(firstItemFocus)
                 if (wide) {
                     WideCard(item = item, imageUrl = imageUrlFor(item), modifier = m, onClick = { onItemClick(item) })
                 } else {

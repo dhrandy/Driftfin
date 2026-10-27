@@ -46,4 +46,23 @@ class BannerPicksTest {
         assertTrue(!tv.jetflix.app.ui.components.ScreensaverRules.mayRun(false, emptyList()))
         assertTrue(tv.jetflix.app.ui.components.ScreensaverRules.mayRun(false, listOf(tv.jetflix.app.ui.components.ScreensaverSlide("x"))))
     }
+
+    @Test fun homeBannerIsSixRandomOfTheTopFiftyEligible() {
+        val items = (1..80).map { movie("m$it", 9.9f - it * 0.05f) } + movie("w", 9.99f, played = true)
+        val top50 = BannerPicks.topUnwatchedMovies(items, all, 50).map { it.Id }.toSet()
+        assertEquals(50, top50.size)
+        val seen = mutableSetOf<String>()
+        repeat(20) { n ->
+            val pick = BannerPicks.randomTopUnwatchedMovies(items, all, 6, random = kotlin.random.Random(n)).map { it.Id }
+            assertEquals(6, pick.size); assertEquals(6, pick.toSet().size)
+            assertTrue(top50.containsAll(pick)); assertTrue("w" !in pick)
+            seen += pick
+        }
+        assertTrue("picks should vary between loads", seen.size > 6)
+    }
+
+    @Test fun homeBannerWithFewEligibleShowsThemAll() {
+        val items = listOf(movie("a", 8f), movie("b", 7.5f), movie("c", 9f, played = true))
+        assertEquals(setOf("a", "b"), BannerPicks.randomTopUnwatchedMovies(items, all, 6).map { it.Id }.toSet())
+    }
 }

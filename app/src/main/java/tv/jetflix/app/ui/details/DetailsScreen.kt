@@ -61,6 +61,7 @@ import tv.jetflix.app.data.BaseItemPerson
 import tv.jetflix.app.data.JellyfinRepository
 import tv.jetflix.app.data.SessionManager
 import tv.jetflix.app.ui.components.ArtImage
+import tv.jetflix.app.ui.components.restoreFocus
 import tv.jetflix.app.ui.components.MediaRow
 import tv.jetflix.app.ui.components.PosterCard
 import tv.jetflix.app.ui.components.ResumeProgressBar
@@ -92,11 +93,18 @@ class DetailsViewModel(val repo: JellyfinRepository) : ViewModel() {
     private var allEpisodes: List<BaseItemDto> = emptyList()
     private var seriesTarget: BaseItemDto? = null
     private var firstLoad = true
+    private var loadedId: String? = null
+    private var stale = false
+
+    /** Playback or a local trailer changed progress off-screen; the next load() must refetch instead of keeping the page. */
+    fun invalidate() { stale = true }
 
     fun load(itemId: String, focusEpisodeId: String? = null) {
         // The tapped episode only decides the first open; coming back from the player re-picks from fresh progress.
         val focusId = if (firstLoad) focusEpisodeId else null
         firstLoad = false
+        // Back from an actor page to the same already-loaded title: keep state (and scroll) exactly as it was.
+        if (!stale && loadedId == itemId && _state.value.item?.Id == itemId) return
         val session = SessionManager.session.value ?: return
         val api = repo.apiFor(session.serverUrl)
         viewModelScope.launch {
@@ -107,6 +115,8 @@ class DetailsViewModel(val repo: JellyfinRepository) : ViewModel() {
                     _state.value = DetailsUiState(loading = false, error = "Title not found")
                     return@launch
                 }
+                loadedId = itemId
+                stale = false
                 val trailerDef = async {
                     // Jellyfin's own list of trailer files, then the YouTube links on the item. A failed lookup just hides the button.
                     val local = if ((item.LocalTrailerCount ?: 0) > 0) {
@@ -115,7 +125,8 @@ class DetailsViewModel(val repo: JellyfinRepository) : ViewModel() {
                     tv.jetflix.app.data.Trailers.pick(item, local)
                 }
                 val similarDef = async {
-                    tv.jetflix.app.data.RelatedItems.filter(item, api.getSimilar(itemId, session.userId).body()?.Items ?: emptyList())
+                    // A failed similar-items request only hides the row; it must not replace the whole page with an error.
+                    try { tv.jetflix.app.data.RelatedItems.filter(item, api.getSimilar(itemId, session.userId).body()?.Items ?: emptyList()) } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (_: Exception) { emptyList() }
                 }
                 if (!item.isSeries) {
                     // Movies show the page as soon as the title itself arrives; "More like this" fills in when ready.
@@ -260,8 +271,10 @@ fun DetailsContent(
     tv.jetflix.app.ui.components.CountRecompose("details")
     val item = state.item
     val playFocus = remember { FocusRequester() }
+    // Which cast chip (if any) had focus, so Back from an actor page lands on it without a scroll jump.
+    val castFocus = tv.jetflix.app.ui.components.rememberFocusMemory()
     LaunchedEffect(item?.Id) {
-        if (item != null) {
+        if (item != null && !castFocus.hasKey) {
             try { playFocus.requestFocus() } catch (_: Exception) { }
         }
     }
@@ -468,7 +481,12 @@ fun DetailsContent(
                     horizontalArrangement = Arrangement.spacedBy(14.dp),
                 ) {
                     items(cast, key = { it.Id ?: it.Name ?: "" }) { person ->
-                        CastChip(person = person, imageUrl = repo.personImageUrl(person), onClick = { person.Id?.let { id -> onActor(id, person.Name.orEmpty()) } })
+                        CastChip(
+                            person = person,
+                            imageUrl = repo.personImageUrl(person),
+                            onClick = { person.Id?.let { id -> onActor(id, person.Name.orEmpty()) } },
+                            modifier = Modifier.restoreFocus(castFocus, "cast:" + (person.Id ?: person.Name.orEmpty())),
+                        )
                     }
                 }
             }
@@ -639,11 +657,11 @@ private fun EpisodeRow(episode: BaseItemDto, thumbUrl: String?, onClick: () -> U
 
 @OptIn(androidx.tv.material3.ExperimentalTvMaterial3Api::class)
 @Composable
-fun CastChip(person: BaseItemPerson, imageUrl: String?, onClick: () -> Unit = {}) {
+fun CastChip(person: BaseItemPerson, imageUrl: String?, onClick: () -> Unit = {}, modifier: Modifier = Modifier) {
     androidx.tv.material3.Surface(
         onClick = onClick,
         enabled = person.Id != null,
-        modifier = Modifier.width(100.dp),
+        modifier = modifier.width(100.dp),
         shape = androidx.tv.material3.ClickableSurfaceDefaults.shape(androidx.compose.foundation.shape.RoundedCornerShape(12.dp)),
         colors = androidx.tv.material3.ClickableSurfaceDefaults.colors(containerColor = Color.Transparent, focusedContainerColor = JetflixColors.SurfaceLight),
         border = androidx.tv.material3.ClickableSurfaceDefaults.border(
@@ -669,19 +687,48 @@ fun playLabel(target: BaseItemDto): String {
     return if (ep != null) "$verb $ep" else verb
 }
 
-/** Where the wide backdrop sits inside the fixed header box: a little above centre, so faces stay in view. */
-val HeaderArtAlignment: Alignment = androidx.compose.ui.BiasAlignment(0f, -0.4f)
+/** Where the wide backdrop sits inside the fixed header box: centred, so the middle of the art is what shows. */
+val HeaderArtAlignment: Alignment = Alignment.Center
 
-/** A framed play triangle, for "Watch trailer". */
+/** Clapperboard, for "Watch trailer". Artwork chosen from the icon options (option 1). */
 val TrailerIcon: androidx.compose.ui.graphics.vector.ImageVector by lazy {
     androidx.compose.ui.graphics.vector.ImageVector.Builder("Trailer", 24.dp, 24.dp, 24f, 24f).apply {
+        // Tilted slate; the four stripe cutouts come from the even-odd fill.
         addPath(
             pathData = androidx.compose.ui.graphics.vector.PathData {
-                moveTo(4f, 5f); horizontalLineTo(20f); quadTo(22f, 5f, 22f, 7f); verticalLineTo(17f); quadTo(22f, 19f, 20f, 19f)
-                horizontalLineTo(4f); quadTo(2f, 19f, 2f, 17f); verticalLineTo(7f); quadTo(2f, 5f, 4f, 5f); close()
-                moveTo(10f, 8.5f); verticalLineTo(15.5f); lineTo(16f, 12f); close()
+                moveTo(2.734f, 6.609f); lineTo(21.211f, 2.003f); lineTo(22.028f, 5.281f); lineTo(3.552f, 9.888f); close()
+                moveTo(3.321f, 5.418f); lineTo(4.891f, 5.027f); lineTo(7.308f, 9.996f); lineTo(5.737f, 10.388f); close()
+                moveTo(7.940f, 4.267f); lineTo(9.510f, 3.875f); lineTo(11.927f, 8.845f); lineTo(10.356f, 9.236f); close()
+                moveTo(12.559f, 3.115f); lineTo(14.129f, 2.723f); lineTo(16.546f, 7.693f); lineTo(14.975f, 8.085f); close()
+                moveTo(17.178f, 1.963f); lineTo(18.748f, 1.572f); lineTo(21.165f, 6.541f); lineTo(19.594f, 6.933f); close()
             },
             pathFillType = androidx.compose.ui.graphics.PathFillType.EvenOdd,
+            fill = androidx.compose.ui.graphics.SolidColor(Color.Black),
+        )
+        // Board body (rounded rect, separate path so the slate's even-odd fill does not punch through).
+        addPath(
+            pathData = androidx.compose.ui.graphics.vector.PathData {
+                moveTo(4.397f, 9.888f)
+                horizontalLineTo(19.603f)
+                arcTo(2.112f, 2.112f, 0f, false, true, 21.715f, 12.0f)
+                verticalLineTo(19.181f)
+                arcTo(2.112f, 2.112f, 0f, false, true, 19.603f, 21.293f)
+                horizontalLineTo(4.397f)
+                arcTo(2.112f, 2.112f, 0f, false, true, 2.285f, 19.181f)
+                verticalLineTo(12.0f)
+                arcTo(2.112f, 2.112f, 0f, false, true, 4.397f, 9.888f)
+                close()
+            },
+            fill = androidx.compose.ui.graphics.SolidColor(Color.Black),
+        )
+        // Hinge dot.
+        addPath(
+            pathData = androidx.compose.ui.graphics.vector.PathData {
+                moveTo(4.608f, 8.198f)
+                arcTo(1.056f, 1.056f, 0f, true, false, 2.496f, 8.198f)
+                arcTo(1.056f, 1.056f, 0f, true, true, 4.608f, 8.198f)
+                close()
+            },
             fill = androidx.compose.ui.graphics.SolidColor(Color.Black),
         )
     }.build()

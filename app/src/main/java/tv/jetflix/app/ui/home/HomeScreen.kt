@@ -159,7 +159,7 @@ class HomeViewModel(val repo: JellyfinRepository) : ViewModel() {
                     latestMovieItems, myList, latestEpisodeItems, moreLike, librarySections,
                 ).toMutableList()
 
-                // Banner: unwatched movies from this library that rate highest (Jellyfin CommunityRating, 7.0 or more).
+                // Banner: six random picks from the 50 highest-rated unwatched movies (Jellyfin CommunityRating, 7.0 or more when there are any), new on each Home load.
                 // If none reach 7.0 the best-rated unwatched movies are used; if there are no unwatched movies there is no banner.
                 val unwatchedMovies = try {
                     api.getItems(
@@ -168,12 +168,12 @@ class HomeViewModel(val repo: JellyfinRepository) : ViewModel() {
                         recursive = true,
                         sortBy = "CommunityRating",
                         sortOrder = "Descending",
-                        limit = 60,
+                        limit = 120,
                         fields = "Overview,Genres",
                         filters = "IsUnplayed",
                     ).body()?.Items ?: emptyList()
                 } catch (_: Exception) { emptyList() }
-                val heroes = tv.jetflix.app.data.BannerPicks.topUnwatchedMovies(unwatchedMovies, hasBackdrop = { repo.backdropUrl(it) != null }, count = HeroRotation.MAX_TITLES)
+                val heroes = tv.jetflix.app.data.BannerPicks.randomTopUnwatchedMovies(unwatchedMovies, hasBackdrop = { repo.backdropUrl(it) != null }, count = HeroRotation.MAX_TITLES)
                 val hero = heroes.firstOrNull()
 
                 _state.value = HomeUiState(loading = false, hero = hero, heroes = heroes, sections = sections)
@@ -307,6 +307,9 @@ fun HomeContent(
     suspend fun focusHero() {
         // The first request can land before the button is attached or the window has focus; retry until it sticks.
         repeat(20) {
+            // Moving across the top tabs keeps focus on the tabs until Down. Only a sweep heading for
+            // Home's own bar matters here; a stale flag for another tab's page must not block the hero.
+            if (tv.jetflix.app.ui.components.NavSweep.active && tv.jetflix.app.ui.components.NavSweep.tab == tv.jetflix.app.ui.components.JetflixTab.HOME) return
             try { heroPlayFocus.requestFocus() } catch (_: Exception) { }
             delay(60)
             if (heroHasFocus) return
@@ -362,7 +365,9 @@ fun HomeContent(
         label = "stripSpace",
     )
     // Focus scrolling keeps the focused card AND its row title below the menu bar (default scrolling stops at the screen edge).
-    val topInsetPx = with(androidx.compose.ui.platform.LocalDensity.current) { 124.dp.toPx() }
+    // Coming back up, a row settles with its card at this inset, so the row title above it (about 46 dp higher) must
+    // already be below the menu bar's opaque strip and its fade: 76 dp bar + 40 dp fade + 46 dp title block.
+    val topInsetPx = with(androidx.compose.ui.platform.LocalDensity.current) { 162.dp.toPx() }
     val bottomMarginPx = with(androidx.compose.ui.platform.LocalDensity.current) { 56.dp.toPx() }
     val spec = remember(topInsetPx, bottomMarginPx) {
         MenuAwareScrollSpec(

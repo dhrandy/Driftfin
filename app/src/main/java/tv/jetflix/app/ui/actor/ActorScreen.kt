@@ -18,6 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.tv.material3.Text
@@ -39,15 +40,15 @@ data class ActorUiState(
     /** The person's own Jellyfin biography; null when the server has none. */
     val bio: String? = null,
     val photoUrl: String? = null,
-    /** Movies on this server that list the person, as the signed-in user sees them. */
-    val movies: List<BaseItemDto> = emptyList(),
+    /** Movies and series on this server that list the person, as the signed-in user sees them. */
+    val titles: List<BaseItemDto> = emptyList(),
 )
 
 fun cleanBio(raw: String?): String? = raw?.replace(Regex("[ \\t]+\n"), "\n")?.trim()?.takeIf { it.isNotEmpty() }
 
 class ActorViewModel(val repo: JellyfinRepository) : ViewModel() {
-    /** Set by navigation: opens a movie's details page. */
-    var onOpenMovie: (BaseItemDto) -> Unit = {}
+    /** Set by navigation: opens a title's details page (movies and series both land on Details). */
+    var onOpenTitle: (BaseItemDto) -> Unit = {}
     fun retry(personId: String, fallbackName: String) { loadedFor = null; load(personId, fallbackName) }
     private val _state = MutableStateFlow(ActorUiState())
     val state = _state.asStateFlow()
@@ -67,7 +68,7 @@ class ActorViewModel(val repo: JellyfinRepository) : ViewModel() {
         loadJob = viewModelScope.launch {
             try {
                 val personDef = async { try { api.getItem(personId, session.userId).body() } catch (_: Exception) { null } }
-                val resp = api.getItems(userId = session.userId, includeItemTypes = "Movie", recursive = true,
+                val resp = api.getItems(userId = session.userId, includeItemTypes = "Movie,Series", recursive = true,
                     sortBy = "ProductionYear,SortName", sortOrder = "Descending", personIds = personId)
                 if (!resp.isSuccessful) throw IllegalStateException("credits ${resp.code()}")
                 val person = personDef.await()
@@ -78,36 +79,37 @@ class ActorViewModel(val repo: JellyfinRepository) : ViewModel() {
                     name = person?.Name?.takeIf { it.isNotBlank() } ?: fallbackName,
                     bio = cleanBio(person?.Overview),
                     photoUrl = person?.ImageTags?.get("Primary")?.let { repo.imageUrl(personId, "Primary", 400, it) },
-                    movies = resp.body()?.Items.orEmpty(),
+                    // Top-level titles only: episodes of a matching series would duplicate the series itself.
+                    titles = resp.body()?.Items.orEmpty().filter { it.Type == "Movie" || it.Type == "Series" },
                 )
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
             } catch (_: Exception) {
                 loadedFor = null
                 if (!sameSession(session)) return@launch
-                _state.value = ActorUiState(loading = false, name = fallbackName, error = "Couldn't load this actor's movies")
+                _state.value = ActorUiState(loading = false, name = fallbackName, error = "Couldn't load this actor's titles")
             }
         }
     }
 }
 
-/** The actor page: photo, name and bio on the left, the movies on this server on the right. */
+/** The actor page: photo, name and bio on the left, their movies and shows on this server on the right. */
 @Composable
 fun ActorScreen(viewModel: ActorViewModel, personId: String, name: String) {
     LaunchedEffect(personId) { viewModel.load(personId, name) }
     val state by viewModel.state.collectAsState()
-    ActorContent(state = state, imageUrlFor = { viewModel.repo.posterUrl(it) }, onOpenMovie = viewModel.onOpenMovie, onRetry = { viewModel.retry(personId, name) })
+    ActorContent(state = state, imageUrlFor = { viewModel.repo.posterUrl(it) }, onOpenTitle = viewModel.onOpenTitle, onRetry = { viewModel.retry(personId, name) })
 }
 
 @Composable
-fun ActorContent(state: ActorUiState, imageUrlFor: (BaseItemDto) -> String?, onOpenMovie: (BaseItemDto) -> Unit, onRetry: () -> Unit = {}) {
+fun ActorContent(state: ActorUiState, imageUrlFor: (BaseItemDto) -> String?, onOpenTitle: (BaseItemDto) -> Unit, onRetry: () -> Unit = {}) {
     val firstFocus = remember { FocusRequester() }
     Row(Modifier.fillMaxSize().background(JetflixColors.Background).padding(start = 48.dp, end = 32.dp, top = 40.dp, bottom = 24.dp)) {
-        Column(Modifier.width(300.dp).padding(end = 28.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            PersonPhoto(url = state.photoUrl, name = state.name, size = 150.dp)
+        Column(Modifier.width(380.dp).padding(end = 32.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            PersonPhoto(url = state.photoUrl, name = state.name, size = 150.dp, modifier = Modifier.align(Alignment.CenterHorizontally))
             Text(state.name, style = JetflixType.sectionTitle, color = JetflixColors.TextPrimary, maxLines = 3, overflow = TextOverflow.Ellipsis)
             state.bio?.let {
-                Text(it, style = JetflixType.caption, color = JetflixColors.TextSecondary, maxLines = 12, overflow = TextOverflow.Ellipsis)
+                Text(it, style = JetflixType.body.copy(fontSize = 18.sp, lineHeight = 26.sp), color = JetflixColors.TextSecondary, maxLines = 14, overflow = TextOverflow.Ellipsis)
             }
         }
         Box(Modifier.weight(1f).fillMaxHeight()) {
@@ -118,22 +120,22 @@ fun ActorContent(state: ActorUiState, imageUrlFor: (BaseItemDto) -> String?, onO
                     androidx.tv.material3.Button(onClick = onRetry, modifier = Modifier.focusRequester(firstFocus)) { Text("Try again") }
                     LaunchedEffect(Unit) { try { firstFocus.requestFocus() } catch (_: Exception) {} }
                 }
-                state.movies.isEmpty() -> Text("No movies with this actor on your server.", style = JetflixType.body, color = JetflixColors.TextSecondary)
+                state.titles.isEmpty() -> Text("No movies or shows with this actor on your server.", style = JetflixType.body, color = JetflixColors.TextSecondary)
                 else -> Column {
-                    LaunchedEffect(state.movies) { repeat(10) { try { firstFocus.requestFocus(); return@LaunchedEffect } catch (_: Exception) { kotlinx.coroutines.delay(60) } } }
-                    Text(if (state.movies.size == 1) "1 movie on your server" else "${state.movies.size} movies on your server", style = JetflixType.sectionTitle, color = JetflixColors.TextPrimary, modifier = Modifier.padding(bottom = 12.dp))
+                    LaunchedEffect(state.titles) { repeat(10) { try { firstFocus.requestFocus(); return@LaunchedEffect } catch (_: Exception) { kotlinx.coroutines.delay(60) } } }
+                    Text(titlesOnServerLine(state.titles), style = JetflixType.sectionTitle, color = JetflixColors.TextPrimary, modifier = Modifier.padding(bottom = 12.dp))
                     LazyVerticalGrid(
                         columns = GridCells.Fixed(5),
                         modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(bottom = 32.dp, top = 8.dp, start = 8.dp, end = 8.dp),
-                        horizontalArrangement = Arrangement.spacedBy(14.dp),
-                        verticalArrangement = Arrangement.spacedBy(18.dp),
+                        contentPadding = PaddingValues(bottom = 32.dp, top = 20.dp, start = 16.dp, end = 16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(20.dp),
+                        verticalArrangement = Arrangement.spacedBy(24.dp),
                     ) {
-                        items(state.movies, key = { it.Id }) { m ->
+                        items(state.titles, key = { it.Id }) { m ->
                             Column(Modifier.width(140.dp)) {
-                                PosterCard(item = m, imageUrl = imageUrlFor(m), onClick = { onOpenMovie(m) }, width = 140.dp,
-                                    modifier = if (m.Id == state.movies.first().Id) Modifier.focusRequester(firstFocus) else Modifier)
-                                Text(m.displayTitle(), style = JetflixType.caption, color = JetflixColors.TextPrimary, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 6.dp))
+                                PosterCard(item = m, imageUrl = imageUrlFor(m), onClick = { onOpenTitle(m) }, width = 140.dp,
+                                    modifier = if (m.Id == state.titles.first().Id) Modifier.focusRequester(firstFocus) else Modifier)
+                                Text(m.displayTitle(), style = JetflixType.caption, color = JetflixColors.TextPrimary, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 20.dp))
                                 m.ProductionYear?.let { Text("$it", style = JetflixType.caption, color = JetflixColors.TextMuted) }
                             }
                         }
@@ -142,6 +144,17 @@ fun ActorContent(state: ActorUiState, imageUrlFor: (BaseItemDto) -> String?, onO
             }
         }
     }
+}
+
+/** "3 movies and 1 show on your server" - the grid holds both, so say both. */
+fun titlesOnServerLine(titles: List<BaseItemDto>): String {
+    val movies = titles.count { it.Type != "Series" }
+    val shows = titles.size - movies
+    val parts = buildList {
+        if (movies > 0) add(if (movies == 1) "1 movie" else "$movies movies")
+        if (shows > 0) add(if (shows == 1) "1 show" else "$shows shows")
+    }
+    return parts.joinToString(" and ") + " on your server"
 }
 
 /** Round photo, or the person's first letter on a grey disc when the server has no photo. */

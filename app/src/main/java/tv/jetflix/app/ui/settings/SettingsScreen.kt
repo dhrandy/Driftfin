@@ -143,14 +143,16 @@ fun SettingsContent(
 ) {
     val menuBack = tv.jetflix.app.ui.components.rememberMenuBack()
     val first = remember { FocusRequester() }
-    LaunchedEffect(Unit) { try { first.requestFocus() } catch (_: Exception) { } }
+    LaunchedEffect(Unit) { if (!tv.jetflix.app.ui.components.NavSweep.active) try { first.requestFocus() } catch (_: Exception) { } }
     Box(Modifier.fillMaxSize().background(JetflixColors.Background)) {
         Column(
             Modifier.align(Alignment.TopStart).fillMaxHeight().verticalScroll(rememberScrollState()).padding(start = 48.dp, top = 110.dp, bottom = 40.dp).width(760.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             Text("Settings", style = JetflixType.sectionTitle, color = JetflixColors.TextPrimary)
-            SettingRow("Autoplay next episode", "Starts the next episode after a 5 second countdown.", autoplay, onToggleAutoplay, Modifier.focusRequester(first))
+            val (uValue, uDetail) = updateTexts(update)
+            SettingRow("Check for updates", uDetail, true, onUpdateClick, Modifier.focusRequester(first), valueText = uValue)
+            SettingRow("Autoplay next episode", "Starts the next episode after a 5 second countdown.", autoplay, onToggleAutoplay)
             SettingRow("Show My List on Home", "My List uses your Jellyfin favorites for this user.", showMyList, onToggleMyList)
             SettingRow("Poster size", "Small, Medium or Large cards on Home and in libraries. Press OK to change.", true, onCyclePosterSize, valueText = posterSize.label)
             SettingRow("Continue Watching art", "Scene images (the wide look) or posters for the Continue Watching row. Press OK to change.", true, onToggleContinueWatchingPosters, valueText = if (continueWatchingPosters) "Posters" else "Scene images")
@@ -186,8 +188,6 @@ fun SettingsContent(
                     focusedContentColor = Color.White,
                 ),
             ) { Text("Sign out and forget this profile") }
-            val (uValue, uDetail) = updateTexts(update)
-            SettingRow("Check for updates", uDetail, true, onUpdateClick, valueText = uValue)
         }
         TopNavBar(
             solid = true,

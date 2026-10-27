@@ -89,6 +89,16 @@ fun IdleScreensaverHost(
 ) {
     var lastInput by remember { androidx.compose.runtime.mutableLongStateOf(0L) }
     var urls by remember { androidx.compose.runtime.mutableStateOf<List<ScreensaverSlide>?>(null) }
+    // Coming back to the app counts as activity: a screensaver that started while the app was away is
+    // cleared and the idle clock restarts, so the user never returns to a screensaver.
+    val lifecycleOwner = androidx.compose.ui.platform.LocalLifecycleOwner.current
+    androidx.compose.runtime.DisposableEffect(lifecycleOwner) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) lastInput = System.nanoTime()
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
     LaunchedEffect(lastInput, blocked) {
         urls = null
         if (blocked) return@LaunchedEffect

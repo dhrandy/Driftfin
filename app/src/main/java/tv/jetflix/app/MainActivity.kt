@@ -7,6 +7,7 @@ import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.input.key.onPreviewKeyEvent
+import tv.jetflix.app.ui.components.onLeftEdge
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -121,6 +122,15 @@ fun JetflixRoot() {
         return
     }
 
+    // Once per installed build: what changed in this update. OK dismisses and remembers the build.
+    var showWhatsNew by remember { mutableStateOf(tv.jetflix.app.BuildConfig.VERSION_CODE > tv.jetflix.app.data.AppSettings.lastSeenBuild) }
+    if (showWhatsNew) {
+        tv.jetflix.app.update.WhatsNewDialog(tv.jetflix.app.update.WhatsNew.notes) {
+            tv.jetflix.app.data.AppSettings.lastSeenBuild = tv.jetflix.app.BuildConfig.VERSION_CODE
+            showWhatsNew = false
+        }
+    }
+
     val userName = session?.userName
     val onSignOut = {
         // Switch profile: leaves other saved profiles in place so they can be picked again without a password.
@@ -135,6 +145,10 @@ fun JetflixRoot() {
     var showProfiles by remember { mutableStateOf(false) }
     val onUserClick = { showProfiles = true }
     val onTabSelected: (JetflixTab) -> Unit = { tab ->
+      if (tab == JetflixTab.SEARCH) {
+        // Search sits on top of the page you came from, so Back returns there.
+        if (current != Screen.Search) push(Screen.Search)
+      } else {
         backStack = listOf(
             when (tab) {
                 JetflixTab.HOME -> Screen.Home
@@ -145,6 +159,7 @@ fun JetflixRoot() {
                 JetflixTab.SETTINGS -> Screen.Settings
             },
         )
+      }
     }
 
     // The profile picker, opened by OK on the user name in the top bar. Switching reuses the login flow's
@@ -207,6 +222,7 @@ fun JetflixRoot() {
             PlayerScreen(
                 item = ps.item,
                 repo = app.repo,
+                // PlayerScreen only reports "finished" while the player itself is on top, so this pop is always the player.
                 onFinished = { pop() },
                 onPlayNext = { next -> if (current is Screen.Player) backStack = backStack.dropLast(1) + Screen.Player(next) },
                 onOpenActor = { id, name -> push(Screen.Actor(id, name)) },
@@ -215,6 +231,19 @@ fun JetflixRoot() {
         }
     }
     val stateHolder = androidx.compose.runtime.saveable.rememberSaveableStateHolder()
+    // One more Left at the left edge of a browsing page opens Search. Pages where Left belongs to the control
+    // (the player, a trailer, the sign-in form, Search's own text field) and Settings are left alone.
+    val leftOpensSearch = Modifier.onLeftEdge(
+        enabled = current !is Screen.Search && current !is Screen.Player && current !is Screen.Trailer && current !is Screen.Login && current !is Screen.Settings,
+        onEdge = { onTabSelected(JetflixTab.SEARCH) },
+    )
+    androidx.compose.foundation.layout.Box(leftOpensSearch) {
+    if (!showWhatsNew) {
+        tv.jetflix.app.update.StartupUpdateNotice(
+            currentBuild = tv.jetflix.app.BuildConfig.VERSION_CODE,
+            modifier = Modifier.align(androidx.compose.ui.Alignment.TopCenter).padding(top = 84.dp),
+        )
+    }
     stateHolder.SaveableStateProvider(key = current.toString()) {
     when (val screen = current) {
         Screen.Login -> Unit
@@ -282,13 +311,13 @@ fun JetflixRoot() {
             LaunchedEffect(screen.itemId, screen.focusEpisodeId) { vm.load(screen.itemId, screen.focusEpisodeId) }
             DetailsScreen(
                 viewModel = vm,
-                onPlay = { push(Screen.Player(it)) },
+                onPlay = { vm.invalidate(); push(Screen.Player(it)) },
                 onItemClick = { push(Screen.Details(it.seriesOrSelfId())) },
                 onBack = { pop() },
                 onActor = { id, name -> push(Screen.Actor(id, name)) },
                 onTrailer = { t ->
                     when (t) {
-                        is tv.jetflix.app.data.TrailerSource.Local -> push(Screen.Player(t.item))
+                        is tv.jetflix.app.data.TrailerSource.Local -> { vm.invalidate(); push(Screen.Player(t.item)) }
                         is tv.jetflix.app.data.TrailerSource.YouTube -> push(Screen.Trailer(t.videoId, t.title))
                     }
                 },
@@ -296,13 +325,14 @@ fun JetflixRoot() {
         }
         is Screen.Actor -> {
             val vm: tv.jetflix.app.ui.actor.ActorViewModel = viewModel(key = "actor-${session?.serverUrl}-${session?.userId}-${screen.personId}", factory = viewModelFactory { tv.jetflix.app.ui.actor.ActorViewModel(app.repo) })
-            vm.onOpenMovie = { push(Screen.Details(it.Id)) }
+            vm.onOpenTitle = { push(Screen.Details(it.Id)) }
             tv.jetflix.app.ui.actor.ActorScreen(viewModel = vm, personId = screen.personId, name = screen.name)
         }
         is Screen.Trailer -> {
             tv.jetflix.app.ui.player.YouTubeTrailerScreen(videoId = screen.videoId, title = screen.title, onClose = { pop() })
         }
         is Screen.Player -> Unit // drawn above, so it stays alive under the actor page
+    }
     }
     }
     }

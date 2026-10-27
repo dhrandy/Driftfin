@@ -51,6 +51,23 @@ class ScreensaverTest {
         assertEquals("next key reaches the app", 1, clicks[0])
     }
 
+    @Test fun returningToTheAppClearsAScreensaverThatStartedWhileAway() {
+        val clicks = IntArray(1)
+        host(urls = listOf("http://demo.test/Items/a/Images/Backdrop"), clicks = clicks)
+        rule.onNodeWithText("Underneath").requestFocus()
+        // App goes to the TV home screen and sits there past the idle timeout.
+        rule.activityRule.scenario.moveToState(androidx.lifecycle.Lifecycle.State.CREATED)
+        rule.mainClock.advanceTimeBy(3000)
+        // Coming back must show the app, not the screensaver, and the idle clock starts over.
+        rule.activityRule.scenario.moveToState(androidx.lifecycle.Lifecycle.State.RESUMED)
+        rule.waitForIdle()
+        rule.onNodeWithContentDescription("Screensaver").assertDoesNotExist()
+        rule.mainClock.advanceTimeBy(500); rule.waitForIdle()
+        rule.onNodeWithContentDescription("Screensaver").assertDoesNotExist()
+        rule.mainClock.advanceTimeBy(1500); rule.waitForIdle()
+        rule.onNodeWithContentDescription("Screensaver").assertExists()
+    }
+
     @Test fun neverStartsWhenBlockedOrWithoutArt() {
         host(blocked = true, urls = listOf("http://demo.test/x"), clicks = IntArray(1))
         rule.mainClock.advanceTimeBy(5000); rule.waitForIdle()

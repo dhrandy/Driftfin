@@ -14,8 +14,8 @@ android {
         applicationId = "tv.jetflix.app"
         minSdk = 26
         targetSdk = 35
-        // CI sets GITHUB_RUN_NUMBER so every release build has a higher versionCode than the last
-        versionCode = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 1
+        // CI sets BUILD_NUMBER (the next published release number) so every release has a higher versionCode than the last
+        versionCode = System.getenv("BUILD_NUMBER")?.toIntOrNull() ?: System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 1
         versionName = "0.1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }

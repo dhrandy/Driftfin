@@ -66,13 +66,45 @@ object PlayerKeys {
         data object Consume : CastStep()
     }
 
-    /** Keys while the cast strip has focus: Left/Right move, OK opens the actor, Up/Back leave. Everything else is swallowed. */
+    /** Keys while the cast strip has focus: Left/Right move, OK targets the actor, Up/Back leave. Everything else is swallowed. */
     fun castStep(keyCode: Int, index: Int, count: Int): CastStep = when (keyCode) {
         KeyEvent.KEYCODE_DPAD_LEFT -> CastStep.Move((index - 1).coerceAtLeast(0))
         KeyEvent.KEYCODE_DPAD_RIGHT -> CastStep.Move((index + 1).coerceAtMost((count - 1).coerceAtLeast(0)))
         KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER -> CastStep.Open
         KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_BACK -> CastStep.Exit
         else -> CastStep.Consume
+    }
+
+    /**
+     * One OK press on a cast person opens exactly one page. The press only arms the open; the
+     * release performs it and is swallowed. Navigating on the press instead let the same release
+     * land on the actor page, where a focused tv-material card fires its click on ANY Enter
+     * release - even one whose press happened here - so the actor's first movie opened on its own,
+     * and a held OK re-opened the actor on every repeat. Back/Up leave on the press as before, but
+     * their release is swallowed too, so closing the strip never also backs out of the player.
+     */
+    class CastKeySession {
+        var openArmed = false
+            private set
+        var exitArmedKey: Int? = null
+            private set
+
+        /** A key press while the strip has focus. Open only arms; the real open happens in [onRelease]. */
+        fun onPress(keyCode: Int, index: Int, count: Int): CastStep = when (val step = castStep(keyCode, index, count)) {
+            CastStep.Open -> { openArmed = true; CastStep.Consume }
+            CastStep.Exit -> { exitArmedKey = keyCode; step }
+            else -> step
+        }
+
+        /** A key release after the strip handled its press: fires an armed Open, swallows a strip Exit's release. Null = not ours, let it through. */
+        fun onRelease(keyCode: Int): CastStep? = when {
+            openArmed && (keyCode == KeyEvent.KEYCODE_DPAD_CENTER || keyCode == KeyEvent.KEYCODE_ENTER || keyCode == KeyEvent.KEYCODE_NUMPAD_ENTER) -> { openArmed = false; CastStep.Open }
+            exitArmedKey == keyCode -> { exitArmedKey = null; CastStep.Consume }
+            else -> null
+        }
+
+        /** The strip closed without a press (playback resumed): drop anything left armed. */
+        fun reset() { openArmed = false; exitArmedKey = null }
     }
 
     enum class CenterAction { SkipIntro, TogglePlayback, Ignore }

@@ -24,7 +24,9 @@ class SearchBackTest {
     private fun fieldFocused() = rule.onAllNodes(isFocused()).fetchSemanticsNodes()
         .any { it.config.contains(SemanticsProperties.EditableText) }
 
-    @Test fun backLeavesTheSearchFieldForTheMenu() {
+    @Test fun backIsHandledByTheAppNotByMovingFocusInsideSearch() {
+        // Search sits on top of the page you came from and the app pops it on Back. SearchContent itself
+        // must not intercept Back to move focus to the menu; that menu-first step is gone.
         rule.setContent {
             JetflixTheme {
                 SearchContent(SearchUiState(), JellyfinRepository().apply { apiFor("http://demo.test") }, "demo", {}, {}, {}, {}, {})
@@ -34,6 +36,6 @@ class SearchBackTest {
         assertTrue("the search field starts focused", fieldFocused())
         rule.runOnUiThread { rule.activity.onBackPressedDispatcher.onBackPressed() }
         rule.waitForIdle()
-        assertFalse("Back moved focus out of the field", fieldFocused())
+        assertTrue("Back stays app-level: Search does not move focus internally", fieldFocused())
     }
 }

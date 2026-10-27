@@ -47,13 +47,14 @@ object YouTubeTrailerPage {
 var player;
 function onYouTubeIframeAPIReady(){
   player=new YT.Player('player',{width:'100%',height:'100%',videoId:'$videoId',
-    playerVars:{autoplay:1,playsinline:1,rel:0,enablejsapi:1,origin:'$origin'},
+    playerVars:{autoplay:1,playsinline:1,rel:0,enablejsapi:1,cc_load_policy:0,origin:'$origin'},
     events:{
-      onReady:function(e){try{e.target.unloadModule('captions');}catch(x){} e.target.playVideo();},
-      onStateChange:function(e){Bridge.onState(e.data);},
+      onReady:function(e){noCaptions(e.target); e.target.playVideo();},
+      onStateChange:function(e){if(e.data==YT.PlayerState.PLAYING){noCaptions(e.target);} Bridge.onState(e.data);},
       onError:function(e){Bridge.onError(e.data);}
     }});
 }
+function noCaptions(p){try{p.unloadModule('captions');}catch(x){} try{p.setOption('captions','track',{});}catch(x){}}
 function togglePlay(){if(!player)return;var s=player.getPlayerState();if(s==1){player.pauseVideo();}else{player.playVideo();}}
 function seekBy(d){if(!player)return;player.seekTo(Math.max(0,player.getCurrentTime()+d),true);}
 </script>

@@ -112,6 +112,8 @@ fun PlayerScreen(
     var cast by remember { mutableStateOf(emptyList<tv.jetflix.app.data.BaseItemPerson>()) }
     var castFetched by remember { mutableStateOf(false) }
     var castIndex by remember { mutableStateOf<Int?>(null) }
+    // OK on a cast person opens the actor on key release, never on the press (see CastKeySession).
+    val castKeys = remember { PlayerKeys.CastKeySession() }
     LaunchedEffect(isPausedNow, pauseCastOn) {
         if (isPausedNow && pauseCastOn && !castFetched) {
             castFetched = true
@@ -120,7 +122,7 @@ fun PlayerScreen(
             } catch (_: Exception) { emptyList() }
         }
     }
-    LaunchedEffect(isPausedNow, pauseCastOn) { if (!isPausedNow || !pauseCastOn) castIndex = null }
+    LaunchedEffect(isPausedNow, pauseCastOn) { if (!isPausedNow || !pauseCastOn) { castIndex = null; castKeys.reset() } }
     var introSegments by remember { mutableStateOf(emptyList<tv.jetflix.app.data.MediaSegmentDto>()) }
     val skipIntroEnabled by tv.jetflix.app.data.AppSettings.skipIntro.collectAsState()
     var positionTicks by remember { mutableLongStateOf(item.UserData?.PlaybackPositionTicks ?: 0L) }
@@ -152,8 +154,10 @@ fun PlayerScreen(
     var countdown by remember { mutableStateOf(5) }
 
     // When playback ends: for episodes with autoplay on, look up the next episode in server order.
-    LaunchedEffect(ended) {
-        if (!ended) return@LaunchedEffect
+    // While an actor page covers the player (not interactive), the finish waits: the actor page stays until
+    // the user leaves it with Back, and the ended player finishes then.
+    LaunchedEffect(ended, interactive) {
+        if (!shouldAutoFinish(ended, interactive)) return@LaunchedEffect
         val seriesId = item.SeriesId
         if (!item.isEpisode || seriesId == null || !tv.jetflix.app.data.AppSettings.autoplayNext.value) {
             onFinished(); return@LaunchedEffect
@@ -300,6 +304,17 @@ fun PlayerScreen(
             .background(Color.Black),
         onKey = { nativeEvent ->
             run {
+                if (nativeEvent.action == KeyEvent.ACTION_UP) {
+                    // A release the cast strip started: an armed OK opens the actor here (one press, one page) and is swallowed.
+                    return@run when (castKeys.onRelease(nativeEvent.keyCode)) {
+                        PlayerKeys.CastStep.Open -> {
+                            castIndex?.let { idx -> cast.getOrNull(idx)?.let { p -> p.Id?.let { onOpenActor(it, p.Name.orEmpty()) } } }
+                            true
+                        }
+                        PlayerKeys.CastStep.Consume -> true
+                        else -> false
+                    }
+                }
                 if (nativeEvent.action != KeyEvent.ACTION_DOWN) return@run false
                 lastInteraction = System.currentTimeMillis()
                 upNext?.let { n ->
@@ -307,11 +322,10 @@ fun PlayerScreen(
                     return@run nativeEvent.keyCode != KeyEvent.KEYCODE_BACK
                 }
                 castIndex?.let { idx ->
-                    when (val step = PlayerKeys.castStep(nativeEvent.keyCode, idx, cast.size)) {
+                    when (val step = castKeys.onPress(nativeEvent.keyCode, idx, cast.size)) {
                         is PlayerKeys.CastStep.Move -> castIndex = step.index
-                        PlayerKeys.CastStep.Open -> cast.getOrNull(idx)?.let { p -> p.Id?.let { onOpenActor(it, p.Name.orEmpty()) } }
                         PlayerKeys.CastStep.Exit -> castIndex = null
-                        PlayerKeys.CastStep.Consume -> Unit
+                        else -> Unit
                     }
                     return@run true
                 }
@@ -498,6 +512,11 @@ AnimatedVisibility(visible = visible, enter = fadeIn(), exit = fadeOut()) {
                 Modifier.align(Alignment.BottomCenter),
             )
             if (castVisible) {
+                // Dark bottom-up fade behind the cast strip so photos and names stay readable on bright frames.
+                // A gradient, not another live blur: blur is one of the suspects in the TV scroll-stutter investigation.
+                Box(
+                    Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(340.dp).background(PauseCastScrim),
+                )
                 PauseCastStrip(
                     cast = cast, selected = castSelected, imageUrlFor = personImageUrl,
                     modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 96.dp),
@@ -643,6 +662,9 @@ fun PlayerBottomBar(positionTicks: Long, bufferedTicks: Long, durationTicks: Lon
 }
 
 
+/** An ended player finishes itself only while nothing covers it; covered (an actor page is open) it waits. */
+internal fun shouldAutoFinish(ended: Boolean, interactive: Boolean): Boolean = ended && interactive
+
 /** True while playback is wanted and the player is buffering or ready, so the screensaver must not start. */
 internal fun shouldKeepScreenOn(playWhenReady: Boolean, playbackState: Int): Boolean =
     playWhenReady && (playbackState == androidx.media3.common.Player.STATE_BUFFERING ||
@@ -660,6 +682,13 @@ fun SkipIntroPrompt(modifier: Modifier = Modifier) {
     )
 }
 
+/** Scrim behind the paused cast strip: fully clear up top, dark enough under the hint line that light-gray keys stay readable. */
+internal val PauseCastScrim = androidx.compose.ui.graphics.Brush.verticalGradient(
+    0f to Color.Transparent,
+    0.45f to Color.Black.copy(alpha = 0.55f),
+    1f to Color.Black.copy(alpha = 0.9f),
+)
+
 /** Cast along the bottom while paused. Nothing is selected until Down is pressed, so the controls stay first. */
 @Composable
 fun PauseCastStrip(
@@ -669,7 +698,7 @@ fun PauseCastStrip(
     modifier: Modifier = Modifier,
 ) {
     Column(modifier.fillMaxWidth().padding(horizontal = 48.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(if (selected == null) "Cast   \u25BC to browse" else "Cast   \u25C0 \u25B6 choose   OK movies   \u25B2 back", style = JetflixType.caption, color = JetflixColors.TextSecondary)
+        Text(if (selected == null) "Cast   \u25BC to browse" else "Cast   \u25C0 \u25B6 choose   OK movies   \u25B2 back", style = JetflixType.caption, color = Color.White)
         val listState = androidx.compose.foundation.lazy.rememberLazyListState(initialFirstVisibleItemIndex = ((selected ?: 0) - 3).coerceAtLeast(0))
         // Keep the chosen actor on screen when the row is longer than the screen.
         LaunchedEffect(selected) { selected?.let { listState.animateScrollToItem((it - 3).coerceAtLeast(0)) } }

@@ -32,6 +32,11 @@ class SettingsScrollReachTest {
             JetflixTheme { SettingsContent(true, true, true, "demo", null, {}, {}, {}, {}, {}) }
         }
         rule.waitForIdle()
+        // The update row is first in Settings and takes the opening focus.
+        val firstNode = rule.onAllNodes(isFocused()).fetchSemanticsNodes().firstOrNull()
+        val firstLabel = firstNode?.config?.getOrNull(SemanticsProperties.Text)?.joinToString(",") { it.text }
+            ?: firstNode?.children?.joinToString { c -> c.config.getOrNull(SemanticsProperties.Text)?.joinToString(",") { it.text } ?: "?" } ?: ""
+        assertTrue("opening focus should be on Check for updates, was: $firstLabel", firstLabel.contains("Check for updates"))
         val seen = mutableListOf<String>()
         var lastBottom = 0f
         repeat(20) {
@@ -42,7 +47,6 @@ class SettingsScrollReachTest {
             lastBottom = n.boundsInRoot.bottom
         }
         assertTrue("never focused sign out; focus visited: $seen", seen.any { it.contains("Sign out and forget") })
-        assertTrue("never focused Check for updates (the last row); focus visited: $seen", seen.any { it.contains("Check for updates") })
         val rootH = rule.onRoot().fetchSemanticsNode().boundsInRoot.height
         assertTrue("focused row is below the visible area: bottom=$lastBottom of $rootH; visited $seen", lastBottom <= rootH + 1f)
     }
