@@ -1,0 +1,723 @@
+{
+ "Items": [
+  {
+   "Name": "The Gold Rush",
+   "ServerId": "f0b3381645f04afb9a0e392e74b6a1b0",
+   "Id": "e16725e2c1c4367ec596cf93c38bbe4f",
+   "Container": "mov,mp4,m4a,3gp,3g2,mj2",
+   "PremiereDate": "1925-06-16T00:00:00.0000000Z",
+   "CriticRating": 54,
+   "OfficialRating": "NR",
+   "ChannelId": null,
+   "Overview": "A lone prospector ventures into the Klondike gold fields, where he falls for a dance-hall girl and endures blizzards, hunger and a memorable dancing-rolls dinner.",
+   "Genres": [
+    "Comedy",
+    "Adventure"
+   ],
+   "CommunityRating": 8.1,
+   "RunTimeTicks": 57000000000,
+   "ProductionYear": 1925,
+   "IsFolder": false,
+   "Type": "Movie",
+   "GenreItems": [
+    {
+     "Name": "Comedy",
+     "Id": "00000000000000000cf8d226ea6448b6"
+    },
+    {
+     "Name": "Adventure",
+     "Id": "0000000000000000723dd02535d167cb"
+    }
+   ],
+   "UserData": {
+    "PlayedPercentage": 22.94401587858182,
+    "PlaybackPositionTicks": 14442510000,
+    "PlayCount": 31,
+    "IsFavorite": false,
+    "LastPlayedDate": "2026-10-24T19:23:42.4631413Z",
+    "Played": false,
+    "Key": "e16725e2-c1c4-367e-c596-cf93c38bbe4f",
+    "ItemId": "e16725e2c1c4367ec596cf93c38bbe4f"
+   },
+   "VideoType": "VideoFile",
+   "ImageTags": {
+    "Logo": "93cec0bbafcd333d9d4a149ce4ad9071",
+    "Thumb": "1b497d86fdb1dee5449fd03ab39a165b",
+    "Primary": "c19befd73668e5e3a2445e1e8b0ef6b7"
+   },
+   "BackdropImageTags": [
+    "ea2d606ae866e23c47618f3a2b8e775c"
+   ],
+   "ImageBlurHashes": {
+    "Backdrop": {
+     "ea2d606ae866e23c47618f3a2b8e775c": "WIBDW^_4Rjoht8%M-=t7xuxuofWBWBoexuRiayaxxvt8xut8ofax"
+    },
+    "Logo": {
+     "93cec0bbafcd333d9d4a149ce4ad9071": "H4H2crIU00%MD%D%IU9FM{fQ4nt7xu9F00IU%Mxu"
+    },
+    "Thumb": {
+     "1b497d86fdb1dee5449fd03ab39a165b": "WFEe*[-qIC-:pHS#1jOs$%ShR*kC59ogT1NHnhRl^it89$xF%0so"
+    },
+    "Primary": {
+     "c19befd73668e5e3a2445e1e8b0ef6b7": "dOCsW^%2Ntg1RiW.btX74UM|owjY?as:spt6%#kVxZs:"
+    }
+   },
+   "LocationType": "FileSystem",
+   "MediaType": "Video"
+  },
+  {
+   "Name": "The Phantom of the Opera",
+   "ServerId": "f0b3381645f04afb9a0e392e74b6a1b0",
+   "Id": "5e6e8380563c5211106652362c5c6843",
+   "Container": "mov,mp4,m4a,3gp,3g2,mj2",
+   "PremiereDate": "1925-09-06T00:00:00.0000000Z",
+   "CriticRating": 95,
+   "OfficialRating": "NR",
+   "ChannelId": null,
+   "Overview": "A disfigured musical genius haunts the Paris Opera House, tutoring a young singer from the shadows and unleashing terror when his demands are ignored.",
+   "Genres": [
+    "Horror",
+    "Drama"
+   ],
+   "CommunityRating": 7.5,
+   "RunTimeTicks": 55800000000,
+   "ProductionYear": 1925,
+   "IsFolder": false,
+   "Type": "Movie",
+   "GenreItems": [
+    {
+     "Name": "Horror",
+     "Id": "0000000000000000062ff157c3bfb95b"
+    },
+    {
+     "Name": "Drama",
+     "Id": "000000000000000058f91b6f4a951a27"
+    }
+   ],
+   "UserData": {
+    "PlaybackPositionTicks": 0,
+    "PlayCount": 7,
+    "IsFavorite": false,
+    "LastPlayedDate": "2026-10-24T13:07:18.971962Z",
+    "Played": true,
+    "Key": "5e6e8380-563c-5211-1066-52362c5c6843",
+    "ItemId": "5e6e8380563c5211106652362c5c6843"
+   },
+   "VideoType": "VideoFile",
+   "ImageTags": {
+    "Logo": "137f8252408e4dd3ae24c9844b684f6a",
+    "Thumb": "fbfe5e0de879cb94da4c329d1df803f0",
+    "Primary": "16531639600ebf2344b629860bb877e9"
+   },
+   "BackdropImageTags": [
+    "3a01d4a75d7b1d73c5701d508cfccfc6"
+   ],
+   "ImageBlurHashes": {
+    "Backdrop": {
+     "3a01d4a75d7b1d73c5701d508cfccfc6": "WcJ[I,IU?bay-;~q_3IUM{ayIUt7ofM{j[xuIURjxuj[ofWBoft7"
+    },
+    "Logo": {
+     "137f8252408e4dd3ae24c9844b684f6a": "WNM@it-;00ofIUay00xu4nxuIUD%9FWBxuxu?bofxuD%xu%MWBIU"
+    },
+    "Thumb": {
+     "fbfe5e0de879cb94da4c329d1df803f0": "WB7nRR-;4nD%Rj9Fayj[ofWBRjof00IU?bxuof-;WBRjWBt7xuWB"
+    },
+    "Primary": {
+     "16531639600ebf2344b629860bb877e9": "dJC%Z|bY-E?b0cM{m@M|ORInDjIB%M%f%M%3Vut7NYoM"
+    }
+   },
+   "LocationType": "FileSystem",
+   "MediaType": "Video"
+  },
+  {
+   "Name": "Safety Last!",
+   "ServerId": "f0b3381645f04afb9a0e392e74b6a1b0",
+   "Id": "70853c7dde5e5759b151cd76876ab6c2",
+   "Container": "mov,mp4,m4a,3gp,3g2,mj2",
+   "PremiereDate": "1923-04-01T00:00:00.0000000Z",
+   "CriticRating": 92,
+   "ChannelId": null,
+   "Overview": "A country boy heads to the big city to make good, and a department-store publicity stunt leaves him clinging to the side of a skyscraper.",
+   "Genres": [
+    "Comedy",
+    "Romance"
+   ],
+   "CommunityRating": 8.1,
+   "RunTimeTicks": 42000000000,
+   "ProductionYear": 1923,
+   "IsFolder": false,
+   "Type": "Movie",
+   "GenreItems": [
+    {
+     "Name": "Comedy",
+     "Id": "00000000000000000cf8d226ea6448b6"
+    },
+    {
+     "Name": "Romance",
+     "Id": "000000000000000028434feb7f6703c4"
+    }
+   ],
+   "UserData": {
+    "PlayedPercentage": 9.65220611965321,
+    "PlaybackPositionTicks": 5675291450,
+    "PlayCount": 10,
+    "IsFavorite": false,
+    "LastPlayedDate": "2026-10-24T19:25:56.9141733Z",
+    "Played": false,
+    "Key": "70853c7d-de5e-5759-b151-cd76876ab6c2",
+    "ItemId": "70853c7dde5e5759b151cd76876ab6c2"
+   },
+   "VideoType": "VideoFile",
+   "ImageTags": {
+    "Logo": "9ce5c63353d63fdb0a94e04fed84aea4",
+    "Primary": "d09bbce8bddfa33156e62bfea6dffee6"
+   },
+   "BackdropImageTags": [
+    "f8b83a6ba498d1d08ae23f6fbbe57a33"
+   ],
+   "ImageBlurHashes": {
+    "Backdrop": {
+     "f8b83a6ba498d1d08ae23f6fbbe57a33": "WJEoe.?C--$~%J~U~WR*M}xut7j].8oLM|WZWYNL?cj@WBW;ogt8"
+    },
+    "Logo": {
+     "9ce5c63353d63fdb0a94e04fed84aea4": "NcHK2LNHR,R+WCWWkAENoeazoLa|0%s.xYoKoeoK"
+    },
+    "Primary": {
+     "d09bbce8bddfa33156e62bfea6dffee6": "dQJj|y~9-:-o0sR,I[RoyAJBIVNH%gniixNGpIbFRktO"
+    }
+   },
+   "LocationType": "FileSystem",
+   "MediaType": "Video",
+   "OfficialRating": "NR"
+  },
+  {
+   "Name": "Sherlock Jr.",
+   "ServerId": "f0b3381645f04afb9a0e392e74b6a1b0",
+   "Id": "c7eb95d14156c803611cf4a78ac469f6",
+   "Container": "mov,mp4,m4a,3gp,3g2,mj2",
+   "PremiereDate": "1924-04-21T00:00:00.0000000Z",
+   "ChannelId": null,
+   "Overview": "A mild-mannered film projectionist, falsely accused of theft, falls asleep in the booth and dreams himself into the movie on screen as the great detective Sherlock Jr.",
+   "Genres": [
+    "Comedy",
+    "Mystery"
+   ],
+   "CommunityRating": 8.2,
+   "RunTimeTicks": 27000000000,
+   "ProductionYear": 1924,
+   "IsFolder": false,
+   "Type": "Movie",
+   "GenreItems": [
+    {
+     "Name": "Comedy",
+     "Id": "00000000000000000cf8d226ea6448b6"
+    },
+    {
+     "Name": "Mystery",
+     "Id": "000000000000000070a034ad439f1593"
+    }
+   ],
+   "UserData": {
+    "PlaybackPositionTicks": 0,
+    "PlayCount": 5,
+    "IsFavorite": false,
+    "LastPlayedDate": "2026-10-24T18:11:20.8438071Z",
+    "Played": true,
+    "Key": "c7eb95d1-4156-c803-611c-f4a78ac469f6",
+    "ItemId": "c7eb95d14156c803611cf4a78ac469f6"
+   },
+   "VideoType": "VideoFile",
+   "ImageTags": {
+    "Primary": "855efbac73978bd01e073cc19697dfac"
+   },
+   "BackdropImageTags": [
+    "d0e1d2866a4165a206cc9f09af791ac2"
+   ],
+   "ImageBlurHashes": {
+    "Backdrop": {
+     "d0e1d2866a4165a206cc9f09af791ac2": "WWGa^0%1Ej=_RkSi~AozNb$$Rkn$adNIjuofj?xV%MaKWBbcoeoe"
+    },
+    "Primary": {
+     "855efbac73978bd01e073cc19697dfac": "dmJIa|o~oz%2Tff8V@WX0fRPWBW=s:Rko}s:SPt7aeR*"
+    }
+   },
+   "LocationType": "FileSystem",
+   "MediaType": "Video",
+   "OfficialRating": "NR"
+  },
+  {
+   "Name": "The General",
+   "ServerId": "f0b3381645f04afb9a0e392e74b6a1b0",
+   "Id": "9bd5926326d651153928e0d11c6ee7cb",
+   "PremiereDate": "1926-12-31T00:00:00.0000000Z",
+   "OfficialRating": "NR",
+   "ChannelId": null,
+   "Overview": "When Union spies steal his beloved locomotive with the woman he loves aboard, a Southern engineer gives chase across enemy lines in a single-minded pursuit.",
+   "Genres": [
+    "Comedy",
+    "Action"
+   ],
+   "CommunityRating": 8.1,
+   "RunTimeTicks": 45000000000,
+   "ProductionYear": 1926,
+   "IsFolder": true,
+   "Type": "Series",
+   "GenreItems": [
+    {
+     "Name": "Comedy",
+     "Id": "00000000000000000cf8d226ea6448b6"
+    },
+    {
+     "Name": "Action",
+     "Id": "00000000000000001ee0fc4f9e6f4fc2"
+    }
+   ],
+   "UserData": {
+    "PlayedPercentage": 33.33333333333333,
+    "UnplayedItemCount": 4,
+    "PlaybackPositionTicks": 0,
+    "PlayCount": 0,
+    "IsFavorite": true,
+    "Played": false,
+    "Key": "9bd59263-26d6-5115-3928-e0d11c6ee7cb",
+    "ItemId": "9bd5926326d651153928e0d11c6ee7cb"
+   },
+   "Status": "Ended",
+   "AirDays": [],
+   "ImageTags": {
+    "Primary": "b2dfa2770ea69e5bd933b4bf2784597a"
+   },
+   "BackdropImageTags": [
+    "970367b9a680d18ccf8502ae3e111b92"
+   ],
+   "ImageBlurHashes": {
+    "Backdrop": {
+     "970367b9a680d18ccf8502ae3e111b92": "W54.G1oN4nkljEIB%LWCM{t6oLRj4TWU.8i{ozx]4ot6?aIVNG%M"
+    },
+    "Primary": {
+     "b2dfa2770ea69e5bd933b4bf2784597a": "dQMW;*%M+^}FcDTJwKv~-otQM{aK}txFR6V@SynirrRQ"
+    }
+   },
+   "LocationType": "FileSystem",
+   "MediaType": "Unknown",
+   "EndDate": "2011-12-13T00:00:00.0000000Z"
+  },
+  {
+   "Name": "The Kid",
+   "ServerId": "f0b3381645f04afb9a0e392e74b6a1b0",
+   "Id": "edb39341c5039551a5157e51fe4a3364",
+   "Container": "mov,mp4,m4a,3gp,3g2,mj2",
+   "PremiereDate": "1921-02-06T00:00:00.0000000Z",
+   "OfficialRating": "NR",
+   "ChannelId": null,
+   "Overview": "A tramp reluctantly adopts an abandoned baby and raises him as a partner in a window-repair racket, until the authorities try to take the boy away.",
+   "Genres": [
+    "Comedy",
+    "Drama"
+   ],
+   "CommunityRating": 8.3,
+   "RunTimeTicks": 40800000000,
+   "ProductionYear": 1921,
+   "IsFolder": false,
+   "Type": "Movie",
+   "GenreItems": [
+    {
+     "Name": "Comedy",
+     "Id": "00000000000000000cf8d226ea6448b6"
+    },
+    {
+     "Name": "Drama",
+     "Id": "000000000000000058f91b6f4a951a27"
+    }
+   ],
+   "UserData": {
+    "PlaybackPositionTicks": 0,
+    "PlayCount": 41,
+    "IsFavorite": false,
+    "LastPlayedDate": "2026-10-24T17:13:31.9948458Z",
+    "Played": true,
+    "Key": "edb39341-c503-9551-a515-7e51fe4a3364",
+    "ItemId": "edb39341c5039551a5157e51fe4a3364"
+   },
+   "VideoType": "VideoFile",
+   "ImageTags": {
+    "Primary": "a131fdbdca9ddadcda7d3c86756c6b67",
+    "Logo": "66c2aaf2789e62fd7c5f40dcaec916ac",
+    "Thumb": "e5c0066328b2f7342e6fffd4499e3413"
+   },
+   "BackdropImageTags": [
+    "408be2dfc34f1ce61108cf049a5aa82e"
+   ],
+   "ImageBlurHashes": {
+    "Backdrop": {
+     "408be2dfc34f1ce61108cf049a5aa82e": "WJECF8%f%z-AaKX9JGR5E1s.nOS$A1Rif5W;n#WE.ToyxuWBadkC"
+    },
+    "Primary": {
+     "a131fdbdca9ddadcda7d3c86756c6b67": "dfEo3c%K9cIW^#t6aLnj%JWVw^$%~9t6M}ni^gxsR.Rk"
+    },
+    "Logo": {
+     "66c2aaf2789e62fd7c5f40dcaec916ac": "NLI5PcxuM{ofxuof01RjWCj[M{oft6ayxuoft7WB"
+    },
+    "Thumb": {
+     "e5c0066328b2f7342e6fffd4499e3413": "WFG8P}^+s=xG9a$x=S9aI@oyI[%KMxoHIUE2kD-n%N~A-oIan|xU"
+    }
+   },
+   "LocationType": "FileSystem",
+   "MediaType": "Video"
+  },
+  {
+   "Name": "The Lodger: A Story of the London Fog",
+   "ServerId": "f0b3381645f04afb9a0e392e74b6a1b0",
+   "Id": "c541e7545e58b28cd4d0da7aac89d7e8",
+   "Container": "mov,mp4,m4a,3gp,3g2,mj2",
+   "PremiereDate": "1927-02-14T00:00:00.0000000Z",
+   "ChannelId": null,
+   "Overview": "As a killer stalks fogbound London, a family's enigmatic new lodger arouses suspicion that he may be the murderer the whole city is hunting.",
+   "Genres": [
+    "Thriller",
+    "Mystery"
+   ],
+   "CommunityRating": 7.3,
+   "RunTimeTicks": 54600000000,
+   "ProductionYear": 1927,
+   "IsFolder": false,
+   "Type": "Movie",
+   "GenreItems": [
+    {
+     "Name": "Thriller",
+     "Id": "000000000000000075d5095659ec54a5"
+    },
+    {
+     "Name": "Mystery",
+     "Id": "000000000000000070a034ad439f1593"
+    }
+   ],
+   "UserData": {
+    "PlaybackPositionTicks": 0,
+    "PlayCount": 9,
+    "IsFavorite": false,
+    "LastPlayedDate": "2026-10-24T18:04:22.6995614Z",
+    "Played": true,
+    "Key": "c541e754-5e58-b28c-d4d0-da7aac89d7e8",
+    "ItemId": "c541e7545e58b28cd4d0da7aac89d7e8"
+   },
+   "VideoType": "VideoFile",
+   "ImageTags": {
+    "Primary": "8eda7db1cc18d804f4aa9a2c0c377b52"
+   },
+   "BackdropImageTags": [
+    "7b395badd25ae09ea8d4344176455f97"
+   ],
+   "ImageBlurHashes": {
+    "Backdrop": {
+     "7b395badd25ae09ea8d4344176455f97": "WzJj}5t6V@xaazs:_NkCRkofayofyCbIjsayjZkBxZs.oeayayoL"
+    },
+    "Primary": {
+     "8eda7db1cc18d804f4aa9a2c0c377b52": "dqMZ8it8S3-T_NbIoKbb-:s.aeWX-mn$W;oetkn%jubb"
+    }
+   },
+   "LocationType": "FileSystem",
+   "MediaType": "Video",
+   "OfficialRating": "NR"
+  },
+  {
+   "Name": "Ben-Hur: A Tale of the Christ",
+   "ServerId": "f0b3381645f04afb9a0e392e74b6a1b0",
+   "Id": "c002f0f88ee970cce7f138bbc925de64",
+   "Container": "mov,mp4,m4a,3gp,3g2,mj2",
+   "PremiereDate": "1925-12-30T00:00:00.0000000Z",
+   "CriticRating": 94,
+   "OfficialRating": "NR",
+   "ChannelId": null,
+   "Overview": "Betrayed by his boyhood friend and sent to the galleys, Judah Ben-Hur survives to seek revenge in a chariot race for the ages.",
+   "Genres": [
+    "Adventure",
+    "Drama"
+   ],
+   "CommunityRating": 7.8,
+   "RunTimeTicks": 85800000000,
+   "ProductionYear": 1925,
+   "IsFolder": false,
+   "Type": "Movie",
+   "GenreItems": [
+    {
+     "Name": "Adventure",
+     "Id": "0000000000000000723dd02535d167cb"
+    },
+    {
+     "Name": "Drama",
+     "Id": "000000000000000058f91b6f4a951a27"
+    }
+   ],
+   "UserData": {
+    "PlaybackPositionTicks": 0,
+    "PlayCount": 44,
+    "IsFavorite": false,
+    "LastPlayedDate": "2026-10-24T18:56:59.2720098Z",
+    "Played": true,
+    "Key": "c002f0f8-8ee9-70cc-e7f1-38bbc925de64",
+    "ItemId": "c002f0f88ee970cce7f138bbc925de64"
+   },
+   "VideoType": "VideoFile",
+   "ImageTags": {
+    "Primary": "50267d2518c172701a0c3e2f80a10a33",
+    "Logo": "7b8e65b5b145c8798e05ac7cc6876ddc",
+    "Thumb": "2f1cae014a49fb27e4035d411633ec80"
+   },
+   "BackdropImageTags": [
+    "545281894daf67361d92ae7e13c80d68"
+   ],
+   "ImageBlurHashes": {
+    "Backdrop": {
+     "545281894daf67361d92ae7e13c80d68": "WGBg3u-;00of?bIU%MRjIU%M?bM{IUxu?bM{IUt7M{t7-;M{D%xu"
+    },
+    "Primary": {
+     "50267d2518c172701a0c3e2f80a10a33": "d#G94@%f%Lxu~pxtx[xt?aRkRjWC%LRQM|ayxuWBWBt7"
+    },
+    "Logo": {
+     "7b8e65b5b145c8798e05ac7cc6876ddc": "OwKRQZn*RmW:NcNcS3-8I?Ncs-oKn*sn1LS3j@s-o1WWoK"
+    },
+    "Thumb": {
+     "2f1cae014a49fb27e4035d411633ec80": "WqGHxX%LS$ofNINLwGoyt6xXoJR*0ijFw[WBsAocN{niRkI@R,jb"
+    }
+   },
+   "LocationType": "FileSystem",
+   "MediaType": "Video"
+  },
+  {
+   "Name": "Steamboat Bill, Jr.",
+   "ServerId": "f0b3381645f04afb9a0e392e74b6a1b0",
+   "Id": "788ae1cdf3816e3441e29dd3a96ddfe1",
+   "Container": "mov,mp4,m4a,3gp,3g2,mj2",
+   "PremiereDate": "1928-05-12T00:00:00.0000000Z",
+   "CriticRating": 100,
+   "ChannelId": null,
+   "Overview": "The effete son of a gruff riverboat captain returns home and falls for the daughter of his father's rival, just as a cyclone bears down on the town.",
+   "Genres": [
+    "Comedy",
+    "Romance"
+   ],
+   "CommunityRating": 7.8,
+   "RunTimeTicks": 42000000000,
+   "ProductionYear": 1928,
+   "IsFolder": false,
+   "Type": "Movie",
+   "GenreItems": [
+    {
+     "Name": "Comedy",
+     "Id": "00000000000000000cf8d226ea6448b6"
+    },
+    {
+     "Name": "Romance",
+     "Id": "000000000000000028434feb7f6703c4"
+    }
+   ],
+   "UserData": {
+    "PlayedPercentage": 39.85334495432314,
+    "PlaybackPositionTicks": 2877230440,
+    "PlayCount": 12,
+    "IsFavorite": false,
+    "LastPlayedDate": "2026-10-24T18:26:48.5095198Z",
+    "Played": false,
+    "Key": "788ae1cd-f381-6e34-41e2-9dd3a96ddfe1",
+    "ItemId": "788ae1cdf3816e3441e29dd3a96ddfe1"
+   },
+   "VideoType": "VideoFile",
+   "ImageTags": {
+    "Logo": "a6987317853869f66b5874a61c4df376",
+    "Primary": "b51cba302e12fbb69a511ed54e780e0f"
+   },
+   "BackdropImageTags": [
+    "dd336df807a22090ef134003341bf602"
+   ],
+   "ImageBlurHashes": {
+    "Backdrop": {
+     "dd336df807a22090ef134003341bf602": "WJ8;V?Rj00xu_3IUxuj[Rjj[xuj[xuj[M{ayt7ayWBfQt7ayRjof"
+    },
+    "Logo": {
+     "a6987317853869f66b5874a61c4df376": "H14.GFMwt7xvj[WBt7%Nog.9j[ogj[t8oft7WBof"
+    },
+    "Primary": {
+     "b51cba302e12fbb69a511ed54e780e0f": "dIK_2kt7?b~q~WayWBxu_3t74.M{~Wt7M{RjV@RjRjay"
+    }
+   },
+   "LocationType": "FileSystem",
+   "MediaType": "Video",
+   "OfficialRating": "NR"
+  },
+  {
+   "Name": "The Cabinet of Dr. Caligari",
+   "ServerId": "f0b3381645f04afb9a0e392e74b6a1b0",
+   "Id": "b74b4d5de01b4e1a5ce43511c3684ad8",
+   "Container": "mov,mp4,m4a,3gp,3g2,mj2",
+   "PremiereDate": "1920-02-26T00:00:00.0000000Z",
+   "OfficialRating": "NR",
+   "ChannelId": null,
+   "Overview": "A hypnotist and his somnambulist Cesare arrive at a fairground, and a string of murders follows in their wake - told through jagged, dreamlike sets.",
+   "Genres": [
+    "Horror",
+    "Mystery"
+   ],
+   "CommunityRating": 8.0,
+   "RunTimeTicks": 46200000000,
+   "ProductionYear": 1920,
+   "IsFolder": false,
+   "Type": "Movie",
+   "GenreItems": [
+    {
+     "Name": "Horror",
+     "Id": "0000000000000000062ff157c3bfb95b"
+    },
+    {
+     "Name": "Mystery",
+     "Id": "000000000000000070a034ad439f1593"
+    }
+   ],
+   "UserData": {
+    "PlayedPercentage": 35.077250964763884,
+    "PlaybackPositionTicks": 18685025460,
+    "PlayCount": 2,
+    "IsFavorite": false,
+    "LastPlayedDate": "2026-10-24T17:46:51.5938867Z",
+    "Played": false,
+    "Key": "b74b4d5d-e01b-4e1a-5ce4-3511c3684ad8",
+    "ItemId": "b74b4d5de01b4e1a5ce43511c3684ad8"
+   },
+   "VideoType": "VideoFile",
+   "ImageTags": {
+    "Thumb": "7955c0fd12ac1f306598844fecf4ef95",
+    "Logo": "3ee067b2a63afaba6cbb5b9bebbbdca1",
+    "Primary": "e62d9e61591d22dd2073ec5509103431"
+   },
+   "BackdropImageTags": [
+    "88b796c6c75018f4b4b130e74027bc74"
+   ],
+   "ImageBlurHashes": {
+    "Backdrop": {
+     "88b796c6c75018f4b4b130e74027bc74": "W$K-d:V@t7t7a|t6~qWBRjt6axay%Mt6M{fPaet6%Moff6WBfkj["
+    },
+    "Thumb": {
+     "7955c0fd12ac1f306598844fecf4ef95": "WgKmzw~W^,-pt8$~x^XR%Lxvofs:?aJAXSxtozWF-VnixDkDR+t6"
+    },
+    "Logo": {
+     "3ee067b2a63afaba6cbb5b9bebbbdca1": "WZK-qP~q9Ft7xufQD%%MM{ayxuRj?bM{ay%MM{WBofWBt7j[j[j["
+    },
+    "Primary": {
+     "e62d9e61591d22dd2073ec5509103431": "dkN,Vf~p.8-=XS.8%La#%iM|RiWA^*xuIpRjo}kDRRt7"
+    }
+   },
+   "LocationType": "FileSystem",
+   "MediaType": "Video"
+  },
+  {
+   "Name": "The Lost World",
+   "ServerId": "f0b3381645f04afb9a0e392e74b6a1b0",
+   "Id": "b07f6514a3e3aa7d8c273458c9cd4c82",
+   "Container": "mov,mp4,m4a,3gp,3g2,mj2",
+   "PremiereDate": "1925-02-02T00:00:00.0000000Z",
+   "ChannelId": null,
+   "Overview": "An expedition to a remote plateau finds living dinosaurs, and a captured brontosaurus brought back to London runs amok through the city.",
+   "Genres": [
+    "Adventure",
+    "Fantasy"
+   ],
+   "CommunityRating": 7.0,
+   "RunTimeTicks": 63600000000,
+   "ProductionYear": 1925,
+   "IsFolder": false,
+   "Type": "Movie",
+   "GenreItems": [
+    {
+     "Name": "Adventure",
+     "Id": "0000000000000000723dd02535d167cb"
+    },
+    {
+     "Name": "Fantasy",
+     "Id": "00000000000000002cdd4a1b5bdb7544"
+    }
+   ],
+   "UserData": {
+    "PlaybackPositionTicks": 0,
+    "PlayCount": 17,
+    "IsFavorite": false,
+    "LastPlayedDate": "2026-10-24T18:47:46.6080226Z",
+    "Played": false,
+    "Key": "b07f6514-a3e3-aa7d-8c27-3458c9cd4c82",
+    "ItemId": "b07f6514a3e3aa7d8c273458c9cd4c82"
+   },
+   "VideoType": "VideoFile",
+   "ImageTags": {
+    "Primary": "a6f924ad66dbd839711cec38ff645b4d"
+   },
+   "BackdropImageTags": [],
+   "ImageBlurHashes": {
+    "Primary": {
+     "a6f924ad66dbd839711cec38ff645b4d": "dJ9tGqt700WB%MofM_M{IUof%MaeRjofxujsIUWBt8WB"
+    }
+   },
+   "LocationType": "FileSystem",
+   "MediaType": "Video",
+   "OfficialRating": "NR"
+  },
+  {
+   "Name": "Wings",
+   "ServerId": "f0b3381645f04afb9a0e392e74b6a1b0",
+   "Id": "1056b7d34f0fa0b8ce635428e8b27f37",
+   "Container": "mov,mp4,m4a,3gp,3g2,mj2",
+   "PremiereDate": "1927-08-12T00:00:00.0000000Z",
+   "ChannelId": null,
+   "Overview": "Two young men from the same town become fighter pilots in the Great War, bound by rivalry, friendship and the girl they left behind.",
+   "Genres": [
+    "Action",
+    "Drama",
+    "War"
+   ],
+   "CommunityRating": 7.5,
+   "RunTimeTicks": 68400000000,
+   "ProductionYear": 1927,
+   "IsFolder": false,
+   "Type": "Movie",
+   "GenreItems": [
+    {
+     "Name": "Action",
+     "Id": "00000000000000001ee0fc4f9e6f4fc2"
+    },
+    {
+     "Name": "Drama",
+     "Id": "000000000000000058f91b6f4a951a27"
+    },
+    {
+     "Name": "War",
+     "Id": "000000000000000071abfc4646933392"
+    }
+   ],
+   "UserData": {
+    "PlaybackPositionTicks": 0,
+    "PlayCount": 12,
+    "IsFavorite": false,
+    "LastPlayedDate": "2026-10-24T18:35:44.7900895Z",
+    "Played": true,
+    "Key": "1056b7d3-4f0f-a0b8-ce63-5428e8b27f37",
+    "ItemId": "1056b7d34f0fa0b8ce635428e8b27f37"
+   },
+   "VideoType": "VideoFile",
+   "ImageTags": {
+    "Primary": "bab495667f5f34d1bdec8fc00c1195ce"
+   },
+   "BackdropImageTags": [
+    "73ea9ef0c55bb163556330fd6fe97372"
+   ],
+   "ImageBlurHashes": {
+    "Backdrop": {
+     "73ea9ef0c55bb163556330fd6fe97372": "WuKU1oxaW=xuocxtpykCWCs:oJj]yEkDn$e:WEbb?Ha}oeofS4bI"
+    },
+    "Primary": {
+     "bab495667f5f34d1bdec8fc00c1195ce": "d#NTUO%fbG%2yskXj]kWo~n*jabbtQjEbFj[OYWBe.ae"
+    }
+   },
+   "LocationType": "FileSystem",
+   "MediaType": "Video",
+   "OfficialRating": "NR"
+  }
+ ]
+}

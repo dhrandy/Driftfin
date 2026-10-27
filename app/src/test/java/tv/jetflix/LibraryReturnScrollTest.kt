@@ -33,7 +33,7 @@ import tv.jetflix.app.ui.theme.JetflixTheme
 class LibraryReturnScrollTest {
     @get:Rule val rule = createAndroidComposeRule<androidx.activity.ComponentActivity>()
     private val base = Json { ignoreUnknownKeys = true; coerceInputValues = true }
-        .decodeFromString<BaseItemDtoQueryResult>(javaClass.classLoader!!.getResource("demo-items.json")!!.readText()).Items
+        .decodeFromString<BaseItemDtoQueryResult>(javaClass.classLoader!!.getResource("regression-items.json")!!.readText()).Items
     // Enough rows to scroll at the smallest size: 9 rows x 7 columns.
     private val items = (0 until 63).map { i -> base[i % base.size].copy(Id = "lib$i", Name = "Title $i") }
 

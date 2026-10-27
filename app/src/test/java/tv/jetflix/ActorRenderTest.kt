@@ -101,10 +101,10 @@ class ActorRenderTest {
     }
 
     private val demoItems: List<BaseItemDto> = kotlinx.serialization.json.Json { ignoreUnknownKeys = true; coerceInputValues = true }
-        .decodeFromString<tv.jetflix.app.data.BaseItemDtoQueryResult>(javaClass.classLoader!!.getResource("demo-items.json")!!.readText()).Items
+        .decodeFromString<tv.jetflix.app.data.BaseItemDtoQueryResult>(javaClass.classLoader!!.getResource("regression-items.json")!!.readText()).Items
 
     private fun details(is4k: Boolean, hdr: List<String>, name: String) = paparazzi.snapshot(name = name) {
-        val movie = demoItems.first { it.Name == "Sahara" }
+        val movie = demoItems.first { it.Name == "The General" }
         CompositionLocalProvider(LocalTestArtwork provides { synth(it) }) {
             JetflixTheme {
                 tv.jetflix.app.ui.details.DetailsContent(

@@ -101,6 +101,8 @@ fun TopNavBar(
         }
     }
     val openTab: (JetflixTab) -> Unit = { tab -> activate(tab, true) }
+    // OK on the tab you are already on enters the page content (same target as Down); OK on another tab opens it.
+    val enterContent: () -> Unit = { try { downFocus?.requestFocus() } catch (_: Exception) { } }
     androidx.compose.runtime.LaunchedEffect(Unit) {
         // Arrived by moving across the tabs: the new page's selected tab takes focus so the sweep can continue.
         // Only the page the sweep was heading to takes it, and only once - a stale sweep must not steal focus.
@@ -158,7 +160,7 @@ fun TopNavBar(
         // Search is a magnifier icon at the start of the menu, the usual TV-menu pattern.
         SearchIconTab(
             selected = selected == JetflixTab.SEARCH,
-            onClick = { activate(JetflixTab.SEARCH, false) },
+            onClick = { if (selected == JetflixTab.SEARCH) enterContent() else activate(JetflixTab.SEARCH, false) },
             onFocusGained = onTabFocusGained, onDwell = { openTab(JetflixTab.SEARCH) },
             // On the Search page the magnifier is the selected tab, so Back from the page lands here.
             modifier = if (selected == JetflixTab.SEARCH && selectedFocus != null) Modifier.focusRequester(selectedFocus) else Modifier,
@@ -167,7 +169,7 @@ fun TopNavBar(
             NavTab(
                 label = tab.label,
                 selected = tab == selected,
-                onClick = { activate(tab, false) },
+                onClick = { if (tab == selected) enterContent() else activate(tab, false) },
                 onFocusGained = onTabFocusGained, onDwell = { openTab(tab) },
                 modifier = if (tab == selected && selectedFocus != null) Modifier.focusRequester(selectedFocus) else Modifier,
             )

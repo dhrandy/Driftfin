@@ -133,7 +133,10 @@ fun SearchContent(
     val menuBack = remember { tv.jetflix.app.ui.components.MenuBack() }
     var fieldFocused by remember { mutableStateOf(false) }
     val fieldFocus = remember { androidx.compose.ui.focus.FocusRequester() }
-    androidx.compose.runtime.LaunchedEffect(Unit) { if (!tv.jetflix.app.ui.components.NavSweep.active) runCatching { fieldFocus.requestFocus() } }
+    // Captured at composition: arriving by a tab sweep keeps focus on the tab until Down or OK (NavSweep is
+    // cleared by the handoff, so reading it live here races and either steals focus or defers it forever).
+    val openedBySweep = remember { tv.jetflix.app.ui.components.NavSweep.active }
+    androidx.compose.runtime.LaunchedEffect(Unit) { if (!openedBySweep) runCatching { fieldFocus.requestFocus() } }
 
     Box(Modifier.fillMaxSize().background(JetflixColors.Background)) {
         Column(Modifier.fillMaxSize().padding(top = 96.dp)) {
@@ -198,6 +201,7 @@ fun SearchContent(
         TopNavBar(
             solid = true,
             selectedFocus = menuBack.focus,
+            downFocus = fieldFocus,
             onNavFocusChange = { menuBack.navHasFocus = it },
             selected = JetflixTab.SEARCH,
             userName = userName,

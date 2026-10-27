@@ -28,11 +28,11 @@ class NewScreensSnapshotTest {
     )
 
     private val items: List<BaseItemDto> = Json { ignoreUnknownKeys = true; coerceInputValues = true }
-        .decodeFromString<BaseItemDtoQueryResult>(javaClass.classLoader!!.getResource("demo-items.json")!!.readText()).Items
+        .decodeFromString<BaseItemDtoQueryResult>(javaClass.classLoader!!.getResource("regression-items.json")!!.readText()).Items
 
     private fun art(url: String?): androidx.compose.ui.graphics.painter.BitmapPainter? {
         val m = Regex("/Items/([0-9a-f]+)/Images/(Primary|Backdrop)").find(url ?: return null) ?: return null
-        val bytes = javaClass.classLoader!!.getResourceAsStream("art/${m.groupValues[1]}_${m.groupValues[2]}.jpg")?.readBytes() ?: return null
+        val bytes = javaClass.classLoader!!.getResourceAsStream("regression-art/${m.groupValues[1]}_${m.groupValues[2]}.jpg")?.readBytes() ?: return null
         return androidx.compose.ui.graphics.painter.BitmapPainter(android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size).asImageBitmap())
     }
 
@@ -53,7 +53,7 @@ class NewScreensSnapshotTest {
     }
 
     @Test fun detailsInMyList() {
-        val movie = items.first { it.Name == "Sahara" }.let { it.copy(UserData = (it.UserData ?: UserItemDataDto()).copy(IsFavorite = true)) }
+        val movie = items.first { it.Name == "The General" }.let { it.copy(UserData = (it.UserData ?: UserItemDataDto()).copy(IsFavorite = true)) }
         paparazzi.snapshot(name = "details_mylist") {
             CompositionLocalProvider(LocalTestArtwork provides { art(it) }) {
                 tv.jetflix.app.ui.theme.JetflixTheme {
@@ -64,7 +64,7 @@ class NewScreensSnapshotTest {
     }
 
     @Test fun detailsWith4kBadge() {
-        val movie = items.first { it.Name == "Sahara" }
+        val movie = items.first { it.Name == "The General" }
         paparazzi.snapshot(name = "details_4k_badge") {
             CompositionLocalProvider(LocalTestArtwork provides { art(it) }) {
                 tv.jetflix.app.ui.theme.JetflixTheme {

@@ -29,11 +29,11 @@ class MorningSnapshotTest {
     )
 
     private val items: List<BaseItemDto> = Json { ignoreUnknownKeys = true; coerceInputValues = true }
-        .decodeFromString<BaseItemDtoQueryResult>(javaClass.classLoader!!.getResource("demo-items.json")!!.readText()).Items
+        .decodeFromString<BaseItemDtoQueryResult>(javaClass.classLoader!!.getResource("regression-items.json")!!.readText()).Items
 
     private fun art(url: String?): androidx.compose.ui.graphics.painter.BitmapPainter? {
         val m = Regex("/Items/([0-9a-f]+)/Images/(Primary|Backdrop)").find(url ?: return null) ?: return null
-        val bytes = javaClass.classLoader!!.getResourceAsStream("art/${m.groupValues[1]}_${m.groupValues[2]}.jpg")?.readBytes() ?: return null
+        val bytes = javaClass.classLoader!!.getResourceAsStream("regression-art/${m.groupValues[1]}_${m.groupValues[2]}.jpg")?.readBytes() ?: return null
         return androidx.compose.ui.graphics.painter.BitmapPainter(android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size).asImageBitmap())
     }
 
@@ -50,7 +50,7 @@ class MorningSnapshotTest {
         }
 
     @Test fun moviesBannerBadges() = lib("movies_banner_badges", tv.jetflix.app.ui.components.JetflixTab.MOVIES,
-        tv.jetflix.app.ui.library.LibraryUiState(loading = false, items = marked, banner = items.first { it.Name == "Sahara" }.copy(Overview = "A desert adventure about an unlikely crew.", UserData = null)))
+        tv.jetflix.app.ui.library.LibraryUiState(loading = false, items = marked, banner = items.first { it.Name == "The General" }.copy(Overview = "A desert adventure about an unlikely crew.", UserData = null)))
 
     @Test fun myJetflixCollections() = lib("my_jetflix", tv.jetflix.app.ui.components.JetflixTab.MY_LIST,
         tv.jetflix.app.ui.library.LibraryUiState(loading = false, items = marked.take(8).mapIndexed { i, it -> it.copy(Type = "BoxSet", Name = (it.Name ?: "") + " Collection", ChildCount = 3 + i, UserData = null) }, section = tv.jetflix.app.ui.library.MySection.Collections, reversed = true))
@@ -73,7 +73,7 @@ class MorningSnapshotTest {
                 tv.jetflix.app.ui.theme.JetflixTheme {
                     tv.jetflix.app.ui.home.HomeContent(
                         tv.jetflix.app.ui.home.HomeUiState(
-                            loading = false, hero = items.first { it.Name == "Jungle Book" }.copy(UserData = null), heroes = emptyList(),
+                            loading = false, hero = items.first { it.Name == "The Gold Rush" }.copy(UserData = null), heroes = emptyList(),
                             sections = listOf(tv.jetflix.app.ui.home.HomeSection("Popular Picks", marked, wide = false)),
                         ),
                         JellyfinRepository().apply { apiFor("http://demo.test") }, "demo", {}, {}, {}, {},
@@ -100,7 +100,7 @@ class MorningSnapshotTest {
             CompositionLocalProvider(LocalTestArtwork provides { art(it) }) {
                 tv.jetflix.app.ui.theme.JetflixTheme {
                     tv.jetflix.app.ui.home.HomeContent(
-                        tv.jetflix.app.ui.home.HomeUiState(loading = false, hero = items.first { it.Name == "Jungle Book" }.copy(UserData = null), heroes = emptyList(), sections = order),
+                        tv.jetflix.app.ui.home.HomeUiState(loading = false, hero = items.first { it.Name == "The Gold Rush" }.copy(UserData = null), heroes = emptyList(), sections = order),
                         JellyfinRepository().apply { apiFor("http://demo.test") }, "demo", {}, {}, {}, {}, previewScrollIndex = 1,
                     )
                 }

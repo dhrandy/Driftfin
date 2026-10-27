@@ -194,15 +194,21 @@ fun HomeScreen(
     onUserClick: () -> Unit,
 ) {
     val state by viewModel.state.collectAsState()
-    HomeContent(
-        state = state,
-        repo = viewModel.repo,
-        userName = userName,
-        onTabSelected = onTabSelected,
-        onItemClick = onItemClick,
-        onPlay = onPlay,
-        onUserClick = onUserClick,
-    )
+    tv.jetflix.app.ui.components.InitialHomeLoad(
+        loading = state.loading,
+        hasContent = state.hero != null || state.sections.isNotEmpty(),
+        enabled = tv.jetflix.app.data.AppSettings.startupWall.collectAsState().value,
+    ) {
+        HomeContent(
+            state = state,
+            repo = viewModel.repo,
+            userName = userName,
+            onTabSelected = onTabSelected,
+            onItemClick = onItemClick,
+            onPlay = onPlay,
+            onUserClick = onUserClick,
+        )
+    }
 }
 
 /**
@@ -269,6 +275,35 @@ fun HomeContent(
     val firstRowFocus = remember { FocusRequester() }
     val listState = rememberLazyListState(initialFirstVisibleItemIndex = previewScrollIndex)
     val scope = rememberCoroutineScope()
+    // Artwork warmer, on the same image loader the cards use, so a focus move finds its art already cached.
+    val appContext = androidx.compose.ui.platform.LocalContext.current.applicationContext
+    val artworkPrefetcher = androidx.compose.runtime.remember {
+        val loader = coil.Coil.imageLoader(appContext)
+        tv.jetflix.app.ui.components.ArtworkPrefetcher(
+            requestFor = { spec -> tv.jetflix.app.ui.components.artworkRequest(appContext, spec) },
+            enqueue = { loader.enqueue(it) },
+            maxPerBatch = 6,
+        )
+    }
+    // Warm-up stops with the screen; nothing speculative keeps running after leaving Home.
+    androidx.compose.runtime.DisposableEffect(artworkPrefetcher) {
+        onDispose { artworkPrefetcher.cancelAll() }
+    }
+    // The pixel sizes the visible cards ask for, so the warmed bitmaps satisfy their requests from memory.
+    val prefetchPosterScale = tv.jetflix.app.data.AppSettings.posterSize.collectAsState().value.scale
+    val prefetchDensity = androidx.compose.ui.platform.LocalDensity.current
+    val posterCardPx = with(prefetchDensity) {
+        val w = (140.dp * prefetchPosterScale).toPx().toInt()
+        tv.jetflix.app.ui.components.ArtworkSpec("", w, (w * 3f / 2f).toInt())
+    }
+    val wideCardPx = with(prefetchDensity) {
+        val w = (260.dp * prefetchPosterScale).toPx().toInt()
+        tv.jetflix.app.ui.components.ArtworkSpec("", w, (w * 9f / 16f).toInt())
+    }
+    val heroCardPx = with(prefetchDensity) {
+        val w = (androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp - 32).dp.toPx().toInt()
+        tv.jetflix.app.ui.components.ArtworkSpec("", w, 420.dp.toPx().toInt())
+    }
     val heroes = state.heroes.ifEmpty { listOfNotNull(state.hero) }
     var heroIndex by androidx.compose.runtime.remember { androidx.compose.runtime.mutableIntStateOf(0) }
     val currentHero = heroes.getOrNull(heroIndex) ?: state.hero
@@ -280,6 +315,20 @@ fun HomeContent(
                 heroIndex = HeroRotation.next(heroIndex, heroes.size)
             }
         }
+    }
+    // Warm the next banner title's art while the current one shows, so the rotation never fetches mid-crossfade.
+    LaunchedEffect(heroes, heroIndex) {
+        val next = heroes.getOrNull(HeroRotation.next(heroIndex, heroes.size)) ?: return@LaunchedEffect
+        val backdrop = repo.backdropUrl(next, 1920)
+        // A 1920px bitmap is a large speculative hold on a memory-tight TV; warm it to disk only there.
+        val lowRam = runCatching {
+            (appContext.getSystemService(android.content.Context.ACTIVITY_SERVICE) as? android.app.ActivityManager)?.isLowRamDevice
+        }.getOrNull() == true
+        artworkPrefetcher.prefetch(listOfNotNull(
+            backdrop?.let { heroCardPx.copy(url = it, memoryCache = !lowRam) },
+            backdrop?.let { tv.jetflix.app.ui.components.ArtworkSpec(tv.jetflix.app.ui.components.blurSource(it)) },
+            repo.logoUrl(next).let { tv.jetflix.app.ui.components.ArtworkSpec(it) },
+        ))
     }
     val continueWatchingPosters by tv.jetflix.app.data.AppSettings.continueWatchingPosters.collectAsState()
     val navSolid by androidx.compose.runtime.remember {
@@ -315,9 +364,14 @@ fun HomeContent(
             if (heroHasFocus) return
         }
     }
+    // Captured at composition: arriving by a tab sweep keeps focus on the tab until Down or OK. The hero (or a
+    // rotation) arriving after the handoff clears the live sweep flag must not pull focus down into the page.
+    val openedBySweepToHome = remember {
+        tv.jetflix.app.ui.components.NavSweep.active && tv.jetflix.app.ui.components.NavSweep.tab == tv.jetflix.app.ui.components.JetflixTab.HOME
+    }
     // First visit: land on the hero Play button. Returning: the remembered card wins.
     LaunchedEffect(state.hero?.Id) {
-        if (state.hero != null && !focusMemory.hasKey) focusHero()
+        if (state.hero != null && !focusMemory.hasKey && !openedBySweepToHome) focusHero()
     }
     // Returning from playback: the remembered card may be gone (Next Up and Continue Watching change after
     // watching) or scrolled out of composition. If focus was not restored, fall back to the hero instead of
@@ -436,7 +490,32 @@ fun HomeContent(
                         },
                         onItemClick = onItemClick,
                         focusMemory = focusMemory,
-                        onItemFocused = { focusedItem = it },
+                        onItemFocused = { item ->
+                            focusedItem = item
+                            val focusIndex = section.items.indexOfFirst { it.Id == item.Id }
+                            if (focusIndex >= 0) {
+                                // The bar paints a shrunken blur copy of the 960px art, so warm that URL.
+                                val menuArt = repo.backdropUrl(item, 960)?.let { tv.jetflix.app.ui.components.ArtworkSpec(tv.jetflix.app.ui.components.blurSource(it)) }
+                                val cardSpec = if (wide) wideCardPx else posterCardPx
+                                val rowUrl: (BaseItemDto) -> String? = { if (wide) repo.backdropUrl(it, 480) else repo.posterUrl(it) }
+                                // Down moves land on the next row: its first cards should be warm too.
+                                val nextSection = state.sections.getOrNull(state.sections.indexOf(section) + 1)
+                                val nextWide = nextSection?.wide == true && !(nextSection.title == "Continue Watching" && continueWatchingPosters)
+                                val nextSpec = if (nextWide) wideCardPx else posterCardPx
+                                artworkPrefetcher.prefetch(
+                                    listOfNotNull(menuArt) +
+                                        (1..3).mapNotNull { n ->
+                                            section.items.getOrNull(focusIndex + n)?.let { rowUrl(it)?.let { u -> cardSpec.copy(url = u) } }
+                                        } +
+                                        (0..1).mapNotNull { n ->
+                                            nextSection?.items?.getOrNull(n)?.let {
+                                                val url = if (nextWide) repo.backdropUrl(it, 480) else repo.posterUrl(it)
+                                                url?.let { u -> nextSpec.copy(url = u) }
+                                            }
+                                        },
+                                )
+                            }
+                        },
                         firstItemFocus = if (section === state.sections.first()) firstRowFocus else null,
                         upFocus = if (section === state.sections.first() && state.hero != null) heroPlayFocus else null,
                     )

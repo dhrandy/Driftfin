@@ -32,7 +32,7 @@ class MyJetflixAndExitTest {
     @get:Rule val rule = createAndroidComposeRule<androidx.activity.ComponentActivity>()
 
     private val items = Json { ignoreUnknownKeys = true; coerceInputValues = true }
-        .decodeFromString<BaseItemDtoQueryResult>(javaClass.classLoader!!.getResource("demo-items.json")!!.readText()).Items
+        .decodeFromString<BaseItemDtoQueryResult>(javaClass.classLoader!!.getResource("regression-items.json")!!.readText()).Items
 
     @Test fun myJetflixHasCollectionsFavoritesAndDirection() {
         val sections = mutableListOf<MySection>()

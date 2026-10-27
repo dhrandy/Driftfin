@@ -33,7 +33,7 @@ class TrailerSnapshotTest {
 
     private val items: List<BaseItemDto> = Json { ignoreUnknownKeys = true; coerceInputValues = true }
         .decodeFromString<BaseItemDtoQueryResult>(
-            javaClass.classLoader!!.getResource("demo-items.json")!!.readText(),
+            javaClass.classLoader!!.getResource("regression-items.json")!!.readText(),
         ).Items
 
     private fun repo() = JellyfinRepository().apply { apiFor("http://demo.test") }

@@ -29,11 +29,11 @@ class BatchSnapshotTest {
     )
 
     private val items: List<BaseItemDto> = Json { ignoreUnknownKeys = true; coerceInputValues = true }
-        .decodeFromString<BaseItemDtoQueryResult>(javaClass.classLoader!!.getResource("demo-items.json")!!.readText()).Items
+        .decodeFromString<BaseItemDtoQueryResult>(javaClass.classLoader!!.getResource("regression-items.json")!!.readText()).Items
 
     private fun art(url: String?): androidx.compose.ui.graphics.painter.BitmapPainter? {
         val m = Regex("/Items/([0-9a-f]+)/Images/(Primary|Backdrop)").find(url ?: return null) ?: return null
-        val bytes = javaClass.classLoader!!.getResourceAsStream("art/${m.groupValues[1]}_${m.groupValues[2]}.jpg")?.readBytes() ?: return null
+        val bytes = javaClass.classLoader!!.getResourceAsStream("regression-art/${m.groupValues[1]}_${m.groupValues[2]}.jpg")?.readBytes() ?: return null
         return androidx.compose.ui.graphics.painter.BitmapPainter(android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size).asImageBitmap())
     }
 
@@ -51,14 +51,14 @@ class BatchSnapshotTest {
     }
 
     @Test fun focusedDetailsStrip() {
-        val item = items.first { it.Name == "Sahara" }.copy(Overview = "A desert adventure about an unlikely crew crossing the dunes to find a lost treasure.", Genres = listOf("Adventure", "Action"), OfficialRating = "PG-13")
+        val item = items.first { it.Name == "The General" }.copy(Overview = "A desert adventure about an unlikely crew crossing the dunes to find a lost treasure.", Genres = listOf("Adventure", "Action"), OfficialRating = "PG-13")
         paparazzi.snapshot(name = "focused_details_strip") {
             CompositionLocalProvider(LocalTestArtwork provides { art(it) }) {
                 tv.jetflix.app.ui.theme.JetflixTheme {
                     androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.fillMaxSize()) {
                         tv.jetflix.app.ui.home.HomeContent(
                             tv.jetflix.app.ui.home.HomeUiState(
-                                loading = false, hero = items.first { it.Name == "Jungle Book" }, heroes = emptyList(),
+                                loading = false, hero = items.first { it.Name == "The Gold Rush" }, heroes = emptyList(),
                                 sections = listOf(
                                     tv.jetflix.app.ui.home.HomeSection("Continue Watching", items.take(6).map { it.copy(UserData = UserItemDataDto(PlaybackPositionTicks = 1, PlayedPercentage = 35.0)) }, wide = true),
                                     tv.jetflix.app.ui.home.HomeSection("Popular Picks", items.reversed(), wide = false),

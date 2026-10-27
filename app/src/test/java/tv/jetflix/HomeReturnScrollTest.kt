@@ -34,7 +34,7 @@ import tv.jetflix.app.ui.theme.JetflixTheme
 class HomeReturnScrollTest {
     @get:Rule val rule = createAndroidComposeRule<androidx.activity.ComponentActivity>()
     private val items = Json { ignoreUnknownKeys = true; coerceInputValues = true }
-        .decodeFromString<BaseItemDtoQueryResult>(javaClass.classLoader!!.getResource("demo-items.json")!!.readText()).Items
+        .decodeFromString<BaseItemDtoQueryResult>(javaClass.classLoader!!.getResource("regression-items.json")!!.readText()).Items
 
     @Test fun rowsSettleTheSameGoingUpAsGoingDown() {
         val titles = listOf("Continue Watching", "Next Up", "Recently Added Movies", "Favorites", "Action", "Drama")

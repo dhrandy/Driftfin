@@ -33,12 +33,12 @@ class ScreensSnapshotTest {
 
     private val items: List<BaseItemDto> = Json { ignoreUnknownKeys = true; coerceInputValues = true }
         .decodeFromString<BaseItemDtoQueryResult>(
-            javaClass.classLoader!!.getResource("demo-items.json")!!.readText(),
+            javaClass.classLoader!!.getResource("regression-items.json")!!.readText(),
         ).Items
 
     private fun art(url: String?): BitmapPainter? {
         val m = Regex("/Items/([0-9a-f]+)/Images/(Primary|Backdrop)").find(url ?: return null) ?: return null
-        val bytes = javaClass.classLoader!!.getResourceAsStream("art/${m.groupValues[1]}_${m.groupValues[2]}.jpg")?.readBytes() ?: return null
+        val bytes = javaClass.classLoader!!.getResourceAsStream("regression-art/${m.groupValues[1]}_${m.groupValues[2]}.jpg")?.readBytes() ?: return null
         return BitmapPainter(BitmapFactory.decodeByteArray(bytes, 0, bytes.size).asImageBitmap())
     }
 
@@ -55,7 +55,7 @@ class ScreensSnapshotTest {
     }
 
     @Test fun detailsMovie() {
-        val movie = items.first { it.Name == "Sahara" }
+        val movie = items.first { it.Name == "The General" }
         paparazzi.snapshot(name = "details_movie") {
             CompositionLocalProvider(LocalTestArtwork provides { art(it) }) {
                 tv.jetflix.app.ui.theme.JetflixTheme {

@@ -30,7 +30,7 @@ class HomeContinueWatchingPostersTest {
 
     private val items: List<BaseItemDto> = Json { ignoreUnknownKeys = true; coerceInputValues = true }
         .decodeFromString<BaseItemDtoQueryResult>(
-            javaClass.classLoader!!.getResource("demo-items.json")!!.readText(),
+            javaClass.classLoader!!.getResource("regression-items.json")!!.readText(),
         ).Items
 
     /** Synthetic artwork drawn in code (no files, nothing from a real server): posters are tall, scenes are wide. */
@@ -60,7 +60,7 @@ class HomeContinueWatchingPostersTest {
 
     private fun render(name: String) {
         val repo = JellyfinRepository().apply { apiFor("http://demo.test") }
-        val hero = items.first { it.Name == "Jungle Book" }
+        val hero = items.first { it.Name == "The Gold Rush" }
         val state = HomeUiState(
             loading = false,
             hero = hero,

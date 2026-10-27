@@ -95,6 +95,8 @@ fun SettingsScreen(
         onToggleTitleLogos = { AppSettings.setTitleLogos(!AppSettings.titleLogos.value) },
         formatBadges = AppSettings.formatBadges.collectAsState().value,
         onToggleFormatBadges = { AppSettings.setFormatBadges(!AppSettings.formatBadges.value) },
+        startupWall = AppSettings.startupWall.collectAsState().value,
+        onToggleStartupWall = { AppSettings.setStartupWall(!AppSettings.startupWall.value) },
         liveBlur = AppSettings.liveBlur.collectAsState().value,
         onToggleLiveBlur = { AppSettings.setLiveBlur(!AppSettings.liveBlur.value) },
         onStartFrameTest = { (context as? android.app.Activity)?.let { tv.jetflix.app.ui.components.FrameStats.start(it) } },
@@ -140,10 +142,15 @@ fun SettingsContent(
     onToggleTitleLogos: () -> Unit = {},
     formatBadges: Boolean = true,
     onToggleFormatBadges: () -> Unit = {},
+    startupWall: Boolean = true,
+    onToggleStartupWall: () -> Unit = {},
 ) {
     val menuBack = tv.jetflix.app.ui.components.rememberMenuBack()
     val first = remember { FocusRequester() }
-    LaunchedEffect(Unit) { if (!tv.jetflix.app.ui.components.NavSweep.active) try { first.requestFocus() } catch (_: Exception) { } }
+    // Captured at composition: arriving by a tab sweep keeps focus on the tab until Down or OK (NavSweep is
+    // cleared by the handoff, so reading it live here races and either steals focus or defers it forever).
+    val openedBySweep = remember { tv.jetflix.app.ui.components.NavSweep.active }
+    LaunchedEffect(Unit) { if (!openedBySweep) try { first.requestFocus() } catch (_: Exception) { } }
     Box(Modifier.fillMaxSize().background(JetflixColors.Background)) {
         Column(
             Modifier.align(Alignment.TopStart).fillMaxHeight().verticalScroll(rememberScrollState()).padding(start = 48.dp, top = 110.dp, bottom = 40.dp).width(760.dp),
@@ -160,6 +167,7 @@ fun SettingsContent(
             SettingRow("HDR and Dolby Vision tags", "Shows HDR, HDR10, HDR10+ or Dolby Vision on a movie's Details page when the file says it has them. It shows what the file contains, not what your TV is outputting.", formatBadges, onToggleFormatBadges)
             SettingRow("Cast while paused", "Shows the cast along the bottom when you pause. Press Down to pick an actor and OK to see their movies on your server.", pauseCast, onTogglePauseCast)
             SettingRow("Skip Intro button", "Shows a Skip Intro button in the player when your Jellyfin server has marked an intro. It only skips when you press OK.", skipIntro, onToggleSkipIntro)
+            SettingRow("Poster wall on startup", "Shows the Driftfin poster wall while Home loads the first time. Off goes straight to the ordinary empty Home.", startupWall, onToggleStartupWall)
             SettingRow("Button sound", "A quiet sound when you move and when you select. Press OK to try the next one.", true, onCycleButtonSound, valueText = buttonSound.label)
             SettingRow("Live blur", "On is the normal look. Off swaps the live blur for a pre-softened picture, to see whether blur is what slows scrolling. Takes effect when you open the next screen.", liveBlur, onToggleLiveBlur)
             SettingRow("Frame timing test", "Press OK, then move around for 20 seconds (tiny REC counter in the corner). A result card shows afterward. Nothing is saved or sent.", true, onStartFrameTest, valueText = "Start")
@@ -192,6 +200,7 @@ fun SettingsContent(
         TopNavBar(
             solid = true,
             selectedFocus = menuBack.focus,
+            downFocus = first,
             onNavFocusChange = { menuBack.navHasFocus = it },
             selected = JetflixTab.SETTINGS,
             userName = userName,

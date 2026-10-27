@@ -28,11 +28,11 @@ class ReviewSnapshotTest {
     )
 
     private val items: List<BaseItemDto> = Json { ignoreUnknownKeys = true; coerceInputValues = true }
-        .decodeFromString<BaseItemDtoQueryResult>(javaClass.classLoader!!.getResource("demo-items.json")!!.readText()).Items
+        .decodeFromString<BaseItemDtoQueryResult>(javaClass.classLoader!!.getResource("regression-items.json")!!.readText()).Items
 
     private fun art(url: String?): androidx.compose.ui.graphics.painter.BitmapPainter? {
         val m = Regex("/Items/([0-9a-f]+)/Images/(Primary|Backdrop)").find(url ?: return null) ?: return null
-        val bytes = javaClass.classLoader!!.getResourceAsStream("art/${m.groupValues[1]}_${m.groupValues[2]}.jpg")?.readBytes() ?: return null
+        val bytes = javaClass.classLoader!!.getResourceAsStream("regression-art/${m.groupValues[1]}_${m.groupValues[2]}.jpg")?.readBytes() ?: return null
         var bmp = android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
         // Mimic the server's maxWidth resize, so small blur copies really are small, as they are on the device.
         val w = Regex("maxWidth=(\\d+)").find(url)?.groupValues?.get(1)?.toInt()
@@ -43,7 +43,7 @@ class ReviewSnapshotTest {
     private val repo get() = JellyfinRepository().apply { apiFor("http://demo.test") }
 
     @Test fun screensaverCaption() {
-        val m = items.first { it.Name == "Sahara" }
+        val m = items.first { it.Name == "The General" }
         paparazzi.snapshot(name = "review_screensaver") {
             CompositionLocalProvider(LocalTestArtwork provides { art(it) }) {
                 tv.jetflix.app.ui.components.ScreensaverOverlay(listOf(tv.jetflix.app.ui.components.ScreensaverSlide(repo.backdropUrl(m, 1920)!!, m.displayTitle(), m.Overview ?: "A long description goes here so the three line limit and the gradient can be checked against a bright picture. ".repeat(3))))
@@ -52,7 +52,7 @@ class ReviewSnapshotTest {
     }
 
     @Test fun screensaverCaptionLongText() {
-        val m = items.first { it.Name == "Sahara" }
+        val m = items.first { it.Name == "The General" }
         val longOverview = "A retired sergeant, a runaway scientist and a crew of mercenaries cross a burning desert to recover a stolen archive before the border closes, and each of them has a reason to keep it hidden. ".repeat(3)
         paparazzi.snapshot(name = "review_screensaver_long") {
             CompositionLocalProvider(LocalTestArtwork provides { art(it) }) {

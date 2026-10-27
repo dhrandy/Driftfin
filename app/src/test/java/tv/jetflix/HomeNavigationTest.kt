@@ -37,7 +37,7 @@ class HomeNavigationTest {
 
     private val items: List<BaseItemDto> = Json { ignoreUnknownKeys = true; coerceInputValues = true }
         .decodeFromString<BaseItemDtoQueryResult>(
-            javaClass.classLoader!!.getResource("demo-items.json")!!.readText(),
+            javaClass.classLoader!!.getResource("regression-items.json")!!.readText(),
         ).Items
 
     private fun focusedText(): String {
@@ -64,7 +64,7 @@ class HomeNavigationTest {
         val cont = items.take(6).map { it.copy(UserData = UserItemDataDto(PlaybackPositionTicks = 1, PlayedPercentage = 35.0)) }
         val state = HomeUiState(
             loading = false,
-            hero = items.first { it.Name == "Jungle Book" },
+            hero = items.first { it.Name == "The Gold Rush" },
             heroes = heroes,
             sections = listOf(
                 HomeSection("Continue Watching", cont, wide = true),
@@ -183,12 +183,12 @@ class HomeNavigationTest {
         setHome(opened = opened, played = played)
         assertEquals("hero", zone())
         press(Key.Enter)
-        assertEquals(listOf("Jungle Book"), played)
+        assertEquals(listOf("The Gold Rush"), played)
         var guard = 0
         while (focusedText() != "More Info" && guard++ < 4) press(Key.DirectionRight)
         assertEquals("More Info", focusedText())
         press(Key.Enter)
-        assertEquals(listOf("Jungle Book"), opened)
+        assertEquals(listOf("The Gold Rush"), opened)
         press(Key.DirectionDown); assertEquals("row", zone())
         press(Key.Enter)
         assertEquals(2, opened.size)
@@ -196,8 +196,8 @@ class HomeNavigationTest {
 
     @Test fun bannerRotatesToTheNextTitleAndKeepsFocusOnPlay() {
         val played = mutableListOf<String>()
-        val first = items.first { it.Name == "Jungle Book" }
-        val second = items.first { it.Name != "Jungle Book" && it.Name != null }
+        val first = items.first { it.Name == "The Gold Rush" }
+        val second = items.first { it.Name != "The Gold Rush" && it.Name != null }
         setHome(heroes = listOf(first, second), played = played)
         rule.mainClock.autoAdvance = false
         // Short test interval; the real banner waits 8 seconds. Press OK repeatedly: the title it plays must change.

@@ -45,6 +45,11 @@ object AppSettings {
     val skipIntro: StateFlow<Boolean> = _skipIntro
     fun setSkipIntro(v: Boolean) { _skipIntro.value = v; prefs?.edit()?.putBoolean("skip_intro", v)?.apply() }
 
+    /** Poster wall while Home does its first load. On by default; off shows the ordinary empty Home right away. */
+    private val _startupWall = MutableStateFlow(true)
+    val startupWall: StateFlow<Boolean> = _startupWall
+    fun setStartupWall(v: Boolean) { _startupWall.value = v; prefs?.edit()?.putBoolean("startup_wall", v)?.apply() }
+
     private val _buttonSound = MutableStateFlow(tv.jetflix.app.ui.components.ButtonSound.Off)
     val buttonSound: StateFlow<tv.jetflix.app.ui.components.ButtonSound> = _buttonSound
     fun setButtonSound(v: tv.jetflix.app.ui.components.ButtonSound) {
@@ -83,6 +88,7 @@ object AppSettings {
         _titleLogos.value = p.getBoolean("title_logos", true)
         _formatBadges.value = p.getBoolean("format_badges", true)
         _pauseCast.value = p.getBoolean("pause_cast", true)
+        _startupWall.value = p.getBoolean("startup_wall", true)
         _buttonSound.value = tv.jetflix.app.ui.components.ButtonSound.values().firstOrNull { it.name == p.getString("button_sound", null) } ?: tv.jetflix.app.ui.components.ButtonSound.Off
         tv.jetflix.app.ui.components.ButtonSounds.style = _buttonSound.value
         _posterSize.value = PosterSize.values().firstOrNull { it.name == p.getString("poster_size", null) } ?: PosterSize.Medium

@@ -41,7 +41,7 @@ class HomeDownAfterRowScrollTest {
 
     private val items: List<BaseItemDto> = Json { ignoreUnknownKeys = true; coerceInputValues = true }
         .decodeFromString<BaseItemDtoQueryResult>(
-            javaClass.classLoader!!.getResource("demo-items.json")!!.readText(),
+            javaClass.classLoader!!.getResource("regression-items.json")!!.readText(),
         ).Items
 
     private fun focusedText(): String {
@@ -63,7 +63,7 @@ class HomeDownAfterRowScrollTest {
         val cont = long("c", 40).map { it.copy(UserData = UserItemDataDto(PlaybackPositionTicks = 1, PlayedPercentage = 35.0)) }
         val state = HomeUiState(
             loading = false,
-            hero = items.first { it.Name == "Jungle Book" },
+            hero = items.first { it.Name == "The Gold Rush" },
             sections = listOf(
                 HomeSection("Continue Watching", cont, wide = true),
                 HomeSection("Next Up", long("n", 40), wide = true),

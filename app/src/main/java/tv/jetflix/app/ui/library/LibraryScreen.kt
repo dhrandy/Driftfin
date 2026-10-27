@@ -359,8 +359,11 @@ fun LibraryContent(
     val gridState = androidx.compose.foundation.lazy.grid.rememberLazyGridState()
     val firstFocus = remember { FocusRequester() }
     val startedFresh = remember { !focusMemory.hasKey }
+    // Captured at composition: the sweep handoff clears the live flag when the tab takes focus, and content
+    // arriving after that must not pull focus down. Only Down or OK enters content after a sweep.
+    val openedBySweep = remember { tv.jetflix.app.ui.components.NavSweep.active }
     LaunchedEffect(state.items.isNotEmpty()) {
-        if (state.items.isNotEmpty() && startedFresh && !tv.jetflix.app.ui.components.NavSweep.active) {
+        if (state.items.isNotEmpty() && startedFresh && !openedBySweep) {
             try { firstFocus.requestFocus() } catch (_: Exception) { }
         }
     }
@@ -415,6 +418,25 @@ fun LibraryContent(
         OptionPicker("Year", state.years.map { it.toString() to it }, state.year, { picker = null }) { onYear(it); picker = null }
     }
     var focusedItem by remember { androidx.compose.runtime.mutableStateOf<BaseItemDto?>(null) }
+    // Artwork warmer, on the same image loader the cards use, so a focus move finds its art already cached.
+    val appContext = androidx.compose.ui.platform.LocalContext.current.applicationContext
+    val artworkPrefetcher = androidx.compose.runtime.remember {
+        val loader = coil.Coil.imageLoader(appContext)
+        tv.jetflix.app.ui.components.ArtworkPrefetcher(
+            requestFor = { spec -> tv.jetflix.app.ui.components.artworkRequest(appContext, spec) },
+            enqueue = { loader.enqueue(it) },
+        )
+    }
+    // Warm-up stops with the screen; nothing speculative keeps running after leaving the grid.
+    androidx.compose.runtime.DisposableEffect(artworkPrefetcher) {
+        onDispose { artworkPrefetcher.cancelAll() }
+    }
+    // The pixel size the grid's cards ask for, so the warmed bitmaps satisfy their requests from memory.
+    val gridCardPx = run {
+        val scale = tv.jetflix.app.data.AppSettings.posterSize.value.scale
+        val w = (160 * scale * appContext.resources.displayMetrics.density).toInt()
+        tv.jetflix.app.ui.components.ArtworkSpec("", w, (w * 3f / 2f).toInt())
+    }
     val navFocus = remember { FocusRequester() }
     var navHasFocus by remember { androidx.compose.runtime.mutableStateOf(false) }
     // Back from the grid goes to the top menu first, as on most TV apps; Back from the menu leaves.
@@ -428,7 +450,7 @@ fun LibraryContent(
     val banner: BaseItemDto? = null
     val bannerFocus = remember { FocusRequester() }
     LaunchedEffect(banner?.Id) {
-        if (banner != null && startedFresh && !tv.jetflix.app.ui.components.NavSweep.active) {
+        if (banner != null && startedFresh && !openedBySweep) {
             repeat(10) { try { bannerFocus.requestFocus(); return@LaunchedEffect } catch (_: Exception) { kotlinx.coroutines.delay(60) } }
         }
     }
@@ -544,7 +566,19 @@ fun LibraryContent(
                         item = item,
                         imageUrl = repo.posterUrl(item),
                         modifier = (if (showSort && index < tv.jetflix.app.data.AppSettings.posterSize.value.gridColumns) Modifier.focusProperties { up = sortFocus } else Modifier)
-                            .onFocusChanged { if (it.hasFocus) { focusedItem = item; hideBanner() } }
+                            .onFocusChanged { if (it.hasFocus) {
+                                focusedItem = item
+                                hideBanner()
+                                val columns = tv.jetflix.app.data.AppSettings.posterSize.value.gridColumns
+                                artworkPrefetcher.prefetch(
+                                    listOfNotNull(repo.backdropUrl(item, 960)?.let { tv.jetflix.app.ui.components.ArtworkSpec(tv.jetflix.app.ui.components.blurSource(it)) }) +
+                                        listOfNotNull(
+                                            state.items.getOrNull(index + 1),
+                                            state.items.getOrNull(index + 2),
+                                            state.items.getOrNull(index + columns),
+                                        ).mapNotNull { repo.posterUrl(it)?.let { u -> gridCardPx.copy(url = u) } },
+                                )
+                            } }
                             .then(if (startedFresh && item.Id == state.items.first().Id) {
                                 Modifier.focusRequester(firstFocus).restoreFocus(focusMemory, item.Id)
                             } else {

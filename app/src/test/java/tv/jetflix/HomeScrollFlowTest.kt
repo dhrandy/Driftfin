@@ -30,7 +30,7 @@ import tv.jetflix.app.ui.theme.JetflixTheme
 class HomeScrollFlowTest {
     @get:Rule val rule = createAndroidComposeRule<androidx.activity.ComponentActivity>()
     private val items = Json { ignoreUnknownKeys = true; coerceInputValues = true }
-        .decodeFromString<BaseItemDtoQueryResult>(javaClass.classLoader!!.getResource("demo-items.json")!!.readText()).Items
+        .decodeFromString<BaseItemDtoQueryResult>(javaClass.classLoader!!.getResource("regression-items.json")!!.readText()).Items
 
     @Test fun focusedRowsStayBelowTheMenuBar() {
         val sections = listOf("Continue Watching", "Next Up", "Recently Added Movies", "Favorites", "Action", "Drama").mapIndexed { i, t ->
@@ -90,7 +90,7 @@ class HomeScrollFlowTest {
                     seq += (desc(n) ?: "?") + "@" + n.boundsInRoot.left.toInt()
                 }
             }
-            val firstTitleVisible = rule.onAllNodes(androidx.compose.ui.test.hasContentDescription("Jungle Book"), useUnmergedTree = true).fetchSemanticsNodes().size
+            val firstTitleVisible = rule.onAllNodes(androidx.compose.ui.test.hasContentDescription("The Gold Rush"), useUnmergedTree = true).fetchSemanticsNodes().size
             println("FIRST_TITLE_NODES " + size + " " + firstTitleVisible)
             println("GRID_SEQ " + size + " " + seq)
             assertTrue("$size: focus moved, tops=$tops", tops.size >= 8)

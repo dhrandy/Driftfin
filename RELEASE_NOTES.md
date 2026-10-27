@@ -4,6 +4,14 @@ Each build lists its real changes here. The CI release workflow copies the secti
 matching the build tag onto the GitHub release page and appends the standard
 automated-build footer.
 
+## build-20
+
+Fixes:
+- Top tabs: moving across Home, Shows, Movies, Search and Settings keeps the selection on the tab until you press Down or OK; it no longer drops onto a movie while you browse the tabs.
+- Settings and Search open properly from the top bar again (Down or OK enters the page), and every Settings row can be reached.
+- Smoother browsing: artwork for rows, grids and the next hero image is loaded in advance, before it scrolls into view.
+- New poster wall while Home loads the first time. Turn it off in Settings ("Poster wall on startup").
+
 ## build-19
 
 Fixes:
