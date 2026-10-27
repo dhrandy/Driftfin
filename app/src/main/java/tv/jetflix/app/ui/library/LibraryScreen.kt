@@ -375,6 +375,9 @@ fun LibraryContent(
         }
     }
     val sortFocus = remember { FocusRequester() }
+    // Attached to the card the user last focused (focusMemory.key); that card is composed whenever the
+    // grid is scrolled, so it is a live Down target from the bar when the sort/section row is gone.
+    val rememberedCardFocus = remember { FocusRequester() }
     val filterFocus = remember { FocusRequester() }
     var picker by remember { androidx.compose.runtime.mutableStateOf<String?>(null) }
     if (picker == "sort") {
@@ -446,6 +449,11 @@ fun LibraryContent(
     }
     val navFocus = remember { FocusRequester() }
     var navHasFocus by remember { androidx.compose.runtime.mutableStateOf(false) }
+    // True once the grid has moved off the very top: the sort/section row is (or will be) disposed, so
+    // nothing may hard-point at its focus requester - a detached target swallows the move entirely.
+    val scrolledAway by androidx.compose.runtime.remember {
+        androidx.compose.runtime.derivedStateOf { gridState.firstVisibleItemIndex > 0 || gridState.firstVisibleItemScrollOffset > 0 }
+    }
     // Back from the grid goes to the top menu first, as on most TV apps; Back from the menu leaves.
     androidx.activity.compose.BackHandler(enabled = !navHasFocus && collectionTitle == null) {
         try { navFocus.requestFocus() } catch (_: Exception) { }
@@ -471,10 +479,6 @@ fun LibraryContent(
             val barPx = with(androidx.compose.ui.platform.LocalDensity.current) { 136.dp.toPx() }
             val bottomPx = with(androidx.compose.ui.platform.LocalDensity.current) { 56.dp.toPx() }
             val scrollSpec = remember(barPx, bottomPx) { tv.jetflix.app.ui.home.MenuAwareScrollSpec(barPx, bottomPx) }
-            // Derived so the screen recomposes when this flips, not on every scrolled pixel.
-            val scrolledAway by androidx.compose.runtime.remember {
-                androidx.compose.runtime.derivedStateOf { gridState.firstVisibleItemIndex > 0 || gridState.firstVisibleItemScrollOffset > 0 }
-            }
             androidx.compose.runtime.CompositionLocalProvider(androidx.compose.foundation.gestures.LocalBringIntoViewSpec provides scrollSpec) {
             LazyVerticalGrid(
                 columns = GridCells.Fixed(tv.jetflix.app.data.AppSettings.posterSize.collectAsState().value.gridColumns),
@@ -589,6 +593,7 @@ fun LibraryContent(
                                         ).mapNotNull { repo.posterUrl(it)?.let { u -> gridCardPx.copy(url = u) } },
                                 )
                             } }
+                            .then(if (focusMemory.key == item.Id) Modifier.focusRequester(rememberedCardFocus) else Modifier)
                             .then(if (startedFresh && item.Id == state.items.first().Id) {
                                 Modifier.focusRequester(firstFocus).restoreFocus(focusMemory, item.Id)
                             } else {
@@ -617,7 +622,7 @@ fun LibraryContent(
             onTabSelected = onTabSelected,
             onUserClick = onUserClick,
             modifier = Modifier.align(Alignment.TopCenter),
-            downFocus = if (banner != null) bannerFocus else if (isMine) sectionFocus else if (showSort) sortFocus else null,
+            downFocus = if (banner != null) bannerFocus else if (scrolledAway) (if (focusMemory.hasKey) rememberedCardFocus else null) else if (isMine) sectionFocus else if (showSort) sortFocus else null,
             selectedFocus = navFocus,
             blurArtUrl = (focusedItem ?: banner)?.let { repo.backdropUrl(it, 960) },
             onNavFocusChange = { navHasFocus = it },

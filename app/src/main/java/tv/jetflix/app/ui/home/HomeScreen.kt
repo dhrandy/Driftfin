@@ -272,6 +272,7 @@ fun HomeContent(
     val focusMemory = rememberFocusMemory(restoredFocusKey)
     val heroPlayFocus = remember { FocusRequester() }
     val navFocus = remember { FocusRequester() }
+    var navHasFocus by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
     val firstRowFocus = remember { FocusRequester() }
     val listState = rememberLazyListState(initialFirstVisibleItemIndex = previewScrollIndex)
     val scope = rememberCoroutineScope()
@@ -364,10 +365,14 @@ fun HomeContent(
             if (heroHasFocus) return
         }
     }
-    // Captured at composition: arriving by a tab sweep keeps focus on the tab until Down or OK. The hero (or a
-    // rotation) arriving after the handoff clears the live sweep flag must not pull focus down into the page.
+    // Captured at composition: arriving by a tab sweep (or Back-to-Home, which uses the same handoff) keeps
+    // focus on the tab until Down or OK. The hero (or a rotation) arriving after the handoff clears the live
+    // sweep flag must not pull focus down into the page. The remembered card must not either: the sweep
+    // owns focus, so its pending restore is consumed here, once, before any card can compose and grab it.
     val openedBySweepToHome = remember {
-        tv.jetflix.app.ui.components.NavSweep.active && tv.jetflix.app.ui.components.NavSweep.tab == tv.jetflix.app.ui.components.JetflixTab.HOME
+        val sweep = tv.jetflix.app.ui.components.NavSweep.active && tv.jetflix.app.ui.components.NavSweep.tab == tv.jetflix.app.ui.components.JetflixTab.HOME
+        if (sweep) focusMemory.pending = false
+        sweep
     }
     // First visit: land on the hero Play button. Returning: the remembered card wins.
     LaunchedEffect(state.hero?.Id) {
@@ -387,13 +392,13 @@ fun HomeContent(
             }
         }
     }
-    // Back from deep in the rows goes back to the top of Home first; the next Back exits.
-    BackHandler(enabled = focusMemory.key != null) {
+    // Back from anywhere in Home goes to the top bar first, as on Movies/Shows (Randy: "it should go to the
+    // top and you be able to click right, just like how it works on movies and shows"). Back from the bar exits.
+    BackHandler(enabled = !navHasFocus) {
         focusMemory.key = null
-        scope.launch {
-            listState.scrollToItem(0)
-            focusHero()
-        }
+        focusMemory.pending = false
+        scope.launch { listState.scrollToItem(0) }
+        try { navFocus.requestFocus() } catch (_: Exception) { }
     }
     // The details strip takes its own space under the rows so it never covers the focused row.
     // Only changes (and so only recomposes Home) when the nav bar is solid and the art really differs.
@@ -546,6 +551,7 @@ fun HomeContent(
             downFocus = if (state.hero != null) heroPlayFocus else if (state.sections.isNotEmpty()) firstRowFocus else null,
             selectedFocus = navFocus,
             solid = navSolid,
+            onNavFocusChange = { navHasFocus = it },
             blurArtUrl = navArtUrl,
         )
     }

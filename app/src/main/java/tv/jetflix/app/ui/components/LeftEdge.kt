@@ -15,35 +15,38 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalFocusManager
 
 /**
- * "Double click on the far left" (Randy): a Left press fires [onEdge] only when the previous fresh Left
- * press already touched the boundary chain - either it moved focus (the press that ARRIVES at the edge
- * counts) or it was itself an edge press that only armed. A single accidental Left at rest at the edge arms
- * instead of opening Search; holding Left repeats the key without a key-up and those repeats stop at the
- * boundary, never firing. Any other key disarms. Controls that handle Left themselves (a text field, the
- * player's seek) consume the key first and never reach this.
+ * "Double click on the far left" (Randy, strict form after the build-21 device report): a Left press
+ * fires [onEdge] only when the previous fresh Left press found focus ALREADY at rest on the boundary.
+ * A press that moves focus - including the press that ARRIVES at the edge - never counts, so no single
+ * press can open Search regardless of what was pressed or armed before. The first at-rest press arms;
+ * the second fresh at-rest press fires. Holding Left repeats the key without a key-up; those repeats
+ * stop at the boundary and never arm or fire. Any other key disarms. Controls that handle Left
+ * themselves (a text field, the player's seek) consume the key first and never reach this.
  */
 @Composable
 fun Modifier.onLeftEdge(enabled: Boolean, onEdge: () -> Unit): Modifier {
     val focusManager = LocalFocusManager.current
     // True while the Left key is physically down, so key-repeat from holding the button never fires.
     var leftHeld by remember { mutableStateOf(false) }
-    // True after a fresh Left press that moved focus or armed at the edge; the next fresh edge press fires.
-    var leftChain by remember { mutableStateOf(false) }
+    // True only after a fresh Left press that found focus ALREADY at the edge; the next such press fires.
+    var armedAtEdge by remember { mutableStateOf(false) }
     return this.onKeyEvent { e ->
-        if (!enabled) { leftChain = false; return@onKeyEvent false }
+        if (!enabled) { armedAtEdge = false; return@onKeyEvent false }
         when {
             e.key == Key.DirectionLeft && e.type == KeyEventType.KeyDown -> {
                 val held = leftHeld
                 leftHeld = true
                 if (focusManager.moveFocus(FocusDirection.Left)) {
-                    leftChain = true
+                    // This press MOVED focus (it may have arrived at the edge): it was not pressed at
+                    // rest on the boundary, so it never counts - and it clears any stale arm.
+                    armedAtEdge = false
                 } else if (!held) {
-                    if (leftChain) { leftChain = false; onEdge() } else leftChain = true
+                    if (armedAtEdge) { armedAtEdge = false; onEdge() } else armedAtEdge = true
                 }
                 true
             }
             e.key == Key.DirectionLeft && e.type == KeyEventType.KeyUp -> { leftHeld = false; true }
-            else -> { leftChain = false; false }
+            else -> { armedAtEdge = false; false }
         }
     }
 }

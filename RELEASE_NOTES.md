@@ -4,6 +4,13 @@ Each build lists its real changes here. The CI release workflow copies the secti
 matching the build tag onto the GitHub release page and appends the standard
 automated-build footer.
 
+## build-22
+
+Fixes:
+- Search could still open from a single Left press at the far left edge right after scrolling that way. Now it always takes two separate presses at the edge, and holding Left never opens it.
+- Back on Home now returns to the top bar with Home focused, so pressing Right moves along the tabs. Returning to Home from another section no longer lands on the hero Play button.
+- On Movies and Shows, after pressing Back to jump to the tab bar (grid stays scrolled where you left it) and moving to another tab, pressing Down enters the grid again right where you were.
+
 ## build-21
 
 Fixes:

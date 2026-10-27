@@ -125,7 +125,7 @@ class HomeNavigationTest {
         press(Key.DirectionDown); assertEquals("hero", zone())
     }
 
-    @Test fun backFromDeepInRowsGoesToTopThenExits() {
+    @Test fun backFromDeepInRowsGoesToTopBarThenExits() {
         setHome()
         press(Key.DirectionDown); press(Key.DirectionDown); press(Key.DirectionDown)
         assertEquals("row", zone())
@@ -133,7 +133,8 @@ class HomeNavigationTest {
         assertTrue("Back must be intercepted while in the rows", dispatcher.hasEnabledCallbacks())
         rule.runOnUiThread { dispatcher.onBackPressed() }
         rule.waitForIdle()
-        assertEquals("hero", zone())
+        // Build-22: Back from the rows goes to the top with the NAV BAR focused (so Right works), not the hero.
+        assertEquals("nav", zone())
         assertFalse("second Back must fall through so the app exits", dispatcher.hasEnabledCallbacks())
     }
 
