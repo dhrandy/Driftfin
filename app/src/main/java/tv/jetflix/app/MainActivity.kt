@@ -89,6 +89,9 @@ fun JetflixRoot() {
     val app = context.applicationContext as JetflixApp
     val session by SessionManager.session.collectAsState()
 
+    // Switching profiles is cancellable navigation, not a sign-out. Keep the active
+    // session and previous screen until a different login succeeds.
+    var switchingProfile by remember { mutableStateOf(false) }
     var backStack by remember { mutableStateOf(listOf<Screen>(Screen.Home)) }
     val stateHolder = androidx.compose.runtime.saveable.rememberSaveableStateHolder()
     val current = backStack.last()
@@ -108,28 +111,41 @@ fun JetflixRoot() {
     var searchLeftFully by remember { mutableStateOf(false) }
     LaunchedEffect(backStack) { if (backStack.none { it == Screen.Search }) searchLeftFully = true }
 
-    BackHandler(enabled = session != null && backStack.size > 1) { pop() }
+    BackHandler(enabled = !switchingProfile && session != null && backStack.size > 1) { pop() }
     // From Shows/Movies/My List/Search/Settings, Back goes to Home first; Back on Home exits.
     // The sweep handoff lands focus on the Home tab (Randy: Back to Home must not drop onto the hero
     // Play button), and it stops a remembered card or a late-loading hero from stealing it back.
-    BackHandler(enabled = session != null && backStack.size == 1 && current != Screen.Home) {
+    BackHandler(enabled = !switchingProfile && session != null && backStack.size == 1 && current != Screen.Home) {
         tv.jetflix.app.ui.components.NavSweep.active = true
         tv.jetflix.app.ui.components.NavSweep.tab = tv.jetflix.app.ui.components.JetflixTab.HOME
         backStack = listOf(Screen.Home)
     }
     // Back on Home asks before leaving the app. Cancel or Back stays; Exit leaves.
     var confirmExit by remember { mutableStateOf(false) }
-    BackHandler(enabled = session != null && backStack.size == 1 && current == Screen.Home && !confirmExit) { confirmExit = true }
+    BackHandler(enabled = !switchingProfile && session != null && backStack.size == 1 && current == Screen.Home && !confirmExit) { confirmExit = true }
     if (confirmExit) {
         val activity = context as? android.app.Activity
         ExitDialog(onCancel = { confirmExit = false }, onExit = { confirmExit = false; activity?.finish() })
     }
 
-    if (session == null) {
+    if (session == null || switchingProfile) {
         val vm: LoginViewModel = viewModel(
             factory = viewModelFactory { LoginViewModel(app.repo, app.tokenStore) },
         )
+        androidx.compose.runtime.DisposableEffect(vm) {
+            onDispose { vm.cancelPendingLogin() }
+        }
+        val loginState by vm.state.collectAsState()
+        BackHandler(enabled = loginState.quickCode != null || (switchingProfile && session != null)) {
+            if (loginState.quickCode != null) vm.cancelQuickConnect()
+            else {
+                vm.cancelPendingLogin()
+                session?.let { app.repo.apiFor(it.serverUrl) }
+                switchingProfile = false
+            }
+        }
         LoginScreen(viewModel = vm, onLoggedIn = {
+            switchingProfile = false
             if (vm.state.value.sessionNotSaved) {
                 android.widget.Toast.makeText(context, "Signed in, but this device could not save the login securely. You will need to sign in again next time.", android.widget.Toast.LENGTH_LONG).show()
             }
@@ -264,7 +280,8 @@ fun JetflixRoot() {
         Screen.Login -> Unit
         Screen.Home -> {
             val vm: HomeViewModel = viewModel(key = "home-${session?.userId}", factory = viewModelFactory { HomeViewModel(app.repo) })
-            LaunchedEffect(Unit) { vm.load() }
+            val excludeAnimation by tv.jetflix.app.data.AppSettings.excludeHomeAnimation.collectAsState()
+            LaunchedEffect(excludeAnimation) { vm.load() }
             HomeScreen(
                 viewModel = vm,
                 userName = userName,
@@ -312,7 +329,7 @@ fun JetflixRoot() {
                 userName = userName,
                 serverUrl = session?.serverUrl,
                 onTabSelected = onTabSelected,
-                onSignOut = onSignOut,
+                onSignOut = { switchingProfile = true },
                 onForgetProfile = onForgetProfile,
                 onUserClick = onUserClick,
             )

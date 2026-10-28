@@ -196,7 +196,7 @@ class HomeViewModel(val repo: JellyfinRepository) : ViewModel() {
                         filters = "IsUnplayed",
                     ).body()?.Items ?: emptyList()
                 } catch (_: Exception) { emptyList() }
-                val heroes = tv.jetflix.app.data.BannerPicks.randomTopUnwatchedMovies(unwatchedMovies, hasBackdrop = { repo.backdropUrl(it) != null }, count = HeroRotation.MAX_TITLES)
+                val heroes = tv.jetflix.app.data.BannerPicks.randomTopUnwatchedMovies(unwatchedMovies, hasBackdrop = { repo.backdropUrl(it) != null }, count = HeroRotation.MAX_TITLES, excludeAnimation = tv.jetflix.app.data.AppSettings.excludeHomeAnimation.value)
                 val hero = heroes.firstOrNull()
 
                 _state.value = HomeUiState(loading = false, hero = hero, heroes = heroes, sections = sections)
@@ -794,7 +794,7 @@ fun HeroBanner(
                                 focusedContentColor = Color.White,
                             ),
                         ) {
-                            Text("Trailer")
+                            Icon(tv.jetflix.app.ui.details.TrailerIcon, contentDescription = "Watch trailer", modifier = Modifier.size(24.dp))
                         }
                     }
                 }

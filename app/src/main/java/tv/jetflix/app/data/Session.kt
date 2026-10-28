@@ -196,10 +196,10 @@ object SessionManager {
     fun authenticatedClientBuilder(): okhttp3.OkHttpClient.Builder =
         okhttp3.OkHttpClient.Builder().addInterceptor { chain -> chain.proceed(authorize(chain.request())) }
 
-    fun authorizationHeader(token: String? = null, deviceId: String? = null): String {
+    fun authorizationHeader(token: String? = null, deviceId: String? = null, includeToken: Boolean = true): String {
         val base = "MediaBrowser Client=\"Driftfin\", Device=\"Android TV\", " +
             "DeviceId=\"${deviceId ?: _session.value?.deviceId ?: "jetflix"}\", Version=\"${tv.jetflix.app.BuildConfig.VERSION_NAME}.${tv.jetflix.app.BuildConfig.VERSION_CODE}\""
-        val t = token ?: _session.value?.token
+        val t = if (includeToken) token ?: _session.value?.token else null
         return if (t != null) "$base, Token=\"$t\"" else base
     }
 }

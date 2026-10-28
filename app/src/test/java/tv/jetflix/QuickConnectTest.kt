@@ -17,6 +17,7 @@ import kotlinx.coroutines.test.setMain
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import org.junit.After
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -100,7 +101,12 @@ class QuickConnectTest {
         assertNull(vm.state.value.quickCode)
         assertTrue(vm.state.value.savedProfiles.any { it == "randy" })
         // The poll carried the server's secret, and the code was shown while waiting.
-        val paths = (1..server.requestCount).map { server.takeRequest().path }
+        val requests = (1..server.requestCount).map { server.takeRequest() }
+        requests.forEach {
+            assertTrue(it.getHeader("Authorization")!!.contains("DeviceId=\"${session!!.deviceId}\""))
+            assertFalse(it.getHeader("Authorization")!!.contains("Token="))
+        }
+        val paths = requests.map { it.path }
         assertTrue(paths.any { it?.startsWith("/QuickConnect/Connect?secret=sec123") == true })
     }
 
@@ -140,6 +146,6 @@ class QuickConnectTest {
             JetflixTheme { LoginContent(LoginUiState(serverUrl = "http://demo.test"), { _, _, _ -> }, {}) }
         }
         rule.waitForIdle()
-        rule.onNodeWithText("Use Quick Connect instead").assertExists()
+        rule.onNodeWithText("Quick Connect").assertExists()
     }
 }

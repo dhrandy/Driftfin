@@ -51,6 +51,11 @@ object AppSettings {
     val searchRecommendations: StateFlow<Boolean> = _searchRecommendations
     fun setSearchRecommendations(v: Boolean) { _searchRecommendations.value = v; prefs?.edit()?.putBoolean("search_recommendations", v)?.apply() }
 
+    /** Home banner only: exclude movies Jellyfin marks with the Animation genre. */
+    private val _excludeHomeAnimation = MutableStateFlow(false)
+    val excludeHomeAnimation: StateFlow<Boolean> = _excludeHomeAnimation
+    fun setExcludeHomeAnimation(v: Boolean) { _excludeHomeAnimation.value = v; prefs?.edit()?.putBoolean("exclude_home_animation", v)?.apply() }
+
     /** Preview: age rating and community score beside More Info on the Home banner. On while previewed; hideable. */
     private val _heroRatings = MutableStateFlow(true)
     val heroRatings: StateFlow<Boolean> = _heroRatings
@@ -104,6 +109,7 @@ object AppSettings {
         _formatBadges.value = p.getBoolean("format_badges", true)
         _pauseCast.value = p.getBoolean("pause_cast", true)
         _startupWall.value = p.getBoolean("startup_wall", true)
+        _excludeHomeAnimation.value = p.getBoolean("exclude_home_animation", false)
         _heroRatings.value = p.getBoolean("hero_ratings", true)
         _searchRecommendations.value = p.getBoolean("search_recommendations", true)
         _buttonSound.value = tv.jetflix.app.ui.components.ButtonSound.values().firstOrNull { it.name == p.getString("button_sound", null) } ?: tv.jetflix.app.ui.components.ButtonSound.Off

@@ -4,6 +4,18 @@ Each build lists its real changes here. The CI release workflow copies the secti
 matching the build tag onto the GitHub release page and appends the standard
 automated-build footer.
 
+## build-31
+
+Fixes:
+- Sign-in now uses this TV's own saved device ID from the first password or Quick Connect request, rather than a shared fallback. This prevents that shared-ID collision between TVs; it cannot restore a token already rejected by the server, so one new sign-in may be needed.
+- Settings > Switch profile keeps the current session until another login succeeds. Back cancels pending sign-in work and returns to the previous screen. Explicit sign-out and forgetting a profile still sign out.
+- The Home Trailer button now uses the clapperboard icon, matching Details.
+
+Changes:
+- Quick Connect sits directly below the server address, before profiles and password sign-in.
+- Settings adds "Exclude animated movies from Home banner". When enabled, movies tagged Animation are excluded from that banner only; library rows stay unchanged. The choice is saved.
+- Settings groups related controls under headings and uses rectangular panels with slightly softened corners. Check for updates remains first, with account actions pinned below the scrollable columns.
+
 ## build-30
 
 Changes:

@@ -13,6 +13,7 @@ class JellyfinRepository {
     val json = Json { ignoreUnknownKeys = true; coerceInputValues = true }
 
     private var api: JellyfinApi? = null
+    private var apiDeviceId: String? = null
     var serverUrl: String? = null
         private set
 
@@ -43,15 +44,15 @@ class JellyfinRepository {
         }
     } catch (_: Exception) { null }
 
-    fun apiFor(baseUrl: String): JellyfinApi {
+    fun apiFor(baseUrl: String, deviceId: String? = null): JellyfinApi {
         val existing = api
-        if (existing != null && serverUrl == baseUrl) return existing
+        if (existing != null && serverUrl == baseUrl && apiDeviceId == deviceId) return existing
         val client = OkHttpClient.Builder()
             .connectTimeout(15, TimeUnit.SECONDS)
             .readTimeout(30, TimeUnit.SECONDS)
             .addInterceptor { chain ->
                 val req = chain.request().newBuilder()
-                    .header("Authorization", SessionManager.authorizationHeader())
+                    .header("Authorization", SessionManager.authorizationHeader(deviceId = deviceId, includeToken = deviceId == null))
                     .build()
                 chain.proceed(req)
             }
@@ -63,6 +64,7 @@ class JellyfinRepository {
             .build()
         return retrofit.create(JellyfinApi::class.java).also {
             api = it
+            apiDeviceId = deviceId
             serverUrl = baseUrl
         }
     }

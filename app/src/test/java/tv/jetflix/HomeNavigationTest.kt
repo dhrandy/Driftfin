@@ -8,6 +8,7 @@ import androidx.compose.ui.test.isFocused
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.requestFocus
 import androidx.compose.ui.test.performKeyInput
@@ -257,7 +258,7 @@ class HomeNavigationTest {
         // The showing banner title triggers exactly its own lazy lookup.
         assertTrue(needed.contains(hero.Id))
         // TV buttons fire on DPAD_CENTER, not a touch click.
-        rule.onNodeWithText("Trailer").assertExists().requestFocus()
+        rule.onNodeWithContentDescription("Watch trailer").assertExists().requestFocus()
         rule.onRoot().performKeyInput { pressKey(Key.DirectionCenter) }
         rule.waitForIdle()
         assertEquals(listOf(src), clicks)
@@ -265,7 +266,7 @@ class HomeNavigationTest {
 
     @Test fun bannerTrailerButtonHiddenWithoutSource() {
         setHome()
-        rule.onNodeWithText("Trailer").assertDoesNotExist()
+        rule.onNodeWithContentDescription("Watch trailer").assertDoesNotExist()
         // Play/Resume and More Info are untouched (the fixture hero is part-watched, so its button is Resume).
         rule.onNodeWithText("Resume").assertExists()
         rule.onNodeWithText("More Info").assertExists()

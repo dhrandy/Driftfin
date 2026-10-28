@@ -42,6 +42,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.cancelChildren
+import kotlinx.coroutines.ensureActive
 import tv.jetflix.app.data.AuthenticateUserByName
 import tv.jetflix.app.data.JellyfinRepository
 import tv.jetflix.app.data.Session
@@ -102,6 +104,7 @@ class LoginViewModel(
             val ok = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { repo.validateToken(saved) }
             when (ok) {
                 true -> {
+                    coroutineContext.ensureActive()
                     val persisted = tokenStore.activate(saved)
                     SessionManager.signIn(saved)
                     _state.value = _state.value.copy(connecting = false, sessionNotSaved = !persisted)
@@ -123,7 +126,7 @@ class LoginViewModel(
         if (normalized.isEmpty()) return
         viewModelScope.launch {
             try {
-                val users = repo.apiFor(normalized).getPublicUsers().body()?.mapNotNull { it.Name } ?: emptyList()
+                val users = repo.apiFor(normalized, deviceId = tokenStore.deviceId()).getPublicUsers().body()?.mapNotNull { it.Name } ?: emptyList()
                 _state.value = _state.value.copy(
                     profiles = users,
                     profilesNote = if (users.isEmpty()) "This server doesn't list its users. Type your username." else null,
@@ -172,7 +175,7 @@ class LoginViewModel(
         quickJob = viewModelScope.launch {
             _state.value = _state.value.copy(connecting = true, error = null, quickCode = null)
             try {
-                val api = repo.apiFor(normalized)
+                val api = repo.apiFor(normalized, deviceId = tokenStore.deviceId())
                 val info = api.getPublicSystemInfo()
                 if (!info.isSuccessful || info.body() == null) {
                     _state.value = _state.value.copy(connecting = false, error = "No Jellyfin server answered at $normalized")
@@ -207,6 +210,7 @@ class LoginViewModel(
                     _state.value = _state.value.copy(connecting = false, quickCode = null, error = "Quick Connect sign-in failed. Try again or use your password.")
                     return@launch
                 }
+                coroutineContext.ensureActive()
                 completeSignIn(normalized, user.Id, user.Name ?: "Jellyfin user", token, onSuccess)
             } catch (e: Exception) {
                 if (!isActive) return@launch
@@ -216,6 +220,13 @@ class LoginViewModel(
                 )
             }
         }
+    }
+
+    /** Leaving a cancellable login owns every pending request, not just a displayed code. */
+    fun cancelPendingLogin() {
+        viewModelScope.coroutineContext.cancelChildren()
+        quickJob = null
+        _state.value = _state.value.copy(connecting = false, quickCode = null, password = "", error = null)
     }
 
     fun cancelQuickConnect() {
@@ -237,7 +248,7 @@ class LoginViewModel(
         viewModelScope.launch {
             _state.value = _state.value.copy(connecting = true, error = null)
             try {
-                val api = repo.apiFor(normalized)
+                val api = repo.apiFor(normalized, deviceId = tokenStore.deviceId())
                 val info = api.getPublicSystemInfo()
                 if (!info.isSuccessful || info.body() == null) {
                     _state.value = _state.value.copy(connecting = false, error = "No Jellyfin server answered at $normalized")
@@ -251,6 +262,7 @@ class LoginViewModel(
                     _state.value = _state.value.copy(connecting = false, error = "Sign-in failed. Check the username and password.")
                     return@launch
                 }
+                coroutineContext.ensureActive()
                 completeSignIn(normalized, user.Id, user.Name ?: s.username.trim(), token, onSuccess)
             } catch (e: Exception) {
                 _state.value = _state.value.copy(
@@ -312,6 +324,21 @@ fun LoginContent(
                 keyboardType = KeyboardType.Uri,
                 modifier = Modifier.focusRequester(serverFocus),
             )
+            if (state.quickCode == null) {
+            Button(
+                onClick = { onQuickConnect() },
+                enabled = !state.connecting,
+                colors = ButtonDefaults.colors(
+                    containerColor = JetflixColors.SurfaceLight,
+                    contentColor = JetflixColors.TextPrimary,
+                    focusedContainerColor = JetflixColors.Red,
+                    focusedContentColor = JetflixColors.TextPrimary,
+                ),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text("Quick Connect", style = JetflixType.body)
+            }
+            }
             val names = (state.savedProfiles + state.profiles).distinctBy { it.lowercase() }
             if (names.isNotEmpty()) {
                 Text("Who's watching?", style = JetflixType.caption, color = JetflixColors.TextSecondary)
@@ -394,19 +421,7 @@ fun LoginContent(
             ) {
                 Text(if (state.connecting) "Connecting…" else "Sign In", style = JetflixType.body)
             }
-            Button(
-                onClick = { onQuickConnect() },
-                enabled = !state.connecting,
-                colors = ButtonDefaults.colors(
-                    containerColor = JetflixColors.SurfaceLight,
-                    contentColor = JetflixColors.TextPrimary,
-                    focusedContainerColor = JetflixColors.Red,
-                    focusedContentColor = JetflixColors.TextPrimary,
-                ),
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text("Use Quick Connect instead", style = JetflixType.body)
-            }
+
             }
         }
     }

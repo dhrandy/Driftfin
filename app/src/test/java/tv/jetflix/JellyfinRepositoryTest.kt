@@ -95,4 +95,16 @@ class JellyfinRepositoryTest {
         assertEquals(90_000L, 900_000_000L.ticksToMs())
         assertEquals(900_000_000L, 90_000L.msToTicks())
     }
+
+    @Test fun explicitLoginIdentityNeverCarriesOldSessionTokenAndCacheTracksIdentity() = runTest {
+        SessionManager.signIn(tv.jetflix.app.data.Session("https://old.invalid", "old", "old", "old-secret", "old-device"))
+        for (id in listOf("install-A", "install-A", "install-B")) {
+            server.enqueue(MockResponse().setBody("{}"))
+            repo.apiFor(base(), deviceId = id).getPublicSystemInfo()
+            val auth = server.takeRequest().getHeader("Authorization")!!
+            assertTrue(auth.contains("DeviceId=\"$id\""))
+            assertFalse(auth.contains("Token="))
+            assertFalse(auth.contains("old-secret"))
+        }
+    }
 }

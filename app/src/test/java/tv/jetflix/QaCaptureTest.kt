@@ -150,7 +150,7 @@ class QaCaptureTest {
         rule.setContent {
             CompositionLocalProvider(LocalTestArtwork provides { art(it) }) {
                 JetflixTheme {
-                    HomeContent(HomeUiState(loading = false, hero = base.first().copy(UserData = null), heroes = emptyList(), sections = sections),
+                    HomeContent(HomeUiState(loading = false, hero = base.first().copy(UserData = null), heroes = emptyList(), heroTrailers = mapOf(base.first().Id to tv.jetflix.app.data.TrailerSource.YouTube("abcdefghijk", "Demo")), sections = sections),
                         JellyfinRepository().apply { apiFor("http://demo.test") }, "demo", {}, {}, {}, {})
                 }
             }
