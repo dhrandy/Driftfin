@@ -1,4 +1,4 @@
-name: Build Jetflix
+name: Build Driftfin
 
 on:
   workflow_dispatch:

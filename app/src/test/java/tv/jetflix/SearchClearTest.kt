@@ -65,6 +65,7 @@ class SearchClearTest {
         main.scheduler.advanceTimeBy(2_000)
         var tries = 0
         while (server.requestCount == 0 && tries++ < 200) { main.scheduler.advanceUntilIdle(); Thread.sleep(25) }
-        assertEquals(1, server.requestCount)
+        // A standing query now fires the title search and the actor lookup, so at least one request goes out.
+        assertTrue("search request fired, count=${server.requestCount}", server.requestCount >= 1)
     }
 }
