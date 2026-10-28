@@ -11,7 +11,7 @@ Fixes:
 - Details pages keep more of the banner's upper artwork in frame (crop adjustment toward the top of the art).
 
 New:
-- Settings uses two columns, so every setting fits on screen without scrolling, and the two account buttons sit side by side at the bottom.
+- Settings uses two columns, so there's much less scrolling, and the two account buttons sit side by side at the bottom.
 - Home banner shows the age rating and community score under the title, above the description. Settings: "Age rating and score on Home" turns it off.
 - Search shows recommended movie and show rows before you type anything (your server's suggestions when it has them, otherwise top-rated unwatched). Settings: "Recommended rows on Search" turns it off.
 
