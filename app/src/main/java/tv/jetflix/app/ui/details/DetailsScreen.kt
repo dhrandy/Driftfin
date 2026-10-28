@@ -733,8 +733,9 @@ fun playLabel(target: BaseItemDto): String {
     return if (ep != null) "$verb $ep" else verb
 }
 
-/** Where the wide backdrop sits inside the fixed header box: centred, so the middle of the art is what shows. */
-val HeaderArtAlignment: Alignment = Alignment.Center
+/** Where the wide backdrop sits inside the fixed header box: anchored to the top of the art. Centring
+ *  clipped the top of the subject (heads/titles sit high in fanart) - Randy's Shrinking screenshot. */
+val HeaderArtAlignment: Alignment = Alignment.TopCenter
 
 /** Hollow star, for "not on the Watchlist yet": the material-icons core outlined star renders solid,
  *  so this is the Material star_border geometry (outer star with the inner star punched out). */

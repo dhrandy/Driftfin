@@ -4,6 +4,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -107,6 +109,10 @@ fun SettingsScreen(
         onToggleFormatBadges = { AppSettings.setFormatBadges(!AppSettings.formatBadges.value) },
         startupWall = AppSettings.startupWall.collectAsState().value,
         onToggleStartupWall = { AppSettings.setStartupWall(!AppSettings.startupWall.value) },
+        heroRatings = AppSettings.heroRatings.collectAsState().value,
+        onToggleHeroRatings = { AppSettings.setHeroRatings(!AppSettings.heroRatings.value) },
+        searchRecommendations = AppSettings.searchRecommendations.collectAsState().value,
+        onToggleSearchRecommendations = { AppSettings.setSearchRecommendations(!AppSettings.searchRecommendations.value) },
         liveBlur = AppSettings.liveBlur.collectAsState().value,
         onToggleLiveBlur = { AppSettings.setLiveBlur(!AppSettings.liveBlur.value) },
         buttonSound = AppSettings.buttonSound.collectAsState().value,
@@ -154,6 +160,10 @@ fun SettingsContent(
     onToggleStartupWall: () -> Unit = {},
     showWatchlist: Boolean = true,
     onToggleWatchlist: () -> Unit = {},
+    heroRatings: Boolean = true,
+    onToggleHeroRatings: () -> Unit = {},
+    searchRecommendations: Boolean = true,
+    onToggleSearchRecommendations: () -> Unit = {},
 ) {
     val menuBack = tv.jetflix.app.ui.components.rememberMenuBack()
     val first = remember { FocusRequester() }
@@ -162,50 +172,68 @@ fun SettingsContent(
     val openedBySweep = remember { tv.jetflix.app.ui.components.NavSweep.active }
     LaunchedEffect(Unit) { if (!openedBySweep) try { first.requestFocus() } catch (_: Exception) { } }
     Box(Modifier.fillMaxSize().background(JetflixColors.Background)) {
-        Column(
-            Modifier.align(Alignment.TopStart).fillMaxHeight().verticalScroll(rememberScrollState()).padding(start = 48.dp, top = 110.dp, bottom = 40.dp).width(760.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
-        ) {
+        val (uValue, uDetail) = updateTexts(update)
+        Column(Modifier.fillMaxSize().padding(start = 48.dp, end = 48.dp, top = 92.dp, bottom = 24.dp)) {
             Text("Settings", style = JetflixType.sectionTitle, color = JetflixColors.TextPrimary)
-            val (uValue, uDetail) = updateTexts(update)
-            SettingRow("Check for updates", uDetail, true, onUpdateClick, Modifier.focusRequester(first), valueText = uValue)
-            SettingRow("Autoplay next episode", "Starts the next episode after a 5 second countdown.", autoplay, onToggleAutoplay)
-            SettingRow("Show My List on Home", "My List uses your Jellyfin favorites for this user.", showMyList, onToggleMyList)
-            SettingRow("Watchlist", "Star movies and shows to watch later. Adds the star button on their pages and the Watchlist section under My Driftfin.", showWatchlist, onToggleWatchlist)
-            SettingRow("Poster size", "Small, Medium or Large cards on Home and in libraries. Press OK to change.", true, onCyclePosterSize, valueText = posterSize.label)
-            SettingRow("Continue Watching art", "Scene images (the wide look) or posters for the Continue Watching row. Press OK to change.", true, onToggleContinueWatchingPosters, valueText = if (continueWatchingPosters) "Posters" else "Scene images")
-            SettingRow("Title logos", "Shows a show's own title lettering on Home and Details when Jellyfin has it. Falls back to plain text.", titleLogos, onToggleTitleLogos)
-            SettingRow("HDR and Dolby Vision tags", "Shows HDR, HDR10, HDR10+ or Dolby Vision on a movie's Details page when the file says it has them. It shows what the file contains, not what your TV is outputting.", formatBadges, onToggleFormatBadges)
-            SettingRow("Cast while paused", "Shows the cast along the bottom when you pause. Press Down to pick an actor and OK to see their movies on your server.", pauseCast, onTogglePauseCast)
-            SettingRow("Skip Intro button", "Shows a Skip Intro button in the player when your Jellyfin server has marked an intro. It only skips when you press OK.", skipIntro, onToggleSkipIntro)
-            SettingRow("Poster wall on startup", "Shows the Driftfin poster wall while Home loads the first time. Off goes straight to the ordinary empty Home.", startupWall, onToggleStartupWall)
-            SettingRow("Button sound", "A quiet sound when you move and when you select. Press OK to try the next one.", true, onCycleButtonSound, valueText = buttonSound.label)
-            SettingRow("Live blur", "On is the normal look. Off swaps the live blur for a pre-softened picture, to see whether blur is what slows scrolling. Takes effect when you open the next screen.", liveBlur, onToggleLiveBlur)
-            SettingRow("Show Next Up on Home", "Jellyfin's next unwatched episode of series you follow.", showNextUp, onToggleNextUp)
-            Spacer(Modifier.padding(top = 8.dp))
+            Spacer(Modifier.height(10.dp))
+            // Two columns on a TV screen: playback and Home behavior on the left, the look of the app on the
+            // right. Down walks one column, Left/Right moves between them; the account actions stay pinned below.
+            Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
+                Column(
+                    Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    SettingRow("Check for updates", uDetail, true, onUpdateClick, Modifier.focusRequester(first), valueText = uValue)
+                    SettingRow("Autoplay next episode", "Starts the next episode after a 5 second countdown.", autoplay, onToggleAutoplay)
+                    SettingRow("Show My List on Home", "My List uses your Jellyfin favorites for this user.", showMyList, onToggleMyList)
+                    SettingRow("Watchlist", "Star movies and shows to watch later. Adds the star button on their pages and the Watchlist section under My Driftfin.", showWatchlist, onToggleWatchlist)
+                    SettingRow("Show Next Up on Home", "Jellyfin's next unwatched episode of series you follow.", showNextUp, onToggleNextUp)
+                    SettingRow("Cast while paused", "Shows the cast along the bottom when you pause. Press Down to pick an actor and OK to see their movies on your server.", pauseCast, onTogglePauseCast)
+                    SettingRow("Skip Intro button", "Shows a Skip Intro button in the player when your Jellyfin server has marked an intro. It only skips when you press OK.", skipIntro, onToggleSkipIntro)
+                    SettingRow("Poster wall on startup", "Shows the Driftfin poster wall while Home loads the first time. Off goes straight to the ordinary empty Home.", startupWall, onToggleStartupWall)
+                }
+                Column(
+                    Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    SettingRow("Poster size", "Small, Medium or Large cards on Home and in libraries. Press OK to change.", true, onCyclePosterSize, valueText = posterSize.label)
+                    SettingRow("Continue Watching art", "Scene images (the wide look) or posters for the Continue Watching row. Press OK to change.", true, onToggleContinueWatchingPosters, valueText = if (continueWatchingPosters) "Posters" else "Scene images")
+                    SettingRow("Title logos", "Shows a show's own title lettering on Home and Details when Jellyfin has it. Falls back to plain text.", titleLogos, onToggleTitleLogos)
+                    SettingRow("HDR and Dolby Vision tags", "Shows HDR, HDR10, HDR10+ or Dolby Vision on a movie's Details page when the file says it has them. It shows what the file contains, not what your TV is outputting.", formatBadges, onToggleFormatBadges)
+                    SettingRow("Age rating and score on Home", "Shows the age rating and community score under the title on the Home banner.", heroRatings, onToggleHeroRatings)
+                    SettingRow("Recommended rows on Search", "Shows recommended movies and shows on the Search page before you type.", searchRecommendations, onToggleSearchRecommendations)
+                    SettingRow("Button sound", "A quiet sound when you move and when you select. Press OK to try the next one.", true, onCycleButtonSound, valueText = buttonSound.label)
+                    SettingRow("Live blur", "On is the normal look. Off swaps the live blur for a pre-softened picture, to see whether blur is what slows scrolling. Takes effect when you open the next screen.", liveBlur, onToggleLiveBlur)
+                }
+            }
+            Spacer(Modifier.height(10.dp))
             Text(
                 "Signed in as ${userName ?: "-"}${if (serverUrl != null) " on $serverUrl" else ""}",
                 style = JetflixType.caption,
                 color = JetflixColors.TextSecondary,
             )
-            Button(
-                onClick = onSignOut,
-                colors = ButtonDefaults.colors(
-                    containerColor = JetflixColors.SurfaceLight.copy(alpha = 0.7f),
-                    contentColor = Color.White,
-                    focusedContainerColor = JetflixColors.Red,
-                    focusedContentColor = Color.White,
-                ),
-            ) { Text("Switch profile") }
-            Button(
-                onClick = onForgetProfile,
-                colors = ButtonDefaults.colors(
-                    containerColor = JetflixColors.SurfaceLight.copy(alpha = 0.7f),
-                    contentColor = Color.White,
-                    focusedContainerColor = JetflixColors.Red,
-                    focusedContentColor = Color.White,
-                ),
-            ) { Text("Sign out and forget this profile") }
+            Spacer(Modifier.height(8.dp))
+            // Account actions side by side: the pinned footer stays one row tall so both columns keep their room.
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Button(
+                    onClick = onSignOut,
+                    colors = ButtonDefaults.colors(
+                        containerColor = JetflixColors.SurfaceLight.copy(alpha = 0.7f),
+                        contentColor = Color.White,
+                        focusedContainerColor = JetflixColors.Red,
+                        focusedContentColor = Color.White,
+                    ),
+                ) { Text("Switch profile") }
+                Button(
+                    onClick = onForgetProfile,
+                    colors = ButtonDefaults.colors(
+                        containerColor = JetflixColors.SurfaceLight.copy(alpha = 0.7f),
+                        contentColor = Color.White,
+                        focusedContainerColor = JetflixColors.Red,
+                        focusedContentColor = Color.White,
+                    ),
+                ) { Text("Sign out and forget this profile") }
+            }
         }
         TopNavBar(
             solid = true,
@@ -226,6 +254,7 @@ internal fun SettingRow(title: String, detail: String, on: Boolean, onClick: () 
     Button(
         onClick = onClick,
         modifier = modifier.fillMaxWidth(),
+        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 10.dp),
         colors = ButtonDefaults.colors(
             containerColor = JetflixColors.Surface,
             contentColor = Color.White,

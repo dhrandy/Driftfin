@@ -28,6 +28,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
@@ -50,6 +51,8 @@ data class SearchUiState(
     val query: String = "",
     val searching: Boolean = false,
     val results: List<BaseItemDto> = emptyList(),
+    /** "Recommended movies"/"Recommended shows" rows for the idle page, posters only. */
+    val recommendations: List<Pair<String, List<BaseItemDto>>> = emptyList(),
 )
 
 class SearchViewModel(val repo: JellyfinRepository) : ViewModel() {
@@ -57,6 +60,42 @@ class SearchViewModel(val repo: JellyfinRepository) : ViewModel() {
     private val _state = MutableStateFlow(SearchUiState())
     val state = _state.asStateFlow()
     private var searchJob: Job? = null
+
+    init { loadRecommendations() }
+
+    /** Idle-page rows: Jellyfin's own suggestions when the server has them, else the top-rated unwatched with posters. */
+    fun loadRecommendations() {
+        if (!tv.jetflix.app.data.AppSettings.searchRecommendations.value) {
+            _state.value = _state.value.copy(recommendations = emptyList())
+            return
+        }
+        val session = SessionManager.session.value ?: return
+        viewModelScope.launch {
+            val api = repo.apiFor(session.serverUrl)
+            val movies = recommend(api, session.userId, "Movie")
+            val shows = recommend(api, session.userId, "Series")
+            _state.value = _state.value.copy(
+                recommendations = listOfNotNull(
+                    movies.takeIf { it.isNotEmpty() }?.let { "Recommended movies" to it },
+                    shows.takeIf { it.isNotEmpty() }?.let { "Recommended shows" to it },
+                ),
+            )
+        }
+    }
+
+    private suspend fun recommend(api: tv.jetflix.app.data.JellyfinApi, userId: String, type: String): List<BaseItemDto> {
+        val suggested = try {
+            api.getSuggestions(userId = userId, type = type, limit = 24).body()?.Items
+        } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (_: Exception) { null }
+        if (!suggested.isNullOrEmpty()) return suggested.filter { repo.posterUrl(it) != null }.take(20)
+        val fallback = try {
+            api.getItems(
+                userId = userId, includeItemTypes = type, recursive = true,
+                sortBy = "CommunityRating", sortOrder = "Descending", limit = 40, filters = "IsUnplayed",
+            ).body()?.Items
+        } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (_: Exception) { null }
+        return (fallback ?: emptyList()).filter { repo.posterUrl(it) != null }.take(20)
+    }
 
     fun onQueryChange(query: String) {
         _state.value = _state.value.copy(query = query)
@@ -193,6 +232,22 @@ fun SearchContent(
                         color = JetflixColors.TextSecondary,
                         modifier = Modifier.padding(48.dp),
                     )
+                }
+                state.recommendations.isNotEmpty() -> {
+                    Column(
+                        Modifier.fillMaxSize().verticalScroll(androidx.compose.foundation.rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(28.dp),
+                    ) {
+                        state.recommendations.forEach { (title, items) ->
+                            tv.jetflix.app.ui.components.MediaRow(
+                                title = title,
+                                items = items,
+                                wide = false,
+                                imageUrlFor = { repo.posterUrl(it) },
+                                onItemClick = onItemClick,
+                            )
+                        }
+                    }
                 }
                 else -> {
                     Text(

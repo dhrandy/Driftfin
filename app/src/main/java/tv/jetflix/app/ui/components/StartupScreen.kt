@@ -20,6 +20,9 @@ import tv.jetflix.app.R
 internal fun showStartupWall(loading: Boolean, hasContent: Boolean, initialLoadFinished: Boolean): Boolean =
     loading && !hasContent && !initialLoadFinished
 
+/** Randy 22:50: the wall stays up 3s on a cold start even when the library answers faster. */
+const val STARTUP_WALL_MIN_MS = 3000L
+
 /** Replaces the empty first Home composition, never login, playback or an already-visible Home refresh. */
 @Composable
 fun InitialHomeLoad(
@@ -29,9 +32,22 @@ fun InitialHomeLoad(
     content: @Composable () -> Unit,
 ) {
     var initialLoadFinished by remember { mutableStateOf(false) }
+    // Frame-clock timestamps, so the minimum is testable and follows the device clock, not wall time.
+    var wallShownAtNanos by remember { mutableStateOf<Long?>(null) }
+    LaunchedEffect(Unit) { androidx.compose.runtime.withFrameNanos { wallShownAtNanos = it } }
     LaunchedEffect(loading, hasContent) {
-        // Success, empty-library and error states all end the initial wall. No minimum display time.
-        if (!loading || hasContent) initialLoadFinished = true
+        // Success, empty-library and error states all end the initial wall - but no sooner than
+        // STARTUP_WALL_MIN_MS after the wall first composed. A slower load keeps the wall longer.
+        if (!loading || hasContent) {
+            val start = wallShownAtNanos
+            if (start != null) {
+                var now = start
+                androidx.compose.runtime.withFrameNanos { now = it }
+                val remaining = STARTUP_WALL_MIN_MS - (now - start) / 1_000_000
+                if (remaining > 0) kotlinx.coroutines.delay(remaining)
+            }
+            initialLoadFinished = true
+        }
     }
     if (enabled && showStartupWall(loading, hasContent, initialLoadFinished)) StartupScreen() else content()
 }

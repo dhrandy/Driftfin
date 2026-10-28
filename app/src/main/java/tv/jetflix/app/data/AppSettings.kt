@@ -45,6 +45,17 @@ object AppSettings {
     val skipIntro: StateFlow<Boolean> = _skipIntro
     fun setSkipIntro(v: Boolean) { _skipIntro.value = v; prefs?.edit()?.putBoolean("skip_intro", v)?.apply() }
 
+
+    /** Recommended movie and show rows on the Search page before anything is typed. On by default. */
+    private val _searchRecommendations = MutableStateFlow(true)
+    val searchRecommendations: StateFlow<Boolean> = _searchRecommendations
+    fun setSearchRecommendations(v: Boolean) { _searchRecommendations.value = v; prefs?.edit()?.putBoolean("search_recommendations", v)?.apply() }
+
+    /** Preview: age rating and community score beside More Info on the Home banner. On while previewed; hideable. */
+    private val _heroRatings = MutableStateFlow(true)
+    val heroRatings: StateFlow<Boolean> = _heroRatings
+    fun setHeroRatings(v: Boolean) { _heroRatings.value = v; prefs?.edit()?.putBoolean("hero_ratings", v)?.apply() }
+
     /** Poster wall while Home does its first load. On by default; off shows the ordinary empty Home right away. */
     private val _startupWall = MutableStateFlow(true)
     val startupWall: StateFlow<Boolean> = _startupWall
@@ -93,6 +104,8 @@ object AppSettings {
         _formatBadges.value = p.getBoolean("format_badges", true)
         _pauseCast.value = p.getBoolean("pause_cast", true)
         _startupWall.value = p.getBoolean("startup_wall", true)
+        _heroRatings.value = p.getBoolean("hero_ratings", true)
+        _searchRecommendations.value = p.getBoolean("search_recommendations", true)
         _buttonSound.value = tv.jetflix.app.ui.components.ButtonSound.values().firstOrNull { it.name == p.getString("button_sound", null) } ?: tv.jetflix.app.ui.components.ButtonSound.Off
         tv.jetflix.app.ui.components.ButtonSounds.style = _buttonSound.value
         _posterSize.value = PosterSize.values().firstOrNull { it.name == p.getString("poster_size", null) } ?: PosterSize.Medium

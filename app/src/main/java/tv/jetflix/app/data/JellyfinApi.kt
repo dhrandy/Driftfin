@@ -63,6 +63,13 @@ interface JellyfinApi {
         @Query("fields") fields: String = "Overview,Genres",
     ): Response<List<BaseItemDto>>
 
+    @GET("Items/Suggestions")
+    suspend fun getSuggestions(
+        @Query("userId") userId: String,
+        @Query("type") type: String,
+        @Query("limit") limit: Int? = null,
+    ): Response<BaseItemDtoQueryResult>
+
     @GET("Items")
     suspend fun getItems(
         @Query("userId") userId: String,

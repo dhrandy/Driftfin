@@ -34,9 +34,15 @@ class SearchClearTest {
         server = MockWebServer().apply { start() }
         server.enqueue(MockResponse().setBody("""{"Items":[]}"""))
         SessionManager.signIn(Session(server.url("/").toString().trimEnd('/'), "u1", "n", "t", "d"))
+        // Keep the idle-page recommendation load out of this test: it would fire its own HTTP
+        // requests on ViewModel init and break the request-count assertions for clear().
+        tv.jetflix.app.data.AppSettings.setSearchRecommendations(false)
     }
 
-    @After fun tearDown() { server.shutdown(); SessionManager.signOut(); Dispatchers.resetMain() }
+    @After fun tearDown() {
+        tv.jetflix.app.data.AppSettings.setSearchRecommendations(true)
+        server.shutdown(); SessionManager.signOut(); Dispatchers.resetMain()
+    }
 
     @Test fun clearEmptiesTheBarAndCancelsThePendingSearch() {
         val vm = SearchViewModel(JellyfinRepository())

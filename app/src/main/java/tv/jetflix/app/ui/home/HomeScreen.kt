@@ -3,12 +3,14 @@ package tv.jetflix.app.ui.home
 import tv.jetflix.app.ui.components.CountRecompose
 import kotlinx.coroutines.flow.collectLatest
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -17,6 +19,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Star
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.LaunchedEffect
@@ -505,6 +508,7 @@ fun HomeContent(
                         downFocus = if (state.sections.isNotEmpty()) firstRowFocus else null,
                         onFocused = { focusMemory.key = null },
                         onFocusChange = { heroHasFocus = it },
+                        showRatings = tv.jetflix.app.data.AppSettings.heroRatings.collectAsState().value,
                         modifier = Modifier
                             .padding(start = 16.dp, end = 16.dp, top = 62.dp, bottom = 10.dp)
                             .clip(androidx.compose.foundation.shape.RoundedCornerShape(20.dp)),
@@ -600,6 +604,7 @@ fun HeroBanner(
     onMoreInfo: (BaseItemDto) -> Unit,
     trailer: tv.jetflix.app.data.TrailerSource? = null,
     onTrailer: (tv.jetflix.app.data.TrailerSource) -> Unit = {},
+    showRatings: Boolean = false,
     playFocus: FocusRequester? = null,
     upFocus: FocusRequester? = null,
     downFocus: FocusRequester? = null,
@@ -662,6 +667,32 @@ fun HeroBanner(
                     title = hero.displayTitle(),
                     logoUrl = logoUrl,
                 )
+                if (showRatings && (hero.OfficialRating?.isNotBlank() == true || hero.CommunityRating != null)) {
+                    // Metadata line: age rating and community score below the title, above the description.
+                    Spacer(Modifier.height(8.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        hero.OfficialRating?.takeIf { it.isNotBlank() }?.let { rating ->
+                            Box(
+                                Modifier
+                                    .border(1.dp, JetflixColors.TextMuted, RoundedCornerShape(3.dp))
+                                    .padding(horizontal = 6.dp, vertical = 1.dp),
+                            ) {
+                                Text(rating, style = JetflixType.caption, color = JetflixColors.TextSecondary)
+                            }
+                            Spacer(Modifier.width(10.dp))
+                        }
+                        hero.CommunityRating?.let { rating ->
+                            Icon(
+                                Icons.Filled.Star,
+                                contentDescription = null,
+                                tint = JetflixColors.Red,
+                                modifier = Modifier.size(16.dp),
+                            )
+                            Spacer(Modifier.width(4.dp))
+                            Text("%.1f".format(rating), style = JetflixType.body, color = JetflixColors.TextSecondary)
+                        }
+                    }
+                }
                 Spacer(Modifier.height(10.dp))
                 hero.Overview?.let {
                     Text(

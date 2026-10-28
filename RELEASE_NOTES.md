@@ -4,6 +4,17 @@ Each build lists its real changes here. The CI release workflow copies the secti
 matching the build tag onto the GitHub release page and appends the standard
 automated-build footer.
 
+## build-27
+
+Fixes:
+- The startup poster wall now stays up at least 3 seconds on the first load, so it no longer flashes away before you can see it.
+- Details pages keep more of the banner's upper artwork in frame (crop adjustment toward the top of the art).
+
+New:
+- Settings uses two columns, so every setting fits on screen without scrolling, and the two account buttons sit side by side at the bottom.
+- Home banner shows the age rating and community score under the title, above the description. Settings: "Age rating and score on Home" turns it off.
+- Search shows recommended movie and show rows before you type anything (your server's suggestions when it has them, otherwise top-rated unwatched). Settings: "Recommended rows on Search" turns it off.
+
 ## build-26
 
 Fixes:

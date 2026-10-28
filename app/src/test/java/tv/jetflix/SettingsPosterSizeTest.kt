@@ -42,10 +42,12 @@ class SettingsPosterSizeTest {
         fun t(x: androidx.compose.ui.semantics.SemanticsNode): String? =
             x.config.getOrNull(androidx.compose.ui.semantics.SemanticsProperties.Text)?.firstOrNull()?.text ?: x.children.firstNotNullOfOrNull { t(it) }
         fun focusedText(): String = rule.onAllNodes(androidx.compose.ui.test.isFocused(), useUnmergedTree = true).fetchSemanticsNodes().firstOrNull()?.let { t(it) } ?: "none"
+        // Poster size heads the right column: move Right into that column, then Down to walk it.
         val seen = mutableListOf<String>()
+        key(Key.DirectionRight); seen += focusedText()
         repeat(6) { key(Key.DirectionDown); seen += focusedText() }
         println("SETTINGS_FOCUS_SEQ $seen")
-        while (!focusedText().startsWith("Poster size") && seen.size < 12) { key(Key.DirectionUp); seen += focusedText() }
+        while (!focusedText().startsWith("Poster size") && seen.size < 14) { key(Key.DirectionUp); seen += focusedText() }
         val idx = seen.indexOfFirst { it.startsWith("Poster size") }
         assertTrue("Poster size row reachable with D-pad, seq=$seen", idx >= 0)
         key(Key.DirectionDown); key(Key.DirectionUp)
