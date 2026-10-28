@@ -1,21 +1,15 @@
-MIT License
+Copyright (c) 2026 dhrandy. All rights reserved.
 
-Copyright (c) 2026 dhrandy
+This notice covers Driftfin's own original source code and original assets
+(the "Driftfin Work"). No license is granted to copy, modify, distribute,
+sublicense or sell the Driftfin Work in versions published after build 24,
+except as stated below.
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+Build 24 and earlier builds were published under the MIT License. That grant
+is unchanged for those builds. It does not extend to builds published after
+this notice.
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+This notice does not cover third-party components or artwork. Libraries
+included in the app keep their own licenses (see THIRD_PARTY_NOTICES.md).
+Third-party artwork, such as movie and show posters, belongs to its owners and
+is not licensed by this notice.

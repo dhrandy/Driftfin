@@ -4,7 +4,7 @@
 [![Build](https://github.com/dhrandy/Driftfin/actions/workflows/android.yml/badge.svg)](https://github.com/dhrandy/Driftfin/actions/workflows/android.yml)
 [![Latest release](https://img.shields.io/github/v/release/dhrandy/Driftfin?display_name=tag)](https://github.com/dhrandy/Driftfin/releases/latest)
 [![Downloads](https://img.shields.io/github/downloads/dhrandy/Driftfin/total)](https://github.com/dhrandy/Driftfin/releases)
-[![License: MIT](https://img.shields.io/github/license/dhrandy/Driftfin)](LICENSE)
+[![License: proprietary](https://img.shields.io/badge/license-proprietary-blue)](LICENSE)
 
 An Android TV client for your own Jellyfin server, with a TV-first layout (home rows, hero banner, My List, details, search, player). Not affiliated with Jellyfin.
 
@@ -67,4 +67,6 @@ The workflow in `.github/workflows/android.yml` builds a signed release APK from
 
 ## License
 
-MIT. See LICENSE. Driftfin is an independent project, not affiliated with Jellyfin.
+Copyright (c) 2026 dhrandy. All rights reserved. Driftfin's own code and original assets are proprietary for builds published after build 24; no open-source license is granted for them. Build 24 and earlier were published under MIT, and that grant is unchanged for those builds. Third-party libraries and artwork are not covered and keep their own terms; see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Driftfin is an independent project, not affiliated with Jellyfin.
+
+Movie and TV show posters belong to their respective copyright owners. Driftfin does not claim ownership of that artwork.
