@@ -4,6 +4,17 @@ Each build lists its real changes here. The CI release workflow copies the secti
 matching the build tag onto the GitHub release page and appends the standard
 automated-build footer.
 
+## build-32
+
+Fixes:
+- The Skip Intro prompt is now a compact dark button with a gray outline and white text, about 40% of its former width, instead of a large white pill. Pressing OK checks the live playback position at that moment, so a press right as the intro starts is not dropped.
+- Audio language and subtitle choices are remembered by language. New playback starts with English audio and subtitles Off unless you pick otherwise in the player panel; a pick is saved and reused for the next item and after restart. If the item has no English track, the player's default applies. For transcoded (HLS) playback the app asks the server for the preferred audio language and for no subtitle stream; whether the server honors that, and whether any subtitles are burned into the video, depends on the server and is not guaranteed.
+- The screensaver shows the full description. A long description scrolls slowly after a short pause and the next slide waits until it has been read.
+- Search headings read "Recommended Movies" and "Recommended Shows" with more space under the search bar.
+
+Changes:
+- Search also finds actors by name and shows them in an Actors row above the results. OK opens that actor's page.
+
 ## build-31
 
 Fixes:

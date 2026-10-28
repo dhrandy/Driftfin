@@ -41,6 +41,14 @@ object AppSettings {
     val pauseCast: StateFlow<Boolean> = _pauseCast
     fun setPauseCast(v: Boolean) { _pauseCast.value = v; prefs?.edit()?.putBoolean("pause_cast", v)?.apply() }
 
+    /** Remembered player track choice: audio language (default English) and subtitle language (null = off). */
+    var audioLanguage: String
+        get() = prefs?.getString("audio_language", null) ?: "eng"
+        set(v) { prefs?.edit()?.putString("audio_language", v)?.apply() }
+    var subtitleLanguage: String?
+        get() = prefs?.getString("subtitle_language", null)
+        set(v) { prefs?.edit()?.apply { if (v == null) remove("subtitle_language") else putString("subtitle_language", v) }?.apply() }
+
     private val _skipIntro = MutableStateFlow(true)
     val skipIntro: StateFlow<Boolean> = _skipIntro
     fun setSkipIntro(v: Boolean) { _skipIntro.value = v; prefs?.edit()?.putBoolean("skip_intro", v)?.apply() }

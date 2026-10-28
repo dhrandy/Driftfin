@@ -30,5 +30,9 @@ object SkipIntro {
                 positionMs < s.EndTicks / TICKS_PER_MS - MIN_REMAINING_MS
         }
 
+    /** The segment OK would skip right now: needs the setting on, nothing covering the player, and the playhead inside an intro. */
+    fun available(enabled: Boolean, covered: Boolean, segments: List<MediaSegmentDto>, positionMs: Long): MediaSegmentDto? =
+        if (enabled && !covered) active(segments, positionMs) else null
+
     fun endMs(segment: MediaSegmentDto): Long = segment.EndTicks / TICKS_PER_MS
 }

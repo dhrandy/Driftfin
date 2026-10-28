@@ -136,6 +136,7 @@ fun PlayerScreen(
         ExoPlayer.Builder(context)
             .setMediaSourceFactory(DefaultMediaSourceFactory(dataSourceFactory))
             .build()
+            .also { it.trackSelectionParameters = TrackPrefs(tv.jetflix.app.data.AppSettings.audioLanguage, tv.jetflix.app.data.AppSettings.subtitleLanguage).apply(it.trackSelectionParameters) }
     }
 
     var playbackError by remember { mutableStateOf<String?>(null) }
@@ -175,11 +176,25 @@ fun PlayerScreen(
     LaunchedEffect(item.Id, transcodeRetry) {
         val startTicks = if (transcodeRetry) retryResumeMs * 10_000 else item.UserData?.PlaybackPositionTicks ?: 0L
         val choice = try {
-            val resp = api.getPlaybackInfo(
+            val caps = tv.jetflix.app.data.CodecSupport.detect()
+            val audioLang = tv.jetflix.app.data.AppSettings.audioLanguage
+            val subsOff = tv.jetflix.app.data.AppSettings.subtitleLanguage == null
+            var resp = api.getPlaybackInfo(
                 item.Id,
                 session.userId,
-                tv.jetflix.app.data.PlaybackNegotiator.playbackInfoBody(session.userId, startTicks, tv.jetflix.app.data.CodecSupport.detect(), forceTranscode = transcodeRetry),
+                tv.jetflix.app.data.PlaybackNegotiator.playbackInfoBody(session.userId, startTicks, caps, forceTranscode = transcodeRetry, subtitlesOff = subsOff),
             )
+            // A server transcode carries one audio stream: if it picked another language, ask again for the saved one.
+            tv.jetflix.app.data.PlaybackNegotiator.audioRetry(resp.body(), audioLang)?.let { (sourceId, index) ->
+                try {
+                    val again = api.getPlaybackInfo(
+                        item.Id,
+                        session.userId,
+                        tv.jetflix.app.data.PlaybackNegotiator.playbackInfoBody(session.userId, startTicks, caps, forceTranscode = transcodeRetry, audioStreamIndex = index, mediaSourceId = sourceId, subtitlesOff = subsOff),
+                    )
+                    if (again.isSuccessful) resp = again
+                } catch (_: Exception) { }
+            }
             if (!resp.isSuccessful) {
                 tv.jetflix.app.data.PlaybackChoice.Unplayable("The server refused playback (HTTP ${resp.code()}).")
             } else {
@@ -224,9 +239,16 @@ fun PlayerScreen(
     LaunchedEffect(item.Id) {
         introSegments = try { api.getMediaSegments(item.Id).body()?.Items.orEmpty() } catch (_: Exception) { emptyList() }
     }
-    val skipSegment = if (skipIntroEnabled && upNext == null && !panelOpen) {
-        tv.jetflix.app.data.SkipIntro.active(introSegments, positionTicks / 10_000)
-    } else null
+    // The prompt follows the live playhead (4x a second), not the once-a-second progress poll, so it shows and works at the segment start.
+    var livePositionMs by remember { mutableLongStateOf(0L) }
+    LaunchedEffect(introSegments) {
+        if (introSegments.isEmpty()) return@LaunchedEffect
+        while (isActive) {
+            livePositionMs = player.currentPosition
+            delay(250L)
+        }
+    }
+    val skipSegment = tv.jetflix.app.data.SkipIntro.available(skipIntroEnabled, upNext != null || panelOpen, introSegments, livePositionMs)
 
     // Poll player state + report progress every 10s.
     LaunchedEffect(Unit) {
@@ -332,7 +354,12 @@ fun PlayerScreen(
                         KeyEvent.KEYCODE_DPAD_UP -> panelIndex = (panelIndex - 1).coerceAtLeast(0)
                         KeyEvent.KEYCODE_DPAD_DOWN -> panelIndex = (panelIndex + 1).coerceAtMost((panelOptions.size - 1).coerceAtLeast(0))
                         KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER -> {
-                            panelOptions.getOrNull(panelIndex)?.let { TrackCycler.apply(player, it) }
+                            panelOptions.getOrNull(panelIndex)?.let {
+                                TrackCycler.apply(player, it)
+                                val saved = TrackPrefs(tv.jetflix.app.data.AppSettings.audioLanguage, tv.jetflix.app.data.AppSettings.subtitleLanguage).after(it, TrackCycler::languageOf)
+                                tv.jetflix.app.data.AppSettings.audioLanguage = saved.audioLanguage
+                                tv.jetflix.app.data.AppSettings.subtitleLanguage = saved.subtitleLanguage
+                            }
                             panelOptions = TrackCycler.options(player)
                         }
                         KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_BACK -> panelOpen = false
@@ -341,9 +368,9 @@ fun PlayerScreen(
                 }
                 when (nativeEvent.keyCode) {
                     KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER -> {
-                        when (PlayerKeys.centerAction(skipSegment != null, nativeEvent.repeatCount)) {
-                            PlayerKeys.CenterAction.SkipIntro -> skipSegment?.let { player.seekTo(tv.jetflix.app.data.SkipIntro.endMs(it)) }
-                            PlayerKeys.CenterAction.TogglePlayback -> { controlsVisible = true; PlayerKeys.togglePlayback(player) }
+                        when (PlayerKeys.pressOk(player, introSegments, skipIntroEnabled, upNext != null || panelOpen, nativeEvent.repeatCount)) {
+                            PlayerKeys.CenterAction.SkipIntro -> livePositionMs = player.currentPosition
+                            PlayerKeys.CenterAction.TogglePlayback -> controlsVisible = true
                             PlayerKeys.CenterAction.Ignore -> Unit
                         }
                         true
@@ -674,12 +701,15 @@ internal fun shouldKeepScreenOn(playWhenReady: Boolean, playbackState: Int): Boo
 /** The bottom-right prompt. OK is handled by the player's key handler; this only shows what OK will do. */
 @Composable
 fun SkipIntroPrompt(modifier: Modifier = Modifier) {
+    // Same dark translucent surface and white text as the player's other overlays; small enough to sit with the controls.
     androidx.tv.material3.Text(
-        text = "Skip Intro  (press OK)",
-        color = Color.Black,
+        text = "Skip Intro",
+        style = JetflixType.caption,
+        color = Color.White,
         modifier = modifier
-            .background(Color.White, androidx.compose.foundation.shape.RoundedCornerShape(8.dp))
-            .padding(horizontal = 24.dp, vertical = 14.dp),
+            .background(Color.Black.copy(alpha = 0.85f), androidx.compose.foundation.shape.RoundedCornerShape(6.dp))
+            .border(1.dp, JetflixColors.TextSecondary, androidx.compose.foundation.shape.RoundedCornerShape(6.dp))
+            .padding(horizontal = 14.dp, vertical = 7.dp),
     )
 }
 

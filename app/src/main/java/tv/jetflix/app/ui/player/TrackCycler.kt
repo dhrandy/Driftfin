@@ -81,6 +81,11 @@ object TrackCycler {
         return out
     }
 
+    /** Language of the track behind [option], or null for Off/speed rows or an unlabeled track. */
+    fun languageOf(option: Option): String? =
+        option.group?.takeIf { option.index in 0 until it.length }?.getTrackFormat(option.index)?.language
+            ?.takeIf { it.isNotBlank() && it != "und" }
+
     fun apply(player: Player, option: Option) {
         if (option.type == TYPE_SPEED) { player.setPlaybackSpeed(option.index / 100f); return }
         val params = player.trackSelectionParameters.buildUpon()

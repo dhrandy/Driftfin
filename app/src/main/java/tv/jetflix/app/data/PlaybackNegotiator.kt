@@ -200,8 +200,15 @@ object PlaybackNegotiator {
         startTicks: Long,
         caps: CodecSupport = CodecSupport.Conservative,
         forceTranscode: Boolean = false,
+        audioStreamIndex: Int? = null,
+        mediaSourceId: String? = null,
+        subtitlesOff: Boolean = false,
     ): JsonObject = buildJsonObject {
         put("UserId", userId)
+        mediaSourceId?.let { put("MediaSourceId", it) }
+        audioStreamIndex?.let { put("AudioStreamIndex", it) }
+        // -1 asks the server for no subtitle stream, so a transcode never burns one in.
+        if (subtitlesOff) put("SubtitleStreamIndex", -1)
         put("StartTimeTicks", startTicks)
         put("EnableDirectPlay", !forceTranscode)
         put("EnableDirectStream", !forceTranscode)
@@ -211,6 +218,31 @@ object PlaybackNegotiator {
         }
         put("MaxStreamingBitrate", MAX_STREAMING_BITRATE)
         put("DeviceProfile", deviceProfile(caps, forceTranscode))
+    }
+
+    private fun sameLanguage(a: String?, b: String?): Boolean {
+        if (a.isNullOrBlank() || b.isNullOrBlank()) return false
+        return androidx.media3.common.util.Util.normalizeLanguageCode(a) == androidx.media3.common.util.Util.normalizeLanguageCode(b)
+    }
+
+    /** The audio stream index the server transcode will use: the one named in its TranscodingUrl, else its default. */
+    internal fun transcodeAudioIndex(source: MediaSourceInfo): Int? =
+        source.TranscodingUrl?.let { Regex("[?&]AudioStreamIndex=(\\d+)", RegexOption.IGNORE_CASE).find(it)?.groupValues?.get(1)?.toIntOrNull() }
+            ?: source.DefaultAudioStreamIndex
+
+    /**
+     * When the server would transcode (HLS carries only one audio stream) and an audio track in [language] exists but is not the
+     * one the server picked, returns the (source id, stream index) to ask for in a second PlaybackInfo call. Direct play keeps
+     * every track, so nothing to ask there.
+     */
+    fun audioRetry(info: PlaybackInfoResponse?, language: String): Pair<String, Int>? {
+        val source = info?.MediaSources.orEmpty()
+            .firstOrNull { it.SupportsDirectPlay == true || it.SupportsDirectStream == true || (it.SupportsTranscoding == true && !it.TranscodingUrl.isNullOrBlank()) }
+            ?: return null
+        if (source.SupportsDirectPlay == true || source.SupportsDirectStream == true) return null
+        val wanted = source.MediaStreams.firstOrNull { it.Type == "Audio" && it.Index != null && sameLanguage(it.Language, language) }?.Index ?: return null
+        val id = source.Id ?: return null
+        return if (wanted == transcodeAudioIndex(source)) null else id to wanted
     }
 
     private fun cond(condition: String, property: String, value: String) = buildJsonObject {

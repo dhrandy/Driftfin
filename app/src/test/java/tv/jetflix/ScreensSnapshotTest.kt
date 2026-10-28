@@ -107,4 +107,31 @@ class ScreensSnapshotTest {
             }
         }
     }
+
+    @Test fun searchActors() {
+        paparazzi.snapshot(name = "search_actors") {
+            CompositionLocalProvider(LocalTestArtwork provides { art(it) }) {
+                tv.jetflix.app.ui.theme.JetflixTheme {
+                    val people = listOf("Tom Hanks", "Tom Hardy", "Tom Holland").mapIndexed { i, n -> tv.jetflix.app.data.BaseItemDto(Id = "p$i", Name = n, Type = "Person") }
+                    tv.jetflix.app.ui.search.SearchContent(
+                        tv.jetflix.app.ui.search.SearchUiState(query = "tom", people = people, results = items.take(6)),
+                        repo(), "demo", {}, {}, {}, {}, {},
+                    )
+                }
+            }
+        }
+    }
+
+    @Test fun searchRecommendedHeadings() {
+        paparazzi.snapshot(name = "search_recommended") {
+            CompositionLocalProvider(LocalTestArtwork provides { art(it) }) {
+                tv.jetflix.app.ui.theme.JetflixTheme {
+                    tv.jetflix.app.ui.search.SearchContent(
+                        tv.jetflix.app.ui.search.SearchUiState(recommendations = listOf("Recommended Movies" to items.take(6), "Recommended Shows" to items.takeLast(6))),
+                        repo(), "demo", {}, {}, {}, {}, {},
+                    )
+                }
+            }
+        }
+    }
 }

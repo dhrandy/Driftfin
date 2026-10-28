@@ -343,6 +343,7 @@ fun JetflixRoot() {
                 onTabSelected = onTabSelected,
                 onItemClick = { push(Screen.Details(it.seriesOrSelfId())) },
                 onUserClick = onUserClick,
+                onActorClick = { id, name -> push(Screen.Actor(id, name)) },
             )
         }
         is Screen.Details -> {

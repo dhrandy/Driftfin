@@ -54,6 +54,15 @@ interface JellyfinApi {
         @Query("fields") fields: String = "Overview,Genres",
     ): Response<BaseItemDtoQueryResult>
 
+    /** People (actors) in the library whose name matches [searchTerm]. */
+    @GET("Persons")
+    suspend fun searchPersons(
+        @Query("userId") userId: String,
+        @Query("searchTerm") searchTerm: String,
+        @Query("limit") limit: Int = 12,
+        @Query("personTypes") personTypes: String = "Actor",
+    ): Response<BaseItemDtoQueryResult>
+
     @GET("Items/Latest")
     suspend fun getLatest(
         @Query("userId") userId: String,

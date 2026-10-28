@@ -116,6 +116,27 @@ object PlayerKeys {
         else -> CenterAction.TogglePlayback
     }
 
+    /**
+     * What OK does right now, decided from the player's position at the press: skip an active intro, pause/play, or nothing
+     * for a held key. Performs the action and returns it so the caller can react (show controls, remember the new position).
+     */
+    fun pressOk(
+        player: Player,
+        segments: List<tv.jetflix.app.data.MediaSegmentDto>,
+        skipEnabled: Boolean,
+        covered: Boolean,
+        repeatCount: Int,
+    ): CenterAction {
+        val segment = tv.jetflix.app.data.SkipIntro.available(skipEnabled, covered, segments, player.currentPosition)
+        val action = centerAction(segment != null, repeatCount)
+        when (action) {
+            CenterAction.SkipIntro -> segment?.let { player.seekTo(tv.jetflix.app.data.SkipIntro.endMs(it)) }
+            CenterAction.TogglePlayback -> togglePlayback(player)
+            CenterAction.Ignore -> Unit
+        }
+        return action
+    }
+
     /** Pause when the player is meant to be playing (even if still buffering); otherwise play, restarting if ended. */
     fun togglePlayback(player: Player) {
         if (player.playWhenReady && player.playbackState != Player.STATE_ENDED) {

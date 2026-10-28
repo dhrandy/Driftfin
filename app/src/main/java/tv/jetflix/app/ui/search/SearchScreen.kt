@@ -22,6 +22,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.input.ImeAction
@@ -51,7 +52,9 @@ data class SearchUiState(
     val query: String = "",
     val searching: Boolean = false,
     val results: List<BaseItemDto> = emptyList(),
-    /** "Recommended movies"/"Recommended shows" rows for the idle page, posters only. */
+    /** Actors whose name matches the query. */
+    val people: List<BaseItemDto> = emptyList(),
+    /** "Recommended Movies"/"Recommended Shows" rows for the idle page, posters only. */
     val recommendations: List<Pair<String, List<BaseItemDto>>> = emptyList(),
 )
 
@@ -76,8 +79,8 @@ class SearchViewModel(val repo: JellyfinRepository) : ViewModel() {
             val shows = recommend(api, session.userId, "Series")
             _state.value = _state.value.copy(
                 recommendations = listOfNotNull(
-                    movies.takeIf { it.isNotEmpty() }?.let { "Recommended movies" to it },
-                    shows.takeIf { it.isNotEmpty() }?.let { "Recommended shows" to it },
+                    movies.takeIf { it.isNotEmpty() }?.let { "Recommended Movies" to it },
+                    shows.takeIf { it.isNotEmpty() }?.let { "Recommended Shows" to it },
                 ),
             )
         }
@@ -101,7 +104,7 @@ class SearchViewModel(val repo: JellyfinRepository) : ViewModel() {
         _state.value = _state.value.copy(query = query)
         searchJob?.cancel()
         if (query.isBlank()) {
-            _state.value = _state.value.copy(results = emptyList(), searching = false)
+            _state.value = _state.value.copy(results = emptyList(), people = emptyList(), searching = false)
             return
         }
         searchJob = viewModelScope.launch {
@@ -127,6 +130,9 @@ class SearchViewModel(val repo: JellyfinRepository) : ViewModel() {
         val api = repo.apiFor(session.serverUrl)
         _state.value = _state.value.copy(searching = true)
         try {
+            val people = try {
+                api.searchPersons(userId = session.userId, searchTerm = query).body()?.Items.orEmpty().filter { it.Name != null }
+            } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (_: Exception) { emptyList() }
             val results = api.getItems(
                 userId = session.userId,
                 searchTerm = query,
@@ -135,7 +141,7 @@ class SearchViewModel(val repo: JellyfinRepository) : ViewModel() {
                 sortBy = "SortName",
                 limit = 60,
             ).body()?.Items ?: emptyList()
-            _state.value = _state.value.copy(searching = false, results = results)
+            _state.value = _state.value.copy(searching = false, results = results, people = people)
         } catch (_: Exception) {
             _state.value = _state.value.copy(searching = false)
         }
@@ -149,6 +155,7 @@ fun SearchScreen(
     onTabSelected: (JetflixTab) -> Unit,
     onItemClick: (BaseItemDto) -> Unit,
     onUserClick: () -> Unit,
+    onActorClick: (String, String) -> Unit = { _, _ -> },
 ) {
     val state by viewModel.state.collectAsState()
     SearchContent(
@@ -160,6 +167,7 @@ fun SearchScreen(
         onTabSelected = onTabSelected,
         onItemClick = onItemClick,
         onUserClick = onUserClick,
+        onActorClick = onActorClick,
     )
 }
 
@@ -173,11 +181,14 @@ fun SearchContent(
     onTabSelected: (JetflixTab) -> Unit,
     onItemClick: (BaseItemDto) -> Unit,
     onUserClick: () -> Unit,
+    onActorClick: (String, String) -> Unit = { _, _ -> },
 ) {
     // Back from Search goes straight to the page you came from (handled by the app), not to the menu first.
     val menuBack = remember { tv.jetflix.app.ui.components.MenuBack() }
     var fieldFocused by remember { mutableStateOf(false) }
     val fieldFocus = remember { androidx.compose.ui.focus.FocusRequester() }
+    val firstActorFocus = remember { androidx.compose.ui.focus.FocusRequester() }
+    val hasActors = state.people.isNotEmpty()
     // Captured at composition: arriving by a tab sweep keeps focus on the tab until Down or OK (NavSweep is
     // cleared by the handoff, so reading it live here races and either steals focus or defers it forever).
     val openedBySweep = remember { tv.jetflix.app.ui.components.NavSweep.active }
@@ -196,6 +207,7 @@ fun SearchContent(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 48.dp)
+                    .focusProperties { if (hasActors) down = firstActorFocus }
                     .focusRequester(fieldFocus)
                     .onFocusChanged { fieldFocused = it.isFocused }
                     .background(JetflixColors.SurfaceLight, RoundedCornerShape(4.dp))
@@ -207,7 +219,7 @@ fun SearchContent(
                     .padding(horizontal = 14.dp, vertical = 12.dp),
             )
             when {
-                state.results.isNotEmpty() -> {
+                state.results.isNotEmpty() || state.people.isNotEmpty() -> {
                     LazyVerticalGrid(
                         columns = GridCells.Fixed(6),
                         modifier = Modifier.fillMaxSize(),
@@ -215,6 +227,24 @@ fun SearchContent(
                         horizontalArrangement = Arrangement.spacedBy(14.dp),
                         verticalArrangement = Arrangement.spacedBy(18.dp),
                     ) {
+                        if (state.people.isNotEmpty()) {
+                            item(key = "actors", span = { androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan) }) {
+                                Column {
+                                    Text("Actors", style = JetflixType.sectionTitle, color = JetflixColors.TextPrimary, modifier = Modifier.padding(bottom = 10.dp))
+                                    androidx.compose.foundation.lazy.LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(vertical = 6.dp)) {
+                                        state.people.forEachIndexed { idx, p -> item(key = p.Id) {
+                                          Box(if (idx == 0) Modifier.focusRequester(firstActorFocus) else Modifier) {
+                                            tv.jetflix.app.ui.details.CastChip(
+                                                person = tv.jetflix.app.data.BaseItemPerson(Name = p.Name, Id = p.Id, PrimaryImageTag = p.ImageTags["Primary"]),
+                                                imageUrl = repo.personImageUrl(tv.jetflix.app.data.BaseItemPerson(Name = p.Name, Id = p.Id, PrimaryImageTag = p.ImageTags["Primary"])),
+                                                onClick = { onActorClick(p.Id, p.Name.orEmpty()) },
+                                            )
+                                          }
+                                        } }
+                                    }
+                                }
+                            }
+                        }
                         items(state.results, key = { it.Id }) { item ->
                             PosterCard(
                                 item = item,
@@ -235,7 +265,7 @@ fun SearchContent(
                 }
                 state.recommendations.isNotEmpty() -> {
                     Column(
-                        Modifier.fillMaxSize().verticalScroll(androidx.compose.foundation.rememberScrollState()),
+                        Modifier.fillMaxSize().verticalScroll(androidx.compose.foundation.rememberScrollState()).padding(top = 28.dp),
                         verticalArrangement = Arrangement.spacedBy(28.dp),
                     ) {
                         state.recommendations.forEach { (title, items) ->

@@ -28,6 +28,7 @@ import tv.jetflix.app.ui.search.SearchViewModel
 class SearchRecommendationsTest {
     private lateinit var server: MockWebServer
     private var suggestionsCode = 200
+    private val personTerms = mutableListOf<String>()
 
     private fun item(id: String, type: String, tag: String?) =
         """{"Id":"$id","Name":"$id","Type":"$type"${if (tag != null) ""","ImageTags":{"Primary":"$tag"}""" else ""}}"""
@@ -51,6 +52,10 @@ class SearchRecommendationsTest {
                             }
                             MockResponse().setBody(body)
                         }
+                        path.startsWith("/Persons") -> {
+                            personTerms += request.requestUrl!!.queryParameter("searchTerm") ?: ""
+                            MockResponse().setBody("""{"Items":[{"Id":"p1","Name":"Tom Actor","Type":"Person","ImageTags":{"Primary":"pt"}}]}""")
+                        }
                         path.startsWith("/Items") -> MockResponse().setBody("""{"Items":[${item("top1", "Movie", "t3")},${item("top2", "Movie", "t4")}]}""")
                         else -> MockResponse().setResponseCode(404)
                     }
@@ -72,7 +77,7 @@ class SearchRecommendationsTest {
         val v = SearchViewModel(JellyfinRepository())
         awaitRows(v)
         val rows = v.state.value.recommendations
-        assertEquals(listOf("Recommended movies", "Recommended shows"), rows.map { it.first })
+        assertEquals(listOf("Recommended Movies", "Recommended Shows"), rows.map { it.first })
         assertEquals(listOf("m1"), rows[0].second.map { it.Id }) // m2 has no poster and is dropped
         assertEquals(listOf("s1"), rows[1].second.map { it.Id })
     }
@@ -82,7 +87,7 @@ class SearchRecommendationsTest {
         val v = SearchViewModel(JellyfinRepository())
         awaitRows(v)
         val rows = v.state.value.recommendations
-        assertEquals(listOf("Recommended movies", "Recommended shows"), rows.map { it.first })
+        assertEquals(listOf("Recommended Movies", "Recommended Shows"), rows.map { it.first })
         assertEquals(listOf("top1", "top2"), rows[0].second.map { it.Id })
     }
 
@@ -91,5 +96,27 @@ class SearchRecommendationsTest {
         val v = SearchViewModel(JellyfinRepository())
         Thread.sleep(300)
         assertTrue(v.state.value.recommendations.isEmpty())
+    }
+
+    @Test fun searchFindsActorsByNameAlongsideTitles() {
+        val v = SearchViewModel(JellyfinRepository())
+        awaitRows(v)
+        v.onQueryChange("tom"); v.searchNow()
+        val end = System.currentTimeMillis() + 5000
+        while (v.state.value.people.isEmpty() && System.currentTimeMillis() < end) Thread.sleep(20)
+        assertEquals(listOf("p1"), v.state.value.people.map { it.Id })
+        assertEquals("tom", personTerms.last())
+        assertTrue("title results still come back", v.state.value.results.isNotEmpty())
+        assertEquals("tom", v.state.value.query)
+    }
+
+    @Test fun clearingTheQueryClearsActors() {
+        val v = SearchViewModel(JellyfinRepository())
+        awaitRows(v)
+        v.onQueryChange("tom"); v.searchNow()
+        val end = System.currentTimeMillis() + 5000
+        while (v.state.value.people.isEmpty() && System.currentTimeMillis() < end) Thread.sleep(20)
+        v.onQueryChange("")
+        assertTrue(v.state.value.people.isEmpty() && v.state.value.results.isEmpty())
     }
 }
