@@ -107,6 +107,7 @@ class LibraryViewModel(val repo: JellyfinRepository, private val store: LibraryP
     private var sort = LibrarySort.Name
     private var reversed = false
     private var section = MySection.Favorites
+    private var loadJob: kotlinx.coroutines.Job? = null
     private var bannerTab: JetflixTab? = null
     private var libraryId: String? = null
     private var knownLibraries = emptyList<Pair<String, String>>()
@@ -156,7 +157,7 @@ class LibraryViewModel(val repo: JellyfinRepository, private val store: LibraryP
     /** Genre and year choices come from the server's own list for the whole library, never from the filtered items. */
     private suspend fun loadOptions(tab: JetflixTab, api: tv.jetflix.app.data.JellyfinApi, userId: String, parents: List<String?>, types: String) {
         if (knownGenres.isNotEmpty() || knownYears.isNotEmpty()) return
-        val all = parents.mapNotNull { p -> try { api.getItemFilters(userId, p, types).body() } catch (_: Exception) { null } }
+        val all = parents.mapNotNull { p -> try { api.getItemFilters(userId, p, types).body() } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (_: Exception) { null } }
         knownGenres = all.flatMap { it.Genres }.distinct().sorted()
         knownYears = all.flatMap { it.Years }.distinct().sortedDescending()
     }
@@ -214,7 +215,9 @@ class LibraryViewModel(val repo: JellyfinRepository, private val store: LibraryP
         val api = repo.apiFor(session.serverUrl)
         restorePrefs(session.userId, tab)
         val includeTypes = if (tab == JetflixTab.MOVIES) "Movie" else "Series"
-        viewModelScope.launch {
+        // Hover-switching sections fires a load per focus step; only the latest may write state.
+        loadJob?.cancel()
+        loadJob = viewModelScope.launch {
             if (_state.value.items.isEmpty()) _state.value = fresh(loading = true)
             try {
                 val inCollection = collectionId
@@ -315,7 +318,7 @@ class LibraryViewModel(val repo: JellyfinRepository, private val store: LibraryP
                                     userId = session.userId, parentId = view.Id, includeItemTypes = "Episode",
                                     recursive = true, is4K = true, fields = "", enableImages = false, enableUserData = false, limit = 4000,
                                 ).body()?.Items?.mapNotNull { it.SeriesId }?.toSet()
-                            } catch (_: Exception) { null }
+                            } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (_: Exception) { null }
                         }
                     }.map { it.await() }
                     if (perLib.any { it == null }) {
@@ -332,6 +335,8 @@ class LibraryViewModel(val repo: JellyfinRepository, private val store: LibraryP
                 loadOptions(tab, api, session.userId, wanted.map { it.Id }, includeTypes)
                 if (dropStaleFilters()) { save(tab); load(tab); return@launch }
                 _state.value = fresh(items = merged)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e // a stale hover-switch load dies quietly; only the latest writes state
             } catch (e: Exception) {
                 _state.value = fresh(error = "Couldn't load (${e.javaClass.simpleName})")
             }
@@ -550,8 +555,12 @@ fun LibraryContent(
                             MySection.values().filter { it != MySection.Watchlist || showWatchlistSection }.forEach { sec ->
                                 val selected = sec == state.section
                                 androidx.tv.material3.Button(
-                                    onClick = { onSection(sec) },
-                                    modifier = if (selected) Modifier.focusRequester(sectionFocus) else Modifier,
+                                    // Sections switch as focus moves across them, like the top tabs, so by the
+                                    // time OK is pressed the section is already selected: OK is a no-op (it
+                                    // would double-fire the same load).
+                                    onClick = { },
+                                    modifier = (if (selected) Modifier.focusRequester(sectionFocus) else Modifier)
+                                        .onFocusChanged { if (it.isFocused) onSection(sec) },
                                     colors = androidx.tv.material3.ButtonDefaults.colors(
                                         containerColor = if (selected) androidx.compose.ui.graphics.Color(0xFF3A3A3A) else androidx.compose.ui.graphics.Color.Transparent,
                                         contentColor = androidx.compose.ui.graphics.Color.White,

@@ -9,6 +9,16 @@ data class AuthenticateUserByName(
 )
 
 @Serializable
+data class QuickConnectState(
+    val Authenticated: Boolean = false,
+    val Secret: String? = null,
+    val Code: String? = null,
+)
+
+@Serializable
+data class QuickConnectAuth(val Secret: String)
+
+@Serializable
 data class AuthenticationResult(
     val User: UserDto? = null,
     val SessionInfo: SessionInfoDto? = null,

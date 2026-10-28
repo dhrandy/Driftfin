@@ -50,7 +50,14 @@ fun SettingsScreen(
     val nextUp by AppSettings.showNextUp.collectAsState()
     val context = androidx.compose.ui.platform.LocalContext.current
     val scope = androidx.compose.runtime.rememberCoroutineScope()
-    var update by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<tv.jetflix.app.update.UpdateUi>(tv.jetflix.app.update.UpdateUi.Idle) }
+    // Opens on "Download" when the startup notice already found the build, so installing is one OK
+    // press; without a known update the row still checks first and downloads on the second press.
+    var update by androidx.compose.runtime.remember {
+        androidx.compose.runtime.mutableStateOf<tv.jetflix.app.update.UpdateUi>(
+            tv.jetflix.app.update.UpdateNoticeState.available?.let { tv.jetflix.app.update.UpdateUi.Available(it) }
+                ?: tv.jetflix.app.update.UpdateUi.Idle,
+        )
+    }
     val flow = remember {
         tv.jetflix.app.update.UpdateFlow(
             updater = tv.jetflix.app.update.Updater(),
@@ -102,7 +109,6 @@ fun SettingsScreen(
         onToggleStartupWall = { AppSettings.setStartupWall(!AppSettings.startupWall.value) },
         liveBlur = AppSettings.liveBlur.collectAsState().value,
         onToggleLiveBlur = { AppSettings.setLiveBlur(!AppSettings.liveBlur.value) },
-        onStartFrameTest = { (context as? android.app.Activity)?.let { tv.jetflix.app.ui.components.FrameStats.start(it) } },
         buttonSound = AppSettings.buttonSound.collectAsState().value,
         onCycleButtonSound = {
             val next = AppSettings.buttonSound.value.next()
@@ -129,7 +135,6 @@ fun SettingsContent(
     onCyclePosterSize: () -> Unit = {},
     buttonSound: tv.jetflix.app.ui.components.ButtonSound = tv.jetflix.app.ui.components.ButtonSound.Off,
     onCycleButtonSound: () -> Unit = {},
-    onStartFrameTest: () -> Unit = {},
     liveBlur: Boolean = true,
     onToggleLiveBlur: () -> Unit = {},
     continueWatchingPosters: Boolean = false,
@@ -176,7 +181,6 @@ fun SettingsContent(
             SettingRow("Poster wall on startup", "Shows the Driftfin poster wall while Home loads the first time. Off goes straight to the ordinary empty Home.", startupWall, onToggleStartupWall)
             SettingRow("Button sound", "A quiet sound when you move and when you select. Press OK to try the next one.", true, onCycleButtonSound, valueText = buttonSound.label)
             SettingRow("Live blur", "On is the normal look. Off swaps the live blur for a pre-softened picture, to see whether blur is what slows scrolling. Takes effect when you open the next screen.", liveBlur, onToggleLiveBlur)
-            SettingRow("Frame timing test", "Press OK, then move around for 20 seconds (tiny REC counter in the corner). A result card shows afterward. Nothing is saved or sent.", true, onStartFrameTest, valueText = "Start")
             SettingRow("Show Next Up on Home", "Jellyfin's next unwatched episode of series you follow.", showNextUp, onToggleNextUp)
             Spacer(Modifier.padding(top = 8.dp))
             Text(

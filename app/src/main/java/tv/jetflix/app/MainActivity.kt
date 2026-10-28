@@ -102,6 +102,12 @@ fun JetflixRoot() {
     }
     fun pop() { if (backStack.size > 1) backStack = backStack.dropLast(1) }
 
+    // Once Search is nowhere on the back stack (backed out of it, or another tab replaced the
+    // stack), the next visit starts with an empty bar. Details sits on TOP of Search, so Back
+    // from a result still returns to the query.
+    var searchLeftFully by remember { mutableStateOf(false) }
+    LaunchedEffect(backStack) { if (backStack.none { it == Screen.Search }) searchLeftFully = true }
+
     BackHandler(enabled = session != null && backStack.size > 1) { pop() }
     // From Shows/Movies/My List/Search/Settings, Back goes to Home first; Back on Home exits.
     // The sweep handoff lands focus on the Home tab (Randy: Back to Home must not drop onto the hero
@@ -266,6 +272,12 @@ fun JetflixRoot() {
                 onItemClick = { push(Screen.Details(it.seriesOrSelfId(), if (it.isEpisode) it.Id else null)) },
                 onPlay = { push(Screen.Player(it)) },
                 onUserClick = onUserClick,
+                onTrailer = { t ->
+                    when (t) {
+                        is tv.jetflix.app.data.TrailerSource.Local -> push(Screen.Player(t.item))
+                        is tv.jetflix.app.data.TrailerSource.YouTube -> push(Screen.Trailer(t.videoId, t.title))
+                    }
+                },
             )
         }
         is Screen.Library -> {
@@ -307,6 +319,7 @@ fun JetflixRoot() {
         }
         Screen.Search -> {
             val vm: SearchViewModel = viewModel(key = "search-${session?.userId}", factory = viewModelFactory { SearchViewModel(app.repo) })
+            LaunchedEffect(Unit) { if (searchLeftFully) { vm.clear(); searchLeftFully = false } }
             SearchScreen(
                 viewModel = vm,
                 userName = userName,

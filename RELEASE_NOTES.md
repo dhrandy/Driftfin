@@ -4,6 +4,20 @@ Each build lists its real changes here. The CI release workflow copies the secti
 matching the build tag onto the GitHub release page and appends the standard
 automated-build footer.
 
+## build-26
+
+Fixes:
+- Search now clears when you leave it and come back, instead of keeping your last query.
+- The update Download button in Settings now starts the download on a single press.
+- My Driftfin: pressing OK on an already-selected section no longer reloads the same list.
+- Settings: the frame-timing test control is removed.
+
+New:
+- My Driftfin: Favorites, Watchlist and Collections switch as you move across them with the remote, like the top navigation tabs.
+- Actor pages: read an actor's full biography with the remote - move Left onto the bio, press OK to open it as an overlay, Back to close it.
+- Home banner adds a Trailer button alongside Play and More Info.
+- Sign in with Quick Connect: approve a code from another device instead of typing your password on the TV.
+
 ## build-25
 
 Fixes:

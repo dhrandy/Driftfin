@@ -25,6 +25,14 @@ import tv.jetflix.app.ui.theme.JetflixType
  * One quiet update check at app start. If a newer build exists, a small note shows for a few seconds and fades.
  * It never downloads or installs anything - installing stays a manual choice in Settings.
  */
+/**
+ * The newest update the startup check found. Settings reads it so the update row can open straight
+ * on "Download" when the notice already named the build - one OK press instead of Check, then OK.
+ */
+object UpdateNoticeState {
+    @Volatile var available: ReleaseInfo? = null
+}
+
 @Composable
 fun StartupUpdateNotice(currentBuild: Int, modifier: Modifier = Modifier, updater: () -> Updater = { Updater() }) {
     var available by remember { mutableStateOf<Int?>(null) }
@@ -32,6 +40,7 @@ fun StartupUpdateNotice(currentBuild: Int, modifier: Modifier = Modifier, update
     LaunchedEffect(Unit) {
         val r = withContext(Dispatchers.IO) { updater().check(currentBuild) }
         if (r is CheckResult.Available) {
+            UpdateNoticeState.available = r.info
             available = r.info.build
             visible = true
             delay(8_000)

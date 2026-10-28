@@ -17,6 +17,16 @@ interface JellyfinApi {
     @POST("Users/AuthenticateByName")
     suspend fun authenticateByName(@Body body: AuthenticateUserByName): Response<AuthenticationResult>
 
+    /** Quick Connect: the TV shows [QuickConnectState.Code], the user approves it in another Jellyfin app, then the secret signs in. */
+    @POST("QuickConnect/Initiate")
+    suspend fun quickConnectInitiate(): Response<QuickConnectState>
+
+    @GET("QuickConnect/Connect")
+    suspend fun quickConnectCheck(@Query("secret") secret: String): Response<QuickConnectState>
+
+    @POST("Users/AuthenticateWithQuickConnect")
+    suspend fun authenticateWithQuickConnect(@Body body: QuickConnectAuth): Response<AuthenticationResult>
+
     /** Every genre and year in a library (not just the current filtered list), for the filter pickers. */
     @GET("Items/Filters")
     suspend fun getItemFilters(

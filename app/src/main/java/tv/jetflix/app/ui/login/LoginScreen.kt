@@ -40,6 +40,7 @@ import androidx.tv.material3.ButtonDefaults
 import androidx.tv.material3.Text
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import tv.jetflix.app.data.AuthenticateUserByName
 import tv.jetflix.app.data.JellyfinRepository
@@ -61,12 +62,18 @@ data class LoginUiState(
     val sessionNotSaved: Boolean = false,
     /** Names of profiles already signed in on this TV for the typed server. Picking one needs no password. */
     val savedProfiles: List<String> = emptyList(),
+    /** Non-null while a Quick Connect approval is pending: the code the user approves in another Jellyfin app. */
+    val quickCode: String? = null,
 )
 
 class LoginViewModel(
     private val repo: JellyfinRepository,
     private val tokenStore: TokenStore,
+    /** Quick Connect poll cadence; tests shrink it. */
+    private val quickPollMs: Long = 2_000,
 ) : ViewModel() {
+
+    private var quickJob: kotlinx.coroutines.Job? = null
 
     private val _state = MutableStateFlow(LoginUiState(serverUrl = tokenStore.lastServer()))
     val state = _state.asStateFlow()
@@ -137,6 +144,85 @@ class LoginViewModel(
         if (serverUrl != null) refreshSaved()
     }
 
+    private fun completeSignIn(normalized: String, userId: String, userName: String, token: String, onSuccess: () -> Unit) {
+        val saved = tokenStore.save(normalized, userId, userName, token)
+        refreshSaved()
+        SessionManager.signIn(
+            Session(
+                serverUrl = normalized,
+                userId = userId,
+                userName = userName,
+                token = token,
+                deviceId = tokenStore.deviceId(),
+            ),
+        )
+        _state.value = _state.value.copy(connecting = false, quickCode = null, sessionNotSaved = !saved)
+        onSuccess()
+    }
+
+    /** Quick Connect: show the server's code, the user approves it in another Jellyfin app, the secret signs in. */
+    fun startQuickConnect(onSuccess: () -> Unit) {
+        val s = _state.value
+        val normalized = repo.normalizeServerUrl(s.serverUrl)
+        if (normalized.isEmpty()) {
+            _state.value = s.copy(error = "Enter your Jellyfin server address")
+            return
+        }
+        quickJob?.cancel()
+        quickJob = viewModelScope.launch {
+            _state.value = _state.value.copy(connecting = true, error = null, quickCode = null)
+            try {
+                val api = repo.apiFor(normalized)
+                val info = api.getPublicSystemInfo()
+                if (!info.isSuccessful || info.body() == null) {
+                    _state.value = _state.value.copy(connecting = false, error = "No Jellyfin server answered at $normalized")
+                    return@launch
+                }
+                val init = api.quickConnectInitiate()
+                val st = init.body()
+                val secret = st?.Secret
+                if (!init.isSuccessful || secret.isNullOrEmpty() || st.Code.isNullOrEmpty()) {
+                    _state.value = _state.value.copy(connecting = false, error = "Quick Connect isn't enabled on this server. Sign in with your password instead.")
+                    return@launch
+                }
+                _state.value = _state.value.copy(connecting = false, quickCode = st.Code)
+                // Five minutes of approval waiting, then the code is abandoned.
+                val deadline = System.currentTimeMillis() + 5 * 60_000
+                var approved = false
+                while (isActive && System.currentTimeMillis() < deadline) {
+                    kotlinx.coroutines.delay(quickPollMs)
+                    val chk = try { api.quickConnectCheck(secret).body() } catch (_: Exception) { null }
+                    if (chk?.Authenticated == true) { approved = true; break }
+                }
+                if (!approved) {
+                    if (isActive) _state.value = _state.value.copy(quickCode = null, error = "Quick Connect wasn't approved in time. Try again or use your password.")
+                    return@launch
+                }
+                _state.value = _state.value.copy(connecting = true)
+                val auth = api.authenticateWithQuickConnect(tv.jetflix.app.data.QuickConnectAuth(secret))
+                val body = auth.body()
+                val token = body?.AccessToken
+                val user = body?.User
+                if (!auth.isSuccessful || token.isNullOrEmpty() || user == null) {
+                    _state.value = _state.value.copy(connecting = false, quickCode = null, error = "Quick Connect sign-in failed. Try again or use your password.")
+                    return@launch
+                }
+                completeSignIn(normalized, user.Id, user.Name ?: "Jellyfin user", token, onSuccess)
+            } catch (e: Exception) {
+                if (!isActive) return@launch
+                _state.value = _state.value.copy(
+                    connecting = false, quickCode = null,
+                    error = "Could not reach $normalized (${e.javaClass.simpleName})",
+                )
+            }
+        }
+    }
+
+    fun cancelQuickConnect() {
+        quickJob?.cancel()
+        _state.value = _state.value.copy(quickCode = null, connecting = false)
+    }
+
     fun connect(onSuccess: () -> Unit) {
         val s = _state.value
         val normalized = repo.normalizeServerUrl(s.serverUrl)
@@ -165,19 +251,7 @@ class LoginViewModel(
                     _state.value = _state.value.copy(connecting = false, error = "Sign-in failed. Check the username and password.")
                     return@launch
                 }
-                val saved = tokenStore.save(normalized, user.Id, user.Name ?: s.username.trim(), token)
-                refreshSaved()
-                SessionManager.signIn(
-                    Session(
-                        serverUrl = normalized,
-                        userId = user.Id,
-                        userName = user.Name ?: s.username.trim(),
-                        token = token,
-                        deviceId = tokenStore.deviceId(),
-                    ),
-                )
-                _state.value = _state.value.copy(connecting = false, sessionNotSaved = !saved)
-                onSuccess()
+                completeSignIn(normalized, user.Id, user.Name ?: s.username.trim(), token, onSuccess)
             } catch (e: Exception) {
                 _state.value = _state.value.copy(
                     connecting = false,
@@ -199,6 +273,8 @@ fun LoginScreen(viewModel: LoginViewModel, onLoggedIn: () -> Unit) {
         onConnect = { viewModel.connect(onLoggedIn) },
         onLoadProfiles = { viewModel.loadProfiles() },
         onSelectProfile = { viewModel.selectProfile(it, onLoggedIn) },
+        onQuickConnect = { viewModel.startQuickConnect(onLoggedIn) },
+        onCancelQuickConnect = { viewModel.cancelQuickConnect() },
     )
 }
 
@@ -209,6 +285,8 @@ fun LoginContent(
     onConnect: () -> Unit,
     onLoadProfiles: () -> Unit = {},
     onSelectProfile: (String) -> Unit = {},
+    onQuickConnect: () -> Unit = {},
+    onCancelQuickConnect: () -> Unit = {},
 ) {
     val serverFocus = remember { FocusRequester() }
 
@@ -267,6 +345,23 @@ fun LoginContent(
                 ) { Text("Show profiles on this server", style = JetflixType.caption) }
                 state.profilesNote?.let { Text(it, style = JetflixType.caption, color = JetflixColors.TextMuted) }
             }
+            if (state.quickCode != null) {
+                Text("Approve this code in any Jellyfin app (Dashboard or app settings, Quick Connect):", style = JetflixType.caption, color = JetflixColors.TextSecondary)
+                Text(state.quickCode, style = JetflixType.sectionTitle, color = JetflixColors.TextPrimary)
+                Text("Waiting for approval…", style = JetflixType.caption, color = JetflixColors.TextMuted)
+                Button(
+                    onClick = { onCancelQuickConnect() },
+                    colors = ButtonDefaults.colors(
+                        containerColor = JetflixColors.SurfaceLight,
+                        contentColor = JetflixColors.TextPrimary,
+                        focusedContainerColor = JetflixColors.Red,
+                        focusedContentColor = JetflixColors.TextPrimary,
+                    ),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text("Cancel", style = JetflixType.body)
+                }
+            } else {
             LoginField(
                 value = state.username,
                 onValueChange = { onUpdate(null, it, null) },
@@ -298,6 +393,20 @@ fun LoginContent(
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Text(if (state.connecting) "Connecting…" else "Sign In", style = JetflixType.body)
+            }
+            Button(
+                onClick = { onQuickConnect() },
+                enabled = !state.connecting,
+                colors = ButtonDefaults.colors(
+                    containerColor = JetflixColors.SurfaceLight,
+                    contentColor = JetflixColors.TextPrimary,
+                    focusedContainerColor = JetflixColors.Red,
+                    focusedContentColor = JetflixColors.TextPrimary,
+                ),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text("Use Quick Connect instead", style = JetflixType.body)
+            }
             }
         }
     }

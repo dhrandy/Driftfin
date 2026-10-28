@@ -83,12 +83,30 @@ data class HomeUiState(
     /** Titles the banner cycles through; [hero] is the first. Empty means just [hero]. */
     val heroes: List<BaseItemDto> = emptyList(),
     val sections: List<HomeSection> = emptyList(),
+    /** Banner title id -> what its Trailer button plays; absent means no trailer or not looked up yet. */
+    val heroTrailers: Map<String, tv.jetflix.app.data.TrailerSource> = emptyMap(),
 )
 
 class HomeViewModel(val repo: JellyfinRepository) : ViewModel() {
 
     private val _state = MutableStateFlow(HomeUiState())
     val state = _state.asStateFlow()
+
+    private val trailerPending = mutableSetOf<String>()
+
+    /** Lazy per-banner-title trailer lookup: one small call, cached by title id, failures just hide the button. */
+    fun loadTrailer(item: BaseItemDto) {
+        val id = item.Id
+        if (id.isBlank()) return
+        if (id in _state.value.heroTrailers || !trailerPending.add(id)) return
+        val session = SessionManager.session.value ?: return
+        val api = repo.apiFor(session.serverUrl)
+        viewModelScope.launch {
+            val local = try { api.getLocalTrailers(id, session.userId).body() ?: emptyList() } catch (_: Exception) { emptyList() }
+            val src = tv.jetflix.app.data.Trailers.pick(item, local)
+            if (src != null) _state.value = _state.value.copy(heroTrailers = _state.value.heroTrailers + (id to src))
+        }
+    }
 
     fun load() {
         val session = SessionManager.session.value ?: return
@@ -169,7 +187,7 @@ class HomeViewModel(val repo: JellyfinRepository) : ViewModel() {
                         sortBy = "CommunityRating",
                         sortOrder = "Descending",
                         limit = 120,
-                        fields = "Overview,Genres",
+                        fields = "Overview,Genres,RemoteTrailers",
                         filters = "IsUnplayed",
                     ).body()?.Items ?: emptyList()
                 } catch (_: Exception) { emptyList() }
@@ -192,6 +210,7 @@ fun HomeScreen(
     onItemClick: (BaseItemDto) -> Unit,
     onPlay: (BaseItemDto) -> Unit,
     onUserClick: () -> Unit,
+    onTrailer: (tv.jetflix.app.data.TrailerSource) -> Unit = {},
 ) {
     val state by viewModel.state.collectAsState()
     tv.jetflix.app.ui.components.InitialHomeLoad(
@@ -207,6 +226,8 @@ fun HomeScreen(
             onItemClick = onItemClick,
             onPlay = onPlay,
             onUserClick = onUserClick,
+            onTrailer = onTrailer,
+            onHeroTrailerNeeded = viewModel::loadTrailer,
         )
     }
 }
@@ -263,6 +284,8 @@ fun HomeContent(
     onItemClick: (BaseItemDto) -> Unit,
     onPlay: (BaseItemDto) -> Unit,
     onUserClick: () -> Unit,
+    onTrailer: (tv.jetflix.app.data.TrailerSource) -> Unit = {},
+    onHeroTrailerNeeded: (BaseItemDto) -> Unit = {},
     restoredFocusKey: String? = null,
     previewFocusedItem: BaseItemDto? = null,
     previewScrollIndex: Int = 0,
@@ -308,6 +331,8 @@ fun HomeContent(
     val heroes = state.heroes.ifEmpty { listOfNotNull(state.hero) }
     var heroIndex by androidx.compose.runtime.remember { androidx.compose.runtime.mutableIntStateOf(0) }
     val currentHero = heroes.getOrNull(heroIndex) ?: state.hero
+    // The Trailer button appears once the lookup for the showing title comes back; rotation reuses the cache.
+    LaunchedEffect(currentHero?.Id) { currentHero?.let(onHeroTrailerNeeded) }
     // The banner moves to the next title every few seconds while it is on screen; it holds still while you browse the rows.
     LaunchedEffect(heroes.size, focusMemory.key == null) {
         if (heroes.size > 1 && focusMemory.key == null) {
@@ -446,6 +471,8 @@ fun HomeContent(
         ) {
             item(key = "hero") {
                 val currentHero = heroes.getOrNull(heroIndex) ?: state.hero
+    // The Trailer button appears once the lookup for the showing title comes back; rotation reuses the cache.
+    LaunchedEffect(currentHero?.Id) { currentHero?.let(onHeroTrailerNeeded) }
                 val heroBackdrop = currentHero?.let { repo.backdropUrl(it, 1920) }
                 Box(Modifier.fillMaxWidth()) {
                     // Blurred, colour-matched copy of the featured title surrounds the inset hero and sits behind the menu.
@@ -471,6 +498,8 @@ fun HomeContent(
                         logoUrl = currentHero?.let { repo.logoUrl(it) },
                         onPlay = onPlay,
                         onMoreInfo = onItemClick,
+                        trailer = currentHero?.let { state.heroTrailers[it.Id] },
+                        onTrailer = onTrailer,
                         playFocus = heroPlayFocus,
                         upFocus = navFocus,
                         downFocus = if (state.sections.isNotEmpty()) firstRowFocus else null,
@@ -569,6 +598,8 @@ fun HeroBanner(
     logoUrl: String?,
     onPlay: (BaseItemDto) -> Unit,
     onMoreInfo: (BaseItemDto) -> Unit,
+    trailer: tv.jetflix.app.data.TrailerSource? = null,
+    onTrailer: (tv.jetflix.app.data.TrailerSource) -> Unit = {},
     playFocus: FocusRequester? = null,
     upFocus: FocusRequester? = null,
     downFocus: FocusRequester? = null,
@@ -700,6 +731,20 @@ fun HeroBanner(
                         ),
                     ) {
                         Text("More Info")
+                    }
+                    if (trailer != null) {
+                        Button(
+                            onClick = { onTrailer(trailer) },
+                            modifier = Modifier.onFocusChanged(reportFocus("trailer")),
+                            colors = ButtonDefaults.colors(
+                                containerColor = JetflixColors.SurfaceLight.copy(alpha = 0.7f),
+                                contentColor = Color.White,
+                                focusedContainerColor = JetflixColors.SurfaceLight,
+                                focusedContentColor = Color.White,
+                            ),
+                        ) {
+                            Text("Trailer")
+                        }
                     }
                 }
             }

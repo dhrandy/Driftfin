@@ -1,6 +1,16 @@
 package tv.jetflix.app.ui.actor
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -104,12 +114,28 @@ fun ActorScreen(viewModel: ActorViewModel, personId: String, name: String) {
 @Composable
 fun ActorContent(state: ActorUiState, imageUrlFor: (BaseItemDto) -> String?, onOpenTitle: (BaseItemDto) -> Unit, onRetry: () -> Unit = {}) {
     val firstFocus = remember { FocusRequester() }
+    var bioOpen by remember { mutableStateOf(false) }
+    var bioFocused by remember { mutableStateOf(false) }
+    val bioFocus = remember { FocusRequester() }
+    Box(Modifier.fillMaxSize()) {
     Row(Modifier.fillMaxSize().background(JetflixColors.Background).padding(start = 48.dp, end = 32.dp, top = 40.dp, bottom = 24.dp)) {
         Column(Modifier.width(380.dp).padding(end = 32.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             PersonPhoto(url = state.photoUrl, name = state.name, size = 150.dp, modifier = Modifier.align(Alignment.CenterHorizontally))
             Text(state.name, style = JetflixType.sectionTitle, color = JetflixColors.TextPrimary, maxLines = 3, overflow = TextOverflow.Ellipsis)
-            state.bio?.let {
-                Text(it, style = JetflixType.body.copy(fontSize = 16.sp, lineHeight = 24.sp), color = JetflixColors.TextSecondary, maxLines = 14, overflow = TextOverflow.Ellipsis)
+            state.bio?.let { bio ->
+                // Left from the filmography lands here; OK opens the full biography, Back returns to this spot.
+                Column(
+                    Modifier
+                        .clip(androidx.compose.foundation.shape.RoundedCornerShape(8.dp))
+                        .onFocusChanged { bioFocused = it.isFocused }
+                        .focusRequester(bioFocus)
+                        .clickable { bioOpen = true }
+                        .background(if (bioFocused) JetflixColors.SurfaceLight else Color.Transparent)
+                        .padding(8.dp),
+                ) {
+                    Text(bio, style = JetflixType.body.copy(fontSize = 16.sp, lineHeight = 24.sp), color = JetflixColors.TextSecondary, maxLines = 14, overflow = TextOverflow.Ellipsis)
+                    if (bioFocused) Text("OK: read the full biography", style = JetflixType.caption, color = JetflixColors.TextMuted)
+                }
             }
         }
         Box(Modifier.weight(1f).fillMaxHeight()) {
@@ -144,6 +170,50 @@ fun ActorContent(state: ActorUiState, imageUrlFor: (BaseItemDto) -> String?, onO
             }
         }
     }
+    if (bioOpen && state.bio != null) {
+        FullBioOverlay(name = state.name, bio = state.bio, onClose = {
+            bioOpen = false
+            try { bioFocus.requestFocus() } catch (_: Exception) {}
+        })
+    }
+    }
+}
+
+/** The full biography in a scrollable panel: DPAD up/down scrolls, Back returns to the bio on the actor page. */
+@Composable
+private fun FullBioOverlay(name: String, bio: String, onClose: () -> Unit) {
+    androidx.activity.compose.BackHandler(onBack = onClose)
+    val scroll = rememberScrollState()
+    val overlayFocus = remember { FocusRequester() }
+    val scope = rememberCoroutineScope()
+    Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.85f))) {
+        Column(
+            Modifier
+                .align(Alignment.Center)
+                .fillMaxHeight(0.85f)
+                .width(760.dp)
+                .background(JetflixColors.Surface, androidx.compose.foundation.shape.RoundedCornerShape(12.dp))
+                .onPreviewKeyEvent { ev ->
+                    if (ev.type == androidx.compose.ui.input.key.KeyEventType.KeyDown) {
+                        when (ev.key) {
+                            androidx.compose.ui.input.key.Key.DirectionDown -> { scope.launch { scroll.scrollBy(160f) }; true }
+                            androidx.compose.ui.input.key.Key.DirectionUp -> { scope.launch { scroll.scrollBy(-160f) }; true }
+                            else -> false
+                        }
+                    } else false
+                }
+                .focusRequester(overlayFocus)
+                .focusable()
+                .padding(36.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            Text(name, style = JetflixType.sectionTitle, color = JetflixColors.TextPrimary)
+            Column(Modifier.verticalScroll(scroll)) {
+                Text(bio, style = JetflixType.body.copy(fontSize = 18.sp, lineHeight = 28.sp), color = JetflixColors.TextSecondary)
+            }
+        }
+    }
+    LaunchedEffect(Unit) { try { overlayFocus.requestFocus() } catch (_: Exception) {} }
 }
 
 /** "3 movies and 1 show on your server" - the grid holds both, so say both. */

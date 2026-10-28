@@ -8,6 +8,8 @@ import androidx.compose.ui.test.isFocused
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.requestFocus
 import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.pressKey
 import kotlinx.serialization.json.Json
@@ -59,6 +61,9 @@ class HomeNavigationTest {
         played: MutableList<String> = mutableListOf(),
         userClicks: MutableList<Int> = mutableListOf(),
         restoredKey: String? = null,
+        heroTrailers: Map<String, tv.jetflix.app.data.TrailerSource> = emptyMap(),
+        trailerClicks: MutableList<tv.jetflix.app.data.TrailerSource> = mutableListOf(),
+        trailerNeeded: MutableList<String> = mutableListOf(),
     ) {
         val repo = JellyfinRepository().apply { apiFor("http://demo.test") }
         val cont = items.take(6).map { it.copy(UserData = UserItemDataDto(PlaybackPositionTicks = 1, PlayedPercentage = 35.0)) }
@@ -66,13 +71,14 @@ class HomeNavigationTest {
             loading = false,
             hero = items.first { it.Name == "The Gold Rush" },
             heroes = heroes,
+            heroTrailers = heroTrailers,
             sections = listOf(
                 HomeSection("Continue Watching", cont, wide = true),
                 HomeSection("Recently Added Movies", items.drop(2), wide = false),
                 HomeSection("Popular Picks", items.reversed(), wide = false),
             ),
         )
-        rule.setContent { JetflixTheme { HomeContent(state, repo, "demo", { tabs += it.label }, { opened += it.Name.orEmpty() }, { played += it.Name.orEmpty() }, { userClicks += 1 }, restoredFocusKey = restoredKey, heroIntervalMs = 1000) } }
+        rule.setContent { JetflixTheme { HomeContent(state, repo, "demo", { tabs += it.label }, { opened += it.Name.orEmpty() }, { played += it.Name.orEmpty() }, { userClicks += 1 }, onTrailer = { trailerClicks += it }, onHeroTrailerNeeded = { trailerNeeded += it.Id }, restoredFocusKey = restoredKey, heroIntervalMs = 1000) } }
         rule.waitForIdle()
         // Robolectric's window never reports focus, so the on-launch focus request cannot be observed here.
         // The first D-pad press gives the screen its initial focus on the hero Play button, as on a TV.
@@ -240,5 +246,28 @@ class HomeNavigationTest {
         setHome()
         println("NAV start: ${focusedText()}")
         repeat(3) { press(Key.DirectionDown); println("NAV down${it + 1}: ${focusedText()}") }
+    }
+
+    @Test fun bannerTrailerButtonShownAndPlays() {
+        val hero = items.first { it.Name == "The Gold Rush" }
+        val src = tv.jetflix.app.data.TrailerSource.YouTube("abcdefghijk", "The Gold Rush trailer")
+        val clicks = mutableListOf<tv.jetflix.app.data.TrailerSource>()
+        val needed = mutableListOf<String>()
+        setHome(heroTrailers = mapOf(hero.Id to src), trailerClicks = clicks, trailerNeeded = needed)
+        // The showing banner title triggers exactly its own lazy lookup.
+        assertTrue(needed.contains(hero.Id))
+        // TV buttons fire on DPAD_CENTER, not a touch click.
+        rule.onNodeWithText("Trailer").assertExists().requestFocus()
+        rule.onRoot().performKeyInput { pressKey(Key.DirectionCenter) }
+        rule.waitForIdle()
+        assertEquals(listOf(src), clicks)
+    }
+
+    @Test fun bannerTrailerButtonHiddenWithoutSource() {
+        setHome()
+        rule.onNodeWithText("Trailer").assertDoesNotExist()
+        // Play/Resume and More Info are untouched (the fixture hero is part-watched, so its button is Resume).
+        rule.onNodeWithText("Resume").assertExists()
+        rule.onNodeWithText("More Info").assertExists()
     }
 }

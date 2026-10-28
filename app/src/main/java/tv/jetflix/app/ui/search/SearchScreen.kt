@@ -71,6 +71,12 @@ class SearchViewModel(val repo: JellyfinRepository) : ViewModel() {
         }
     }
 
+    /** Empties the bar and results for a fresh visit after Search was fully left. */
+    fun clear() {
+        searchJob?.cancel()
+        _state.value = SearchUiState()
+    }
+
     fun searchNow() {
         searchJob?.cancel()
         searchJob = viewModelScope.launch { search(_state.value.query) }
