@@ -43,13 +43,22 @@ Driftfin is still in alpha. Its focus is making your Jellyfin library feel good 
 - Saved profiles: a profile you signed in with stays on the TV (encrypted) so you can switch back without the password. "Sign out and forget this profile" removes it. It does not revoke the token on the server.
 - Check for updates (bottom of Settings): only when you ask. It reads the latest GitHub release, downloads the APK, checks its checksum, package name, version and signing certificate, and then opens Android's installer, which asks you to confirm. Android may first ask you to allow installs from Driftfin. The installer step has not been tested on a TV.
 
+## Requirements
+
+| | |
+| --- | --- |
+| Device | Android TV or Google TV running Android 8 (API 26) or newer |
+| Server | Jellyfin 10.10 or newer for every feature; the app also signs in and browses with older 10.x servers, and features that need a newer server simply hide themselves when the server doesn't have them (Quick Connect sign-in needs 10.7+, Skip Intro needs Media Segments from 10.10+) |
+
+Other devices that meet the same Android level may work but aren't tested.
+
 ## Install
 
 Driftfin is an APK you sideload. You need an Android TV or Google TV and a Jellyfin server you can reach from it.
 
 **With Downloader (easiest on a TV)**
 
-1. Install the free **Downloader** app from your TV's app store.
+1. Install the free **Downloader** app ([aftvnews.com/downloader](https://www.aftvnews.com/downloader/)) from your TV's app store.
 2. Open Downloader and allow it to install apps from unknown sources when Android asks (Settings, then the install-unknown-apps permission for Downloader).
 3. In Downloader's address box, type this link and select Go:
    `https://github.com/dhrandy/Driftfin/releases/latest/download/jetflix-release.apk`
