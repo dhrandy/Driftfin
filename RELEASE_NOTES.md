@@ -4,13 +4,22 @@ Each build lists its real changes here. The CI release workflow copies the secti
 matching the build tag onto the GitHub release page and appends the standard
 automated-build footer.
 
+## build-30
+
+Changes:
+- Home fetches library rows in parallel, with at most four requests in flight, while preserving row order. This optimization passed controlled latency tests; real TV loading time has not been measured.
+- The release workflow passes the build tag to the notes selector so it picks the matching section.
+
+Fixes:
+- Corrects build 29's release-note wording. Build 28 already displayed the corrected notes and My Stuff rename; the earlier claim that it repeated build 27's notes was wrong.
+
 ## build-29
 
 New:
-- Home loads noticeably faster, especially with several libraries: your library rows are now fetched at the same time instead of one after another.
+- Home fetches library rows in parallel, with at most four requests in flight, while preserving row order.
 
 Fixes:
-- The What's New card and the release page now show each build's own notes. Build 28 mistakenly repeated build 27's notes.
+- The release workflow now passes the build tag to the notes selector so it picks the matching section.
 
 ## build-27
 
