@@ -18,6 +18,17 @@ An Android TV client for your own Jellyfin server, with a TV-first layout (home 
 
 Demo data with synthetic placeholder artwork; on your server these are your own titles and artwork.
 
+## What makes Driftfin different
+
+Driftfin puts browsing first, with artwork-led discovery and a layout designed for a TV remote.
+
+- Discover something unwatched. Home's rotating banner highlights highly rated unwatched movies, alongside Continue Watching, Next Up, Recently Added and Favorites.
+- Explore the cast without stopping playback. Press Down while paused to browse cast, then open an actor's page to explore their movies and shows in your library.
+- See your library's artwork and formats. Title logos appear when available, with 4K, HDR and Dolby Vision badges drawn from file metadata.
+- Stay oriented with the remote. D-pad navigation, visible focus and remembered positions help you move around without starting over.
+
+Driftfin is still in alpha. Its focus is making your Jellyfin library feel good to browse on a TV, rather than promising every feature found in other clients.
+
 ## What it does
 
 - Sign in with server address, username and password (profile chips list the server's public users when the server shows them).
