@@ -56,6 +56,9 @@ import androidx.tv.material3.Icon
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
@@ -127,20 +130,19 @@ class HomeViewModel(val repo: JellyfinRepository) : ViewModel() {
                 }
                 val viewsResp = api.getUserViews(session.userId)
                 val views = viewsResp.body()?.Items ?: emptyList()
-                val librarySections = views
-                    .filter { tv.jetflix.app.ui.library.isVideoLibrary(it) }
-                    .map { view ->
-                        val items = api.getItems(
-                            userId = session.userId,
-                            parentId = view.Id,
-                            includeItemTypes = when (view.CollectionType) { "movies" -> "Movie"; "tvshows" -> "Series"; else -> "Movie,Series" },
-                            recursive = true,
-                            sortBy = "DateCreated",
-                            sortOrder = "Descending",
-                            limit = 16,
-                        ).body()?.Items ?: emptyList()
-                        HomeSection(view.Name ?: "Library", items, wide = false)
-                    }.filter { it.items.isNotEmpty() }
+                val librarySections = fetchLibrarySections(
+                    views = views.filter { tv.jetflix.app.ui.library.isVideoLibrary(it) },
+                ) { view ->
+                    api.getItems(
+                        userId = session.userId,
+                        parentId = view.Id,
+                        includeItemTypes = when (view.CollectionType) { "movies" -> "Movie"; "tvshows" -> "Series"; else -> "Movie,Series" },
+                        recursive = true,
+                        sortBy = "DateCreated",
+                        sortOrder = "Descending",
+                        limit = 16,
+                    ).body()?.Items ?: emptyList()
+                }.filter { it.items.isNotEmpty() }
 
                 val myList = if (tv.jetflix.app.data.AppSettings.showMyList.value) {
                     api.getItems(
@@ -259,6 +261,24 @@ class MenuAwareScrollSpec(
             else -> 0f
         }
     }
+}
+
+/**
+ * Fetches every library row at once, at most [maxConcurrent] in flight, keeping the views' order in the result.
+ * A failed fetch cancels the rest and propagates, so one bad library still fails the whole Home load exactly as the
+ * old one-row-at-a-time fetch did; cancellation passes straight through.
+ */
+suspend fun fetchLibrarySections(
+    views: List<BaseItemDto>,
+    maxConcurrent: Int = 4,
+    fetch: suspend (BaseItemDto) -> List<BaseItemDto>,
+): List<HomeSection> = kotlinx.coroutines.coroutineScope {
+    // A semaphore, not limitedParallelism: a dispatcher permit is released while a fetch suspends on the
+    // network, so only a semaphore actually caps how many server requests are in flight at once.
+    val gate = Semaphore(maxConcurrent)
+    views.map { view ->
+        async { gate.withPermit { HomeSection(view.Name ?: "Library", fetch(view), wide = false) } }
+    }.awaitAll()
 }
 
 /** Home row order: Continue Watching, Next Up, Recently Added Movies, Recently Added Episodes, Favorites, then library rows, and More like X last. */

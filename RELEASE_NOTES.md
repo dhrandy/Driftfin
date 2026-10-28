@@ -4,6 +4,14 @@ Each build lists its real changes here. The CI release workflow copies the secti
 matching the build tag onto the GitHub release page and appends the standard
 automated-build footer.
 
+## build-29
+
+New:
+- Home loads noticeably faster, especially with several libraries: your library rows are now fetched at the same time instead of one after another.
+
+Fixes:
+- The What's New card and the release page now show each build's own notes. Build 28 mistakenly repeated build 27's notes.
+
 ## build-27
 
 Fixes:

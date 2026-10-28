@@ -41,7 +41,7 @@ jobs:
           # a release with no notes is exactly the stale-Whats-New bug.
           TAG="build-${BUILD_NUMBER}"
           mkdir -p app/src/main/assets
-          awk '/^## /{if(found)exit; if(tolower($0) ~ tolower(TAG))found=1; next} found' RELEASE_NOTES.md | sed -n 's/^- //p' > app/src/main/assets/whatsnew.txt
+          awk -v tag="$TAG" '/^## /{if(found)exit; if(tolower($0) ~ tolower(tag))found=1; next} found' RELEASE_NOTES.md | sed -n 's/^- //p' > app/src/main/assets/whatsnew.txt
           if [ ! -s app/src/main/assets/whatsnew.txt ]; then echo "RELEASE_NOTES.md has no bullet notes for $TAG; add them before building." >&2; exit 1; fi
           cat app/src/main/assets/whatsnew.txt
 
@@ -92,7 +92,7 @@ jobs:
           if [ "${GITHUB_REF_TYPE}" != "tag" ]; then TAG="build-${BUILD_NUMBER}"; fi
           # Notes come from RELEASE_NOTES.md (top section under the matching heading), so every
           # release lists its real changes. The standard footer is appended here.
-          NOTES=$(awk '/^## /{if(found)exit; if(tolower($0) ~ tolower(TAG))found=1; next} found' RELEASE_NOTES.md)
+          NOTES=$(awk -v tag="$TAG" '/^## /{if(found)exit; if(tolower($0) ~ tolower(tag))found=1; next} found' RELEASE_NOTES.md)
           if [ -z "$NOTES" ]; then NOTES="See RELEASE_NOTES.md for what changed in this build."; fi
           NOTES="$NOTES
 
