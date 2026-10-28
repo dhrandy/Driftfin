@@ -247,17 +247,27 @@ class LibraryViewModel(val repo: JellyfinRepository, private val store: LibraryP
                         MySection.Watchlist -> {
                             val starred = tv.jetflix.app.data.Watchlist.ids.value
                             if (starred.isEmpty()) emptyList() else {
+                                // Same Sort/Filter as Favorites: filters always apply; an explicit sort
+                                // replaces the default star order (newest first).
+                                val explicitSort = sort != LibrarySort.Name || reversed
+                                val unfiltered = watch == WatchFilter.All && genre == null && year == null
                                 val found = api.getItems(
                                     userId = session.userId,
                                     includeItemTypes = "Movie,Series",
                                     recursive = true,
                                     ids = starred.joinToString(","),
+                                    sortBy = if (explicitSort) sort.sortBy else null,
+                                    sortOrder = if (explicitSort) order() else null,
                                     fields = "Overview,Genres",
+                                    filters = filterString(), genres = genre, years = year?.toString(),
                                 ).body()?.Items ?: emptyList()
-                                val rank = starred.withIndex().associate { it.value to it.index }
-                                // The fetch has no filters, so a missing id means the server lost it: drop it.
-                                tv.jetflix.app.data.Watchlist.pruneMissing(found.map { it.Id }.toSet())
-                                found.sortedBy { rank[it.Id] ?: Int.MAX_VALUE }
+                                // Only an unfiltered fetch proves a missing id is gone from the server;
+                                // a filtered-out title must stay starred, so pruning waits for it.
+                                if (unfiltered) tv.jetflix.app.data.Watchlist.pruneMissing(found.map { it.Id }.toSet())
+                                if (explicitSort) found else {
+                                    val rank = starred.withIndex().associate { it.value to it.index }
+                                    found.sortedBy { rank[it.Id] ?: Int.MAX_VALUE }
+                                }
                             }
                         }
                         MySection.Favorites -> api.getItems(
@@ -478,7 +488,8 @@ fun LibraryContent(
     val isMine = tab == JetflixTab.MY_LIST && collectionTitle == null
     val showWatchlistSection by tv.jetflix.app.data.AppSettings.showWatchlist.collectAsState()
     if (!showWatchlistSection && state.section == MySection.Watchlist) LaunchedEffect(Unit) { onSection(MySection.Favorites) }
-    val showSort = state.section != MySection.Watchlist && (tab != JetflixTab.MY_LIST || collectionTitle != null || isMine) && (state.items.isNotEmpty() || state.sort != LibrarySort.Name || isMine || state.watch != WatchFilter.All || state.only4k || state.genre != null || state.year != null)
+    // Watchlist shows the same Sort/Filter row as Favorites (his "just like on favorites").
+    val showSort = (tab != JetflixTab.MY_LIST || collectionTitle != null || isMine) && (state.items.isNotEmpty() || state.sort != LibrarySort.Name || isMine || state.watch != WatchFilter.All || state.only4k || state.genre != null || state.year != null)
     val sectionFocus = remember { FocusRequester() }
     // the banner belongs on Home only; Movies and Shows start straight at the sort and poster grid.
     val banner: BaseItemDto? = null
@@ -534,7 +545,7 @@ fun LibraryContent(
                     item(key = "sections", span = { androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan) }) {
                         androidx.compose.foundation.layout.Row(
                             horizontalArrangement = Arrangement.spacedBy(10.dp),
-                            modifier = Modifier.focusProperties { down = sortFocus; up = navFocus },
+                            modifier = Modifier.focusProperties { down = if (showSort) sortFocus else firstFocus; up = navFocus },
                         ) {
                             MySection.values().filter { it != MySection.Watchlist || showWatchlistSection }.forEach { sec ->
                                 val selected = sec == state.section

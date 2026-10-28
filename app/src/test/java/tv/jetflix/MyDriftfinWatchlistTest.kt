@@ -100,4 +100,63 @@ class MyDriftfinWatchlistTest {
         val req = server.takeRequest()
         assertTrue("only the filter-options call may run", req.path!!.startsWith("/Items/Filters"))
     }
+    @Test fun watchlistAppliesFiltersButKeepsStarOrderByDefault() = runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        Watchlist.toggle("aaa")
+        Watchlist.toggle("bbb")
+        server.enqueue(MockResponse().setBody("""{"Items":[{"Id":"aaa","Name":"A","Type":"Movie"}],"TotalRecordCount":1}"""))
+        server.enqueue(MockResponse().setBody("""{"Genres":[],"Tags":[],"OfficialRatings":[],"Years":[]}"""))
+        val vm = LibraryViewModel(repo, MemStore())
+        vm.setSection(JetflixTab.MY_LIST, MySection.Watchlist)
+        await { vm.state.value.items.isNotEmpty() }
+        server.takeRequest(); server.takeRequest() // consume unfiltered load + options
+        // A filtered fetch: watched-only and a genre, like Favorites passes them.
+        server.enqueue(MockResponse().setBody("""{"Items":[{"Id":"aaa","Name":"A","Type":"Movie"}],"TotalRecordCount":1}"""))
+        server.enqueue(MockResponse().setBody("""{"Genres":[],"Tags":[],"OfficialRatings":[],"Years":[]}"""))
+        vm.cycleWatch(JetflixTab.MY_LIST) // Unwatched
+        vm.setGenre(JetflixTab.MY_LIST, "Drama")
+        await { server.requestCount >= 4 }
+        val req = server.takeRequest()
+        val path = req.path!!
+        org.junit.Assert.assertTrue(path, path.contains("filters=IsUnplayed") && path.contains("genres=Drama"))
+        org.junit.Assert.assertFalse("no sort params until he picks one", path.contains("sortBy="))
+    }
+
+    @Test fun filteredOutTitleStaysStarred() = runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        Watchlist.toggle("gone")
+        Watchlist.toggle("kept")
+        // Unfiltered load returns both; then a filtered load returns only one - no pruning allowed.
+        server.enqueue(MockResponse().setBody("""{"Items":[{"Id":"kept","Name":"K","Type":"Movie"},{"Id":"gone","Name":"G","Type":"Movie"}],"TotalRecordCount":2}"""))
+        server.enqueue(MockResponse().setBody("""{"Genres":[],"Tags":[],"OfficialRatings":[],"Years":[]}"""))
+        val vm = LibraryViewModel(repo, MemStore())
+        vm.setSection(JetflixTab.MY_LIST, MySection.Watchlist)
+        await { vm.state.value.items.size == 2 }
+        server.enqueue(MockResponse().setBody("""{"Items":[{"Id":"kept","Name":"K","Type":"Movie"}],"TotalRecordCount":1}"""))
+        vm.setGenre(JetflixTab.MY_LIST, "Drama")
+        await { vm.state.value.items.size == 1 }
+        assertEquals("filtered-out ids stay starred", listOf("gone", "kept").sorted(), Watchlist.ids.value.sorted())
+    }
+
+    @Test fun explicitSortReplacesStarOrder() = runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        Watchlist.toggle("aaa")
+        Watchlist.toggle("bbb")
+        server.enqueue(MockResponse().setBody("""{"Items":[{"Id":"aaa","Name":"A","Type":"Movie"},{"Id":"bbb","Name":"B","Type":"Movie"}],"TotalRecordCount":2}"""))
+        server.enqueue(MockResponse().setBody("""{"Genres":[],"Tags":[],"OfficialRatings":[],"Years":[]}"""))
+        val vm = LibraryViewModel(repo, MemStore())
+        vm.setSection(JetflixTab.MY_LIST, MySection.Watchlist)
+        await { vm.state.value.items.isNotEmpty() }
+        server.takeRequest(); server.takeRequest()
+        // Server returns Z-first after he picks Date Added: the app must not re-rank into star order.
+        server.enqueue(MockResponse().setBody("""{"Items":[{"Id":"aaa","Name":"A","Type":"Movie"},{"Id":"bbb","Name":"B","Type":"Movie"}],"TotalRecordCount":2}"""))
+        server.enqueue(MockResponse().setBody("""{"Genres":[],"Tags":[],"OfficialRatings":[],"Years":[]}"""))
+        vm.setSort(JetflixTab.MY_LIST, tv.jetflix.app.ui.library.LibrarySort.Added)
+        await { server.requestCount >= 3 }
+        val req = server.takeRequest()
+        val path = req.path!!
+        org.junit.Assert.assertTrue(path, path.contains("sortBy=DateCreated"))
+        await { vm.state.value.items.firstOrNull()?.Id == "aaa" }
+        assertEquals("server order wins after an explicit sort", listOf("aaa", "bbb"), vm.state.value.items.map { it.Id })
+    }
 }

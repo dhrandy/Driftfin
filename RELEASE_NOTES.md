@@ -4,6 +4,14 @@ Each build lists its real changes here. The CI release workflow copies the secti
 matching the build tag onto the GitHub release page and appends the standard
 automated-build footer.
 
+## build-25
+
+Fixes:
+- Pressing Down from the Watchlist button on My Driftfin no longer gets stuck on the button; it moves on to the Sort row or into your list.
+
+New:
+- Watchlist has the same Sort and Filter controls as Favorites: sort the list, or filter by watched state, genre or year. It still opens in your starred order, newest first, until you pick a sort.
+
 ## build-24
 
 New:
