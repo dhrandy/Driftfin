@@ -12,7 +12,7 @@ An Android TV client for your own Jellyfin server, with a TV-first layout (home 
 
 ## Screenshots
 
-![Home: hero banner, Resume / Play from start / More Info, and the Continue Watching row](docs/screenshots/home.png)
+![Home: hero banner, Resume / Play from start / More Info, and the Continue Watching row](https://raw.githubusercontent.com/dhrandy/Driftfin/71fd248c/docs/screenshots/home.png)
 
 ![Movies library grid with sort and filter](docs/screenshots/movies.png)
 
