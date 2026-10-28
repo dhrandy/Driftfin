@@ -26,6 +26,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Button
@@ -188,7 +189,7 @@ fun SettingsContent(
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
                     Text("Updates", style = JetflixType.body, color = JetflixColors.TextSecondary)
-                    SettingRow("Check for updates", uDetail, true, onUpdateClick, Modifier.focusRequester(first), valueText = uValue)
+                    SettingRow("Check for updates", uDetail, true, onUpdateClick, Modifier.focusProperties { up = menuBack.focus }.focusRequester(first), valueText = uValue)
                     Text("Playback", style = JetflixType.body, color = JetflixColors.TextSecondary)
                     SettingRow("Autoplay next episode", "Starts the next episode after a 5 second countdown.", autoplay, onToggleAutoplay)
                     SettingRow("Cast while paused", "Shows the cast along the bottom when you pause. Press Down to pick an actor and OK to see their movies on your server.", pauseCast, onTogglePauseCast)
@@ -205,7 +206,7 @@ fun SettingsContent(
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
                     Text("Appearance", style = JetflixType.body, color = JetflixColors.TextSecondary)
-                    SettingRow("Poster size", "Small, Medium or Large cards on Home and in libraries. Press OK to change.", true, onCyclePosterSize, valueText = posterSize.label)
+                    SettingRow("Poster size", "Small, Medium or Large cards on Home and in libraries. Press OK to change.", true, onCyclePosterSize, Modifier.focusProperties { up = menuBack.focus }, valueText = posterSize.label)
                     SettingRow("Continue Watching art", "Scene images (the wide look) or posters for the Continue Watching row. Press OK to change.", true, onToggleContinueWatchingPosters, valueText = if (continueWatchingPosters) "Posters" else "Scene images")
                     SettingRow("Title logos", "Shows a show's own title lettering on Home and Details when Jellyfin has it. Falls back to plain text.", titleLogos, onToggleTitleLogos)
                     SettingRow("HDR and Dolby Vision tags", "Shows HDR, HDR10, HDR10+ or Dolby Vision on a movie's Details page when the file says it has them. It shows what the file contains, not what your TV is outputting.", formatBadges, onToggleFormatBadges)

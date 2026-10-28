@@ -207,7 +207,7 @@ fun SearchContent(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 48.dp)
-                    .focusProperties { if (hasActors) down = firstActorFocus }
+                    .focusProperties { up = menuBack.focus; if (hasActors) down = firstActorFocus }
                     .focusRequester(fieldFocus)
                     .onFocusChanged { fieldFocused = it.isFocused }
                     .background(JetflixColors.SurfaceLight, RoundedCornerShape(4.dp))
