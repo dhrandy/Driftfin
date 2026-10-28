@@ -70,7 +70,7 @@ import tv.jetflix.app.ui.theme.JetflixType
 /** Which banner title is showing. Cycles through the list and wraps. */
 object HeroRotation {
     const val MAX_TITLES = 6
-    const val INTERVAL_MS = 8_000L
+    const val INTERVAL_MS = 10_000L
     fun next(index: Int, size: Int): Int = if (size <= 1) 0 else (index + 1) % size
 }
 
@@ -237,7 +237,7 @@ class MenuAwareScrollSpec(
     }
 }
 
-/** Home row order: Continue Watching, Up Next, Recently Added Movies, then Favorites, Recently Added Episodes, library rows, and More like X last. */
+/** Home row order: Continue Watching, Next Up, Recently Added Movies, Recently Added Episodes, Favorites, then library rows, and More like X last. */
 fun orderHomeSections(
     resume: List<BaseItemDto>, nextUp: List<BaseItemDto>, latestMovies: List<BaseItemDto>, favorites: List<BaseItemDto>,
     latestEpisodes: List<BaseItemDto>, moreLike: HomeSection?, library: List<HomeSection>,
@@ -246,8 +246,8 @@ fun orderHomeSections(
     if (resume.isNotEmpty()) out += HomeSection("Continue Watching", resume, wide = true)
     if (nextUp.isNotEmpty()) out += HomeSection("Next Up", nextUp, wide = true)
     if (latestMovies.isNotEmpty()) out += HomeSection("Recently Added Movies", latestMovies, wide = false)
-    if (favorites.isNotEmpty()) out += HomeSection("Favorites", favorites, wide = false)
     if (latestEpisodes.isNotEmpty()) out += HomeSection("Recently Added Episodes", latestEpisodes, wide = true)
+    if (favorites.isNotEmpty()) out += HomeSection("Favorites", favorites, wide = false)
     out += library.filter { it.items.isNotEmpty() }
     moreLike?.let { out += it } // recommendations always sit at the very bottom
     return out

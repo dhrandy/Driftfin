@@ -4,6 +4,18 @@ Each build lists its real changes here. The CI release workflow copies the secti
 matching the build tag onto the GitHub release page and appends the standard
 automated-build footer.
 
+## build-23
+
+Fixes:
+- Movie and show pages you reopen start at the top again instead of jumping down to the cast. Coming Back from an actor or the player still returns to your exact spot.
+- While a video is paused, the progress bar and times stay bright and readable with the cast row showing.
+- The Search icon stays visible when the Search tab is selected.
+- The What's New card now shows each update's real changes.
+
+Changes:
+- The Home banner switches titles every 10 seconds.
+- Home rows are now: Continue Watching, Next Up, Recently Added Movies, Recently Added Episodes, Favorites, then your libraries.
+
 ## build-22
 
 Fixes:

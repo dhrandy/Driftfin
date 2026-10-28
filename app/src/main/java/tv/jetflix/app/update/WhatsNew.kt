@@ -17,9 +17,24 @@ import androidx.tv.material3.Button
 import androidx.tv.material3.Text
 import tv.jetflix.app.ui.theme.JetflixType
 
-/** What changed, shown once after an update installs. Kept in step with the build; oldest first. */
+/**
+ * What changed, shown once after an update installs. Release builds embed the matching
+ * RELEASE_NOTES.md section as assets/whatsnew.txt at build time (see android.yml), so the card
+ * always shows the build's real changes; [fallbackNotes] covers local/dev builds with no asset.
+ */
 object WhatsNew {
-    val notes: List<String> = listOf(
+    fun notes(context: android.content.Context): List<String> {
+        val fromAsset = runCatching {
+            context.assets.open("whatsnew.txt").bufferedReader().use { it.readLines() }
+        }.getOrNull()?.let { parse(it) }
+        return fromAsset?.takeIf { it.isNotEmpty() } ?: fallbackNotes
+    }
+
+    /** Keeps the bullet text, drops headings and blank lines. */
+    internal fun parse(lines: List<String>): List<String> =
+        lines.map { it.trim() }.filter { it.isNotEmpty() && !it.equals("Fixes:", ignoreCase = true) && !it.startsWith("#") }
+
+    private val fallbackNotes: List<String> = listOf(
         "Check for updates moved to the top of Settings, and the app now tells you on start when a new build is out.",
         "4K filter on Movies and Shows: Filter, then Resolution.",
         "New trailer button icon.",

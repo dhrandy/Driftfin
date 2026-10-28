@@ -213,6 +213,8 @@ private fun SearchIconTab(selected: Boolean, onClick: () -> Unit, modifier: Modi
         shape = ClickableSurfaceDefaults.shape(shape = androidx.compose.foundation.shape.RoundedCornerShape(50)),
     ) {
         // Magnifier drawn by hand (the extended icon set is not a dependency).
+        // Follow the Surface's content color: dark glyph on the white selected/focused pill, light otherwise.
+        val glyph = androidx.tv.material3.LocalContentColor.current
         androidx.compose.foundation.Canvas(
             Modifier
                 .padding(horizontal = 12.dp, vertical = 5.dp)
@@ -220,8 +222,8 @@ private fun SearchIconTab(selected: Boolean, onClick: () -> Unit, modifier: Modi
                 .semantics { contentDescription = "Search" },
         ) {
             val w = size.width * 0.12f
-            drawCircle(color = Color.White, radius = size.width * 0.34f, center = androidx.compose.ui.geometry.Offset(size.width * 0.4f, size.height * 0.4f), style = androidx.compose.ui.graphics.drawscope.Stroke(width = w))
-            drawLine(color = Color.White, start = androidx.compose.ui.geometry.Offset(size.width * 0.66f, size.height * 0.66f), end = androidx.compose.ui.geometry.Offset(size.width * 0.95f, size.height * 0.95f), strokeWidth = w)
+            drawCircle(color = glyph, radius = size.width * 0.34f, center = androidx.compose.ui.geometry.Offset(size.width * 0.4f, size.height * 0.4f), style = androidx.compose.ui.graphics.drawscope.Stroke(width = w))
+            drawLine(color = glyph, start = androidx.compose.ui.geometry.Offset(size.width * 0.66f, size.height * 0.66f), end = androidx.compose.ui.geometry.Offset(size.width * 0.95f, size.height * 0.95f), strokeWidth = w)
         }
     }
 }

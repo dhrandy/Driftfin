@@ -507,16 +507,19 @@ AnimatedVisibility(visible = visible, enter = fadeIn(), exit = fadeOut()) {
                 )
             }
 
+            if (castVisible) {
+                // Dark bottom-up fade behind the cast strip so photos and names stay readable on bright frames.
+                // A gradient, not another live blur: blur is one of the suspects in the TV scroll-stutter investigation.
+                // Drawn BEFORE the bottom bar: over it, this scrim dimmed the times and seek bar to near-invisible.
+                Box(
+                    Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(340.dp).background(PauseCastScrim),
+                )
+            }
             PlayerBottomBar(
                 positionTicks, bufferedTicks, durationTicks,
                 Modifier.align(Alignment.BottomCenter),
             )
             if (castVisible) {
-                // Dark bottom-up fade behind the cast strip so photos and names stay readable on bright frames.
-                // A gradient, not another live blur: blur is one of the suspects in the TV scroll-stutter investigation.
-                Box(
-                    Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(340.dp).background(PauseCastScrim),
-                )
                 PauseCastStrip(
                     cast = cast, selected = castSelected, imageUrlFor = personImageUrl,
                     modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 96.dp),

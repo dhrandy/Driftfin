@@ -90,10 +90,16 @@ fun JetflixRoot() {
     val session by SessionManager.session.collectAsState()
 
     var backStack by remember { mutableStateOf(listOf<Screen>(Screen.Home)) }
+    val stateHolder = androidx.compose.runtime.saveable.rememberSaveableStateHolder()
     val current = backStack.last()
     androidx.compose.runtime.SideEffect { tv.jetflix.app.ui.components.ButtonSounds.onPlayer = current is Screen.Player }
 
-    fun push(screen: Screen) { backStack = backStack + screen }
+    fun push(screen: Screen) {
+        // A fresh open of a details page starts at the top (Randy: reopened pages must not come
+        // back scrolled); pop() below keeps the saved state, so Back-returns restore the old spot.
+        if (screen is Screen.Details) stateHolder.removeState(screen.toString())
+        backStack = backStack + screen
+    }
     fun pop() { if (backStack.size > 1) backStack = backStack.dropLast(1) }
 
     BackHandler(enabled = session != null && backStack.size > 1) { pop() }
@@ -129,7 +135,7 @@ fun JetflixRoot() {
     // Once per installed build: what changed in this update. OK dismisses and remembers the build.
     var showWhatsNew by remember { mutableStateOf(tv.jetflix.app.BuildConfig.VERSION_CODE > tv.jetflix.app.data.AppSettings.lastSeenBuild) }
     if (showWhatsNew) {
-        tv.jetflix.app.update.WhatsNewDialog(tv.jetflix.app.update.WhatsNew.notes) {
+        tv.jetflix.app.update.WhatsNewDialog(tv.jetflix.app.update.WhatsNew.notes(context)) {
             tv.jetflix.app.data.AppSettings.lastSeenBuild = tv.jetflix.app.BuildConfig.VERSION_CODE
             showWhatsNew = false
         }
@@ -234,7 +240,6 @@ fun JetflixRoot() {
             )
         }
     }
-    val stateHolder = androidx.compose.runtime.saveable.rememberSaveableStateHolder()
     // One more Left at the left edge of a main section opens Search. Nested pages (details, actor,
     // collections), the player, trailers, the sign-in form, Search itself and Settings keep Left to themselves.
     val leftOpensSearch = Modifier.onLeftEdge(

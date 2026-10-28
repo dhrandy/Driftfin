@@ -34,6 +34,17 @@ jobs:
           echo "BUILD_NUMBER=$((LAST + 1))" >> "$GITHUB_ENV"
           echo "Next build number: $((LAST + 1)) (releases max $REL, tags max $TAGS)"
 
+      - name: Embed What's New notes
+        run: |
+          # The in-app What's New card reads the same RELEASE_NOTES.md section the GitHub release
+          # gets, so the app always shows the build's real changes. Refuse to build without them:
+          # a release with no notes is exactly the stale-Whats-New bug.
+          TAG="build-${BUILD_NUMBER}"
+          mkdir -p app/src/main/assets
+          awk '/^## /{if(found)exit; if(tolower($0) ~ tolower(TAG))found=1; next} found' RELEASE_NOTES.md | sed -n 's/^- //p' > app/src/main/assets/whatsnew.txt
+          if [ ! -s app/src/main/assets/whatsnew.txt ]; then echo "RELEASE_NOTES.md has no bullet notes for $TAG; add them before building." >&2; exit 1; fi
+          cat app/src/main/assets/whatsnew.txt
+
       - uses: actions/setup-java@v4
         with:
           distribution: temurin

@@ -158,4 +158,22 @@ class QaCaptureTest {
         rule.waitForIdle(); rule.mainClock.advanceTimeBy(1500); rule.waitForIdle()
         capture("home_readme")
     }
+
+    @Test fun detailsModernLandscape() {
+        // Genuine 16:9 landscape backdrop (Dune: Part Two TMDB still, see art/SOURCES.md): the modern-art
+        // counterpart to the classic-poster fixture, for banner presentation checks at TV proportions.
+        val movie = base.first { it.Name == "Dune: Part Two" }
+        rule.setContent {
+            CompositionLocalProvider(LocalTestArtwork provides { art(it) }) {
+                JetflixTheme {
+                    tv.jetflix.app.ui.details.DetailsContent(
+                        tv.jetflix.app.ui.details.DetailsUiState(loading = false, item = movie, playTarget = movie, similar = base.filter { it.Id != movie.Id }.take(8)),
+                        JellyfinRepository().apply { apiFor("http://demo.test") }, {}, { _, _ -> }, {}, {}, {},
+                    )
+                }
+            }
+        }
+        rule.waitForIdle(); rule.mainClock.advanceTimeBy(1500); rule.waitForIdle()
+        capture("details_modern_landscape")
+    }
 }
