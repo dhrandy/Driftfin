@@ -47,10 +47,8 @@ Driftfin is still in alpha. Its focus is making your Jellyfin library feel good 
 
 | | |
 | --- | --- |
-| Device | Android TV or Google TV running Android 8 (API 26) or newer |
-| Server | Jellyfin 10.10 or newer for every feature; the app also signs in and browses with older 10.x servers, and features that need a newer server simply hide themselves when the server doesn't have them (Quick Connect sign-in needs 10.7+, Skip Intro needs Media Segments from 10.10+) |
-
-Other devices that meet the same Android level may work but aren't tested.
+| Device | Android TV or Google TV running Android 8 (API 26) or newer, the app's install floor. Device compatibility beyond that floor is not exhaustively tested. |
+| Server | A Jellyfin server you can reach from the TV. The oldest server version the app fully supports has not been verified. Some features need a specific server version and hide themselves when the server doesn't have it: Quick Connect sign-in needs Jellyfin 10.7 or newer ([10.7.0 release notes](https://github.com/jellyfin/jellyfin/releases/tag/v10.7.0)), and Skip Intro needs Media Segments, added in Jellyfin 10.10 ([10.10 release post](https://jellyfin.org/posts/jellyfin-release-10.10.0/)). |
 
 ## Install
 
