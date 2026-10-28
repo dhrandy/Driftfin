@@ -1,6 +1,6 @@
 # Driftfin
 
-[![Status: beta](https://img.shields.io/badge/status-beta-yellow)](https://github.com/dhrandy/Driftfin/releases)
+[![Status: alpha](https://img.shields.io/badge/status-alpha-orange)](https://github.com/dhrandy/Driftfin/releases)
 [![Build](https://github.com/dhrandy/Driftfin/actions/workflows/android.yml/badge.svg)](https://github.com/dhrandy/Driftfin/actions/workflows/android.yml)
 [![Latest release](https://img.shields.io/github/v/release/dhrandy/Driftfin?display_name=tag)](https://github.com/dhrandy/Driftfin/releases/latest)
 [![Downloads](https://img.shields.io/github/downloads/dhrandy/Driftfin/total)](https://github.com/dhrandy/Driftfin/releases)
@@ -8,7 +8,7 @@
 
 An Android TV client for your own Jellyfin server, with a TV-first layout (home rows, hero banner, My List, details, search, player). Not affiliated with Jellyfin.
 
-**Status: beta, TV-only.** Expect rough edges and bugs. It is unit-tested and snapshot-tested, and it has had hands-on use on one Android TV, but that is not broad device coverage. Playback, HLS transcodes, subtitle loading, remote-control focus and scrolling smoothness are still being checked on real hardware, and known issues are open. Do not rely on it as your only way to watch.
+**Status: alpha, TV-only.** Expect rough edges and bugs. It is unit-tested and snapshot-tested, and it has had hands-on use on one Android TV, but that is not broad device coverage. Playback, HLS transcodes, subtitle loading, remote-control focus and scrolling smoothness are still being checked on real hardware, and known issues are open. Do not rely on it as your only way to watch.
 
 ## Screenshots
 
