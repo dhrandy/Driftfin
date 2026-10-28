@@ -72,9 +72,12 @@ object AppSettings {
     private val _autoplayNext = MutableStateFlow(true)
     private val _showMyList = MutableStateFlow(true)
     private val _showNextUp = MutableStateFlow(true)
+    private val _showWatchlist = MutableStateFlow(true)
     val autoplayNext: StateFlow<Boolean> = _autoplayNext
     val showMyList: StateFlow<Boolean> = _showMyList
     val showNextUp: StateFlow<Boolean> = _showNextUp
+    /** Star button on movie/show Details and the Watchlist section under My Driftfin. On by default. */
+    val showWatchlist: StateFlow<Boolean> = _showWatchlist
 
     fun init(context: Context) {
         val p = context.getSharedPreferences("jetflix_settings", Context.MODE_PRIVATE)
@@ -82,6 +85,7 @@ object AppSettings {
         _autoplayNext.value = p.getBoolean("autoplay_next", true)
         _showMyList.value = p.getBoolean("show_my_list", true)
         _showNextUp.value = p.getBoolean("show_next_up", true)
+        _showWatchlist.value = p.getBoolean("show_watchlist", true)
         _liveBlur.value = p.getBoolean("live_blur", true)
         _continueWatchingPosters.value = p.getBoolean("continue_watching_posters", false)
         _skipIntro.value = p.getBoolean("skip_intro", true)
@@ -97,4 +101,5 @@ object AppSettings {
     fun setAutoplayNext(v: Boolean) { _autoplayNext.value = v; prefs?.edit()?.putBoolean("autoplay_next", v)?.apply() }
     fun setShowMyList(v: Boolean) { _showMyList.value = v; prefs?.edit()?.putBoolean("show_my_list", v)?.apply() }
     fun setShowNextUp(v: Boolean) { _showNextUp.value = v; prefs?.edit()?.putBoolean("show_next_up", v)?.apply() }
+    fun setShowWatchlist(v: Boolean) { _showWatchlist.value = v; prefs?.edit()?.putBoolean("show_watchlist", v)?.apply() }
 }

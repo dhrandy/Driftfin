@@ -117,9 +117,7 @@ fun PlayerScreen(
     LaunchedEffect(isPausedNow, pauseCastOn) {
         if (isPausedNow && pauseCastOn && !castFetched) {
             castFetched = true
-            cast = try {
-                api.getItem(item.Id, session.userId).body()?.People.orEmpty().filter { it.Type == "Actor" && it.Id != null }.take(15)
-            } catch (_: Exception) { emptyList() }
+            cast = tv.jetflix.app.data.loadPauseCast(api, session.userId, item)
         }
     }
     LaunchedEffect(isPausedNow, pauseCastOn) { if (!isPausedNow || !pauseCastOn) { castIndex = null; castKeys.reset() } }

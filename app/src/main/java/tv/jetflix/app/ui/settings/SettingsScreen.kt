@@ -46,6 +46,7 @@ fun SettingsScreen(
 ) {
     val autoplay by AppSettings.autoplayNext.collectAsState()
     val myList by AppSettings.showMyList.collectAsState()
+    val watchlist by AppSettings.showWatchlist.collectAsState()
     val nextUp by AppSettings.showNextUp.collectAsState()
     val context = androidx.compose.ui.platform.LocalContext.current
     val scope = androidx.compose.runtime.rememberCoroutineScope()
@@ -73,6 +74,8 @@ fun SettingsScreen(
         continueWatchingPosters = AppSettings.continueWatchingPosters.collectAsState().value,
         onToggleContinueWatchingPosters = { AppSettings.setContinueWatchingPosters(!AppSettings.continueWatchingPosters.value) },
         pauseCast = AppSettings.pauseCast.collectAsState().value,
+        showWatchlist = watchlist,
+        onToggleWatchlist = { AppSettings.setShowWatchlist(!watchlist) },
         onTogglePauseCast = { AppSettings.setPauseCast(!AppSettings.pauseCast.value) },
         skipIntro = AppSettings.skipIntro.collectAsState().value,
         onToggleSkipIntro = { AppSettings.setSkipIntro(!AppSettings.skipIntro.value) },
@@ -144,6 +147,8 @@ fun SettingsContent(
     onToggleFormatBadges: () -> Unit = {},
     startupWall: Boolean = true,
     onToggleStartupWall: () -> Unit = {},
+    showWatchlist: Boolean = true,
+    onToggleWatchlist: () -> Unit = {},
 ) {
     val menuBack = tv.jetflix.app.ui.components.rememberMenuBack()
     val first = remember { FocusRequester() }
@@ -161,6 +166,7 @@ fun SettingsContent(
             SettingRow("Check for updates", uDetail, true, onUpdateClick, Modifier.focusRequester(first), valueText = uValue)
             SettingRow("Autoplay next episode", "Starts the next episode after a 5 second countdown.", autoplay, onToggleAutoplay)
             SettingRow("Show My List on Home", "My List uses your Jellyfin favorites for this user.", showMyList, onToggleMyList)
+            SettingRow("Watchlist", "Star movies and shows to watch later. Adds the star button on their pages and the Watchlist section under My Driftfin.", showWatchlist, onToggleWatchlist)
             SettingRow("Poster size", "Small, Medium or Large cards on Home and in libraries. Press OK to change.", true, onCyclePosterSize, valueText = posterSize.label)
             SettingRow("Continue Watching art", "Scene images (the wide look) or posters for the Continue Watching row. Press OK to change.", true, onToggleContinueWatchingPosters, valueText = if (continueWatchingPosters) "Posters" else "Scene images")
             SettingRow("Title logos", "Shows a show's own title lettering on Home and Details when Jellyfin has it. Falls back to plain text.", titleLogos, onToggleTitleLogos)

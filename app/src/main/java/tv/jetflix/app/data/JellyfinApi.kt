@@ -73,6 +73,7 @@ interface JellyfinApi {
         @Query("enableImages") enableImages: Boolean? = null,
         @Query("enableUserData") enableUserData: Boolean? = null,
         @Query("personIds") personIds: String? = null,
+        @Query("ids") ids: String? = null,
     ): Response<BaseItemDtoQueryResult>
 
     @GET("Items/{itemId}")

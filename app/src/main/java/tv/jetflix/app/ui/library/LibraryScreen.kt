@@ -60,8 +60,8 @@ enum class WatchFilter(val label: String, val jellyfin: String?) {
     fun next() = values()[(ordinal + 1) % values().size]
 }
 
-/** Sections inside My Driftfin. Collections are Jellyfin box sets; Favorites are the user's Jellyfin favorites. */
-enum class MySection(val label: String) { Collections("Collections"), Favorites("Favorites") }
+/** Sections inside My Driftfin, in his order: Favorites (Jellyfin heart), Watchlist (Driftfin's own star), Collections (box sets). */
+enum class MySection(val label: String) { Favorites("Favorites"), Watchlist("Watchlist"), Collections("Collections") }
 
 data class LibraryUiState(
     val sort: LibrarySort = LibrarySort.Name,
@@ -232,8 +232,8 @@ class LibraryViewModel(val repo: JellyfinRepository, private val store: LibraryP
                     return@launch
                 }
                 if (tab == JetflixTab.MY_LIST) {
-                    val mine = if (section == MySection.Collections) {
-                        api.getItems(
+                    val mine = when (section) {
+                        MySection.Collections -> api.getItems(
                             userId = session.userId,
                             includeItemTypes = "BoxSet",
                             recursive = true,
@@ -241,9 +241,26 @@ class LibraryViewModel(val repo: JellyfinRepository, private val store: LibraryP
                             sortOrder = order(),
                             fields = "Overview,Genres,ChildCount",
                             filters = filterString(), genres = genre, years = year?.toString(),
-                        )
-                    } else {
-                        api.getItems(
+                        ).body()?.Items ?: emptyList()
+                        // Driftfin's own Watchlist: the starred ids, fetched fresh so posters/watched state
+                        // are current, shown in star order (newest first) like Marquee's shelf.
+                        MySection.Watchlist -> {
+                            val starred = tv.jetflix.app.data.Watchlist.ids.value
+                            if (starred.isEmpty()) emptyList() else {
+                                val found = api.getItems(
+                                    userId = session.userId,
+                                    includeItemTypes = "Movie,Series",
+                                    recursive = true,
+                                    ids = starred.joinToString(","),
+                                    fields = "Overview,Genres",
+                                ).body()?.Items ?: emptyList()
+                                val rank = starred.withIndex().associate { it.value to it.index }
+                                // The fetch has no filters, so a missing id means the server lost it: drop it.
+                                tv.jetflix.app.data.Watchlist.pruneMissing(found.map { it.Id }.toSet())
+                                found.sortedBy { rank[it.Id] ?: Int.MAX_VALUE }
+                            }
+                        }
+                        MySection.Favorites -> api.getItems(
                             userId = session.userId,
                             includeItemTypes = "Movie,Series",
                             recursive = true,
@@ -251,8 +268,8 @@ class LibraryViewModel(val repo: JellyfinRepository, private val store: LibraryP
                             sortOrder = order(),
                             fields = "Overview,Genres",
                             filters = filterString("IsFavorite"), genres = genre, years = year?.toString(),
-                        )
-                    }.body()?.Items ?: emptyList()
+                        ).body()?.Items ?: emptyList()
+                    }
                     loadOptions(tab, api, session.userId, listOf(null), "Movie,Series")
                     if (dropStaleFilters()) { save(tab); load(tab); return@launch }
                     _state.value = fresh(items = mine)
@@ -459,7 +476,9 @@ fun LibraryContent(
         try { navFocus.requestFocus() } catch (_: Exception) { }
     }
     val isMine = tab == JetflixTab.MY_LIST && collectionTitle == null
-    val showSort = (tab != JetflixTab.MY_LIST || collectionTitle != null || isMine) && (state.items.isNotEmpty() || state.sort != LibrarySort.Name || isMine || state.watch != WatchFilter.All || state.only4k || state.genre != null || state.year != null)
+    val showWatchlistSection by tv.jetflix.app.data.AppSettings.showWatchlist.collectAsState()
+    if (!showWatchlistSection && state.section == MySection.Watchlist) LaunchedEffect(Unit) { onSection(MySection.Favorites) }
+    val showSort = state.section != MySection.Watchlist && (tab != JetflixTab.MY_LIST || collectionTitle != null || isMine) && (state.items.isNotEmpty() || state.sort != LibrarySort.Name || isMine || state.watch != WatchFilter.All || state.only4k || state.genre != null || state.year != null)
     val sectionFocus = remember { FocusRequester() }
     // the banner belongs on Home only; Movies and Shows start straight at the sort and poster grid.
     val banner: BaseItemDto? = null
@@ -517,7 +536,7 @@ fun LibraryContent(
                             horizontalArrangement = Arrangement.spacedBy(10.dp),
                             modifier = Modifier.focusProperties { down = sortFocus; up = navFocus },
                         ) {
-                            MySection.values().forEach { sec ->
+                            MySection.values().filter { it != MySection.Watchlist || showWatchlistSection }.forEach { sec ->
                                 val selected = sec == state.section
                                 androidx.tv.material3.Button(
                                     onClick = { onSection(sec) },
@@ -607,7 +626,7 @@ fun LibraryContent(
             }
         } else if (!state.loading) {
             Text(
-                state.error ?: if (tab == JetflixTab.MY_LIST) (if (state.section == MySection.Collections) "No collections found on this server." else "No favorites yet. Open a title and choose Add to Favorites.") else "No ${tab.label.lowercase()} found.",
+                state.error ?: if (tab == JetflixTab.MY_LIST) (when (state.section) { MySection.Collections -> "No collections found on this server."; MySection.Watchlist -> "Nothing on your watchlist yet. Open a movie or show and choose the star."; MySection.Favorites -> "No favorites yet. Open a title and choose Add to Favorites." }) else "No ${tab.label.lowercase()} found.",
                 style = JetflixType.body,
                 color = JetflixColors.TextSecondary,
                 modifier = Modifier

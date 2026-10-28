@@ -4,6 +4,12 @@ Each build lists its real changes here. The CI release workflow copies the secti
 matching the build tag onto the GitHub release page and appends the standard
 automated-build footer.
 
+## build-24
+
+New:
+- Watchlist: star movies and shows to watch later. The star sits before the heart on a movie or show page - outline when not starred, gold when starred. Your Watchlist lives under My Driftfin between Favorites and Collections, newest first. It's your own list per profile on this device, separate from Jellyfin favorites. Settings can hide the star and section.
+- Paused playback now shows the show's cast when the episode itself lists no actors.
+
 ## build-23
 
 Fixes:

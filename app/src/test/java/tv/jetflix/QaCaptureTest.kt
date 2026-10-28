@@ -176,4 +176,58 @@ class QaCaptureTest {
         rule.waitForIdle(); rule.mainClock.advanceTimeBy(1500); rule.waitForIdle()
         capture("details_modern_landscape")
     }
+
+    @Test fun detailsWatchlistStarOutline() {
+        // The unstarred state: outline star before the heart (his 8:56 spec).
+        val movie = base.first { it.Type == "Movie" }
+        rule.setContent {
+            CompositionLocalProvider(LocalTestArtwork provides { art(it) }) {
+                JetflixTheme {
+                    tv.jetflix.app.ui.details.DetailsContent(
+                        tv.jetflix.app.ui.details.DetailsUiState(loading = false, item = movie, playTarget = movie, similar = base.filter { it.Id != movie.Id }.take(8)),
+                        JellyfinRepository().apply { apiFor("http://demo.test") }, {}, { _, _ -> }, {}, {}, {},
+                        watchlisted = false, showWatchlist = true,
+                    )
+                }
+            }
+        }
+        rule.waitForIdle(); rule.mainClock.advanceTimeBy(1500); rule.waitForIdle()
+        capture("details_watchlist_star_outline")
+    }
+
+    @Test fun myDriftfinWatchlistSection() {
+        // My Driftfin with the Watchlist section selected and populated, tab order Favorites / Watchlist / Collections.
+        AppSettings.setPosterSize(PosterSize.Medium)
+        val items = base.take(9).mapIndexed { i, m -> m.copy(Name = "Starred ${i + 1}") }
+        rule.setContent {
+            CompositionLocalProvider(LocalTestArtwork provides { art(it) }) {
+                JetflixTheme {
+                    tv.jetflix.app.ui.library.LibraryContent(
+                        tv.jetflix.app.ui.library.LibraryUiState(loading = false, items = items, section = tv.jetflix.app.ui.library.MySection.Watchlist),
+                        JellyfinRepository().apply { apiFor("http://demo.test") }, JetflixTab.MY_LIST, "demo", {}, {}, {},
+                    )
+                }
+            }
+        }
+        rule.waitForIdle(); rule.mainClock.advanceTimeBy(1500); rule.waitForIdle()
+        capture("my_driftfin_watchlist")
+    }
+
+    @Test fun detailsWatchlistStar() {
+        // Star beside the heart in the Details button row, starred state (gold fill) for the preview.
+        val movie = base.first { it.Type == "Movie" }
+        rule.setContent {
+            CompositionLocalProvider(LocalTestArtwork provides { art(it) }) {
+                JetflixTheme {
+                    tv.jetflix.app.ui.details.DetailsContent(
+                        tv.jetflix.app.ui.details.DetailsUiState(loading = false, item = movie, playTarget = movie, similar = base.filter { it.Id != movie.Id }.take(8)),
+                        JellyfinRepository().apply { apiFor("http://demo.test") }, {}, { _, _ -> }, {}, {}, {},
+                        watchlisted = true, showWatchlist = true,
+                    )
+                }
+            }
+        }
+        rule.waitForIdle(); rule.mainClock.advanceTimeBy(1500); rule.waitForIdle()
+        capture("details_watchlist_star")
+    }
 }

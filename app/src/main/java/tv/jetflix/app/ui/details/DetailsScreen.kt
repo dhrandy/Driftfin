@@ -33,6 +33,8 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.FavoriteBorder
+import androidx.compose.material.icons.outlined.Star
+import androidx.tv.material3.LocalContentColor
 import androidx.compose.foundation.layout.size
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -212,6 +214,12 @@ class DetailsViewModel(val repo: JellyfinRepository) : ViewModel() {
         }
     }
 
+    /** Star on/off in Driftfin's own Watchlist (not a Jellyfin favorite). Local-only; never touches the server. */
+    fun toggleWatchlist() {
+        val item = _state.value.item ?: return
+        tv.jetflix.app.data.Watchlist.toggle(item.Id)
+    }
+
     fun toggleWatched() {
         val session = SessionManager.session.value ?: return
         val item = _state.value.item ?: return
@@ -241,11 +249,19 @@ fun DetailsScreen(
     onActor: (personId: String, name: String) -> Unit = { _, _ -> },
 ) {
     val state by viewModel.state.collectAsState()
+    val watchlistIds by tv.jetflix.app.data.Watchlist.ids.collectAsState()
+    val showWatchlist by tv.jetflix.app.data.AppSettings.showWatchlist.collectAsState()
+    val watchlistFull by tv.jetflix.app.data.Watchlist.capNotice.collectAsState()
+    if (watchlistFull) LaunchedEffect(Unit) { kotlinx.coroutines.delay(4_000); tv.jetflix.app.data.Watchlist.clearCapNotice() }
     DetailsContent(
         state = state,
         repo = viewModel.repo,
         onToggleWatched = { viewModel.toggleWatched() },
         onToggleFavorite = { viewModel.toggleFavorite() },
+        watchlisted = state.item?.Id?.let { watchlistIds.contains(it) } == true,
+        showWatchlist = showWatchlist,
+        watchlistFull = watchlistFull,
+        onToggleWatchlist = { viewModel.toggleWatchlist() },
         onSelectSeason = { seriesId, seasonId -> viewModel.selectSeason(seriesId, seasonId) },
         onPlay = onPlay,
         onItemClick = onItemClick,
@@ -267,6 +283,10 @@ fun DetailsContent(
     onToggleFavorite: () -> Unit = {},
     onTrailer: (tv.jetflix.app.data.TrailerSource) -> Unit = {},
     onActor: (personId: String, name: String) -> Unit = { _, _ -> },
+    watchlisted: Boolean = false,
+    showWatchlist: Boolean = false,
+    onToggleWatchlist: () -> Unit = {},
+    watchlistFull: Boolean = false,
 ) {
     tv.jetflix.app.ui.components.CountRecompose("details")
     val item = state.item
@@ -383,6 +403,26 @@ fun DetailsContent(
                                     modifier = Modifier.size(24.dp),
                                 )
                             }
+                            // Star first, then the heart (his order): Driftfin's own Watchlist, movies and
+                            // shows only (Marquee's rule). Outline = not starred, gold fill = starred.
+                            if (showWatchlist && (item.Type == "Movie" || item.Type == "Series")) {
+                                Button(
+                                    onClick = { onToggleWatchlist() },
+                                    colors = ButtonDefaults.colors(
+                                        containerColor = JetflixColors.SurfaceLight.copy(alpha = 0.7f),
+                                        contentColor = Color.White,
+                                        focusedContainerColor = JetflixColors.SurfaceLight,
+                                        focusedContentColor = Color.White,
+                                    ),
+                                ) {
+                                    Icon(
+                                        if (watchlisted) Icons.Filled.Star else StarOutlineIcon,
+                                        contentDescription = if (watchlisted) "In watchlist. Press OK to remove" else "Add to watchlist",
+                                        tint = if (watchlisted) Color(0xFFE5C778) else LocalContentColor.current,
+                                        modifier = Modifier.size(24.dp),
+                                    )
+                                }
+                            }
                             Button(
                                 onClick = { onToggleFavorite() },
                                 colors = ButtonDefaults.colors(
@@ -402,6 +442,12 @@ fun DetailsContent(
                         }
                     }
                 }
+            }
+        }
+
+        if (watchlistFull) {
+            item(key = "watchlistFull") {
+                Text("Watchlist is full (500 titles). Remove one to add another.", style = JetflixType.caption, color = JetflixColors.TextMuted)
             }
         }
 
@@ -689,6 +735,21 @@ fun playLabel(target: BaseItemDto): String {
 
 /** Where the wide backdrop sits inside the fixed header box: centred, so the middle of the art is what shows. */
 val HeaderArtAlignment: Alignment = Alignment.Center
+
+/** Hollow star, for "not on the Watchlist yet": the material-icons core outlined star renders solid,
+ *  so this is the Material star_border geometry (outer star with the inner star punched out). */
+val StarOutlineIcon: androidx.compose.ui.graphics.vector.ImageVector by lazy {
+    androidx.compose.ui.graphics.vector.ImageVector.Builder("StarOutline", 24.dp, 24.dp, 24f, 24f).apply {
+        addPath(
+            pathData = androidx.compose.ui.graphics.vector.addPathNodes(
+                "M22 9.24l-7.19-.62L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21 12 17.27 18.18 21l-1.63-7.03L22 9.24z" +
+                "M12 15.4l-3.76 2.27 1-4.28-3.32-2.88 4.38-.38L12 6.1l1.71 4.04 4.38.38-3.32 2.88 1 4.28L12 15.4z"
+            ),
+            pathFillType = androidx.compose.ui.graphics.PathFillType.EvenOdd,
+            fill = androidx.compose.ui.graphics.SolidColor(Color.Black),
+        )
+    }.build()
+}
 
 /** Clapperboard, for "Watch trailer". Artwork chosen from the icon options (option 1). */
 val TrailerIcon: androidx.compose.ui.graphics.vector.ImageVector by lazy {

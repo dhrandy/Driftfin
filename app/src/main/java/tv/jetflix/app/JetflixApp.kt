@@ -20,6 +20,7 @@ class JetflixApp : Application(), ImageLoaderFactory {
         repo = JellyfinRepository()
         tokenStore = TokenStore(this)
         tv.jetflix.app.data.AppSettings.init(this)
+        tv.jetflix.app.data.Watchlist.init(this)
         tokenStore.load()?.let { session ->
             SessionManager.signIn(session)
             repo.apiFor(session.serverUrl)
