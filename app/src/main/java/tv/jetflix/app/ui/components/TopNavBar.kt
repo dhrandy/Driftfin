@@ -36,7 +36,7 @@ import androidx.tv.material3.Text
 import tv.jetflix.app.ui.theme.JetflixColors
 import tv.jetflix.app.ui.theme.JetflixType
 
-enum class JetflixTab(val label: String) { HOME("Home"), SHOWS("Shows"), MOVIES("Movies"), MY_LIST("My Driftfin"), SEARCH("Search"), SETTINGS("Settings") }
+enum class JetflixTab(val label: String) { HOME("Home"), SHOWS("Shows"), MOVIES("Movies"), MY_LIST("My Stuff"), SEARCH("Search"), SETTINGS("Settings") }
 
 /**
  * True while the user is moving across the top tabs. Each page owns its own top bar, so opening a page by focus

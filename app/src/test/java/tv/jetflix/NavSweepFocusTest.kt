@@ -154,7 +154,7 @@ class NavSweepFocusTest {
         press(Key.DirectionUp) // sort row -> the tab we came from
         assertEquals("Up from the sort row must land on the Movies tab, not Search", "Movies", focusedLabel())
         press(Key.DirectionRight)
-        assertEquals("horizontal movement must continue across the tabs", "My Driftfin", focusedLabel())
+        assertEquals("horizontal movement must continue across the tabs", "My Stuff", focusedLabel())
     }
 
     @Test fun upFromShowsContentReturnsToTheShowsTab() {
@@ -172,13 +172,13 @@ class NavSweepFocusTest {
         NavSweep.active = true; NavSweep.tab = JetflixTab.MY_LIST
         rule.setContent { JetflixTheme { LibraryContent(LibraryUiState(loading = false, items = items), repo, JetflixTab.MY_LIST, "demo", {}, {}, {}) } }
         settleSweep()
-        assertEquals("My Driftfin", focusedLabel())
+        assertEquals("My Stuff", focusedLabel())
         press(Key.DirectionDown) // tab -> sections row
         press(Key.DirectionDown) // sections -> sort row
         assertTrue("Down must walk tab -> sections -> sort, was: ${focusedLabel()}", focusedLabel().startsWith("Sort:"))
         press(Key.DirectionUp) // sort -> sections
         press(Key.DirectionUp) // sections -> the tab we came from
-        assertEquals("Up from the sections row must land on the My Driftfin tab, not Search", "My Driftfin", focusedLabel())
+        assertEquals("Up from the sections row must land on the My Driftfin tab, not Search", "My Stuff", focusedLabel())
     }
 
     @Test fun sweepReturnToMoviesWithRememberedCardKeepsFocusOnTab() {

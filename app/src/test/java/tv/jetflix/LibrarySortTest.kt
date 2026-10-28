@@ -53,7 +53,7 @@ class LibrarySortTest {
             }
         }
         rule.waitForIdle()
-        val navLabels = setOf("Home", "Shows", "Movies", "My Driftfin", "Search", "Settings", "demo")
+        val navLabels = setOf("Home", "Shows", "Movies", "My Stuff", "Search", "Settings", "demo")
         val sortLabels = listOf("Sort: Name \u2191", "Filter")
         if (focused().isEmpty()) press(Key.DirectionDown) // Robolectric has no window focus; first key lands on the header
         if (focused() in sortLabels) { press(Key.DirectionUp); press(Key.DirectionUp) }

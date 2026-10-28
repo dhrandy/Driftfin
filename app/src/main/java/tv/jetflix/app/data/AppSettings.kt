@@ -87,7 +87,7 @@ object AppSettings {
     val autoplayNext: StateFlow<Boolean> = _autoplayNext
     val showMyList: StateFlow<Boolean> = _showMyList
     val showNextUp: StateFlow<Boolean> = _showNextUp
-    /** Star button on movie/show Details and the Watchlist section under My Driftfin. On by default. */
+    /** Star button on movie/show Details and the Watchlist section under My Stuff. On by default. */
     val showWatchlist: StateFlow<Boolean> = _showWatchlist
 
     fun init(context: Context) {

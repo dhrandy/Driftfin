@@ -60,7 +60,7 @@ class WatchlistDownFocusTest {
         }
         rule.waitForIdle()
         // Converge to the top nav bar from wherever initial focus landed (Up is a dead end there).
-        val tabs = setOf("Home", "Shows", "Movies", "My Driftfin", "Settings", "demo")
+        val tabs = setOf("Home", "Shows", "Movies", "My Stuff", "Settings", "demo")
         repeat(8) { if (focusedText() !in tabs) press(Key.DirectionUp) }
         assertTrue("expected the nav bar, was: ${focusedText()}", focusedText() in tabs)
         press(Key.DirectionDown) // nav bar -> section row (selected Favorites)

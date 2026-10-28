@@ -60,7 +60,7 @@ enum class WatchFilter(val label: String, val jellyfin: String?) {
     fun next() = values()[(ordinal + 1) % values().size]
 }
 
-/** Sections inside My Driftfin, in his order: Favorites (Jellyfin heart), Watchlist (Driftfin's own star), Collections (box sets). */
+/** Sections inside My Stuff, in his order: Favorites (Jellyfin heart), Watchlist (Driftfin's own star), Collections (box sets). */
 enum class MySection(val label: String) { Favorites("Favorites"), Watchlist("Watchlist"), Collections("Collections") }
 
 data class LibraryUiState(

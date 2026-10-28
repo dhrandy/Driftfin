@@ -85,7 +85,7 @@ class HomeNavigationTest {
         if (zone() == "none") press(Key.DirectionDown)
     }
 
-    private val navLabels = setOf("Home", "Shows", "Movies", "My Driftfin", "Search", "Settings", "demo")
+    private val navLabels = setOf("Home", "Shows", "Movies", "My Stuff", "Search", "Settings", "demo")
     private val heroLabels = setOf("Play", "Resume", "Play from start", "More Info")
     private fun zone(): String {
         val t = focusedText()
@@ -153,9 +153,9 @@ class HomeNavigationTest {
         val seen = mutableListOf(focusedText())
         repeat(5) { press(Key.DirectionRight); seen += focusedText() }
         // Search is an icon before Home; tabs follow in order and the last stop is the user name.
-        assertEquals(listOf("Home", "Shows", "Movies", "My Driftfin", "Settings", "demo"), seen.distinct())
+        assertEquals(listOf("Home", "Shows", "Movies", "My Stuff", "Settings", "demo"), seen.distinct())
         press(Key.DirectionLeft); press(Key.DirectionLeft)
-        assertEquals("My Driftfin", focusedText())
+        assertEquals("My Stuff", focusedText())
         repeat(4) { press(Key.DirectionLeft) }
         assertEquals("search icon is the first stop", "?", focusedText())
         press(Key.Enter)

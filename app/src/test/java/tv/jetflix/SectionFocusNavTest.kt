@@ -83,7 +83,7 @@ class SectionFocusNavTest {
             }
         }
         rule.waitForIdle()
-        val tabs = setOf("Home", "Shows", "Movies", "My Driftfin", "Settings", "demo")
+        val tabs = setOf("Home", "Shows", "Movies", "My Stuff", "Settings", "demo")
         repeat(8) { if (focusedText() !in tabs) press(Key.DirectionUp) }
         press(Key.DirectionDown) // nav -> selected section button (Favorites)
         assertTrue("section row, was: ${focusedText()}", focusedText().contains("Favorites"))
@@ -133,7 +133,7 @@ class SectionFocusNavTest {
             }
         }
         rule.waitForIdle()
-        val tabs = setOf("Home", "Shows", "Movies", "My Driftfin", "Settings", "demo")
+        val tabs = setOf("Home", "Shows", "Movies", "My Stuff", "Settings", "demo")
         repeat(8) { if (focusedText() !in tabs) press(Key.DirectionUp) }
         press(Key.DirectionDown)
         rule.onRoot().performKeyInput { pressKey(Key.DirectionRight) }; rule.waitForIdle() // hover -> Collections (empty)

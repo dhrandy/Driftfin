@@ -75,7 +75,7 @@ class HomeDownAfterRowScrollTest {
         if (zone() == "none") press(Key.DirectionDown)
     }
 
-    private val navLabels = setOf("Home", "Shows", "Movies", "My Driftfin", "Search", "Settings", "demo")
+    private val navLabels = setOf("Home", "Shows", "Movies", "My Stuff", "Search", "Settings", "demo")
     private val heroLabels = setOf("Play", "Resume", "Play from start", "More Info")
     private fun zone(): String {
         val t = focusedText()
