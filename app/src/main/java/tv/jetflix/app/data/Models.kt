@@ -169,6 +169,9 @@ data class BaseItemDto(
         return "S${s}:E${e}"
     }
 
+    /** The server's premiere (air) date as a calendar date, e.g. "Mar 3, 2021". Date only, no time zone shift; null when the server has none. */
+    fun airDateLabel(): String? = formatAirDate(PremiereDate)
+
     fun runtimeLabel(): String? {
         val ticks = RunTimeTicks ?: return null
         val totalMinutes = ticks / 600_000_000
@@ -283,4 +286,16 @@ object HdrFormats {
         for (src in item.MediaSources) src.MediaStreams?.firstOrNull { it.Type == "Video" }?.let { found += labelsFor(it) }
         return order.filter { it in found }
     }
+}
+
+private val AIR_MONTHS = arrayOf("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+
+/** Reads only the leading yyyy-MM-dd of a Jellyfin date string, so a UTC midnight never slides to the previous local day. */
+fun formatAirDate(raw: String?): String? {
+    val m = Regex("^(\\d{4})-(\\d{2})-(\\d{2})").find(raw?.trim().orEmpty()) ?: return null
+    val (y, mo, d) = m.destructured
+    val month = mo.toInt()
+    val day = d.toInt()
+    if (y.toInt() < 1850 || month !in 1..12 || day !in 1..31) return null
+    return "${AIR_MONTHS[month - 1]} $day, $y"
 }

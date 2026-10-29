@@ -4,6 +4,12 @@ Each build lists its real changes here. The CI release workflow copies the secti
 matching the build tag onto the GitHub release page and appends the standard
 automated-build footer.
 
+## build-35
+
+Changes:
+- On a show's page, the backdrop picture now stays in place while the page scrolls down to the seasons and episodes, so you see the top of the picture instead of only its bottom edge. The starting view and layout are unchanged.
+- Episode rows show the air date after the runtime, and a show's page shows "Premiered <date>" next to the year, when the server provides the date.
+
 ## build-34
 
 Changes:

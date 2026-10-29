@@ -1,5 +1,7 @@
 package tv.jetflix.app.ui.details
 
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.draw.clipToBounds
 import tv.jetflix.app.ui.components.resumePercent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -149,7 +151,7 @@ class DetailsViewModel(val repo: JellyfinRepository) : ViewModel() {
                     ).body()?.Items ?: emptyList()
                 }
                 val episodesDef = async {
-                    api.getEpisodes(item.Id, session.userId, fields = "Overview", limit = 2000).body()?.Items ?: emptyList()
+                    api.getEpisodes(item.Id, session.userId, fields = "Overview,PremiereDate", limit = 2000).body()?.Items ?: emptyList()
                 }
                 // Which episodes have a 4K version: the server's own is4K filter, IDs only, one request per page open.
                 // A failure just means no episode badges.
@@ -287,6 +289,7 @@ fun DetailsContent(
     showWatchlist: Boolean = false,
     onToggleWatchlist: () -> Unit = {},
     watchlistFull: Boolean = false,
+    listState: androidx.compose.foundation.lazy.LazyListState = androidx.compose.foundation.lazy.rememberLazyListState(),
 ) {
     tv.jetflix.app.ui.components.CountRecompose("details")
     val item = state.item
@@ -300,6 +303,7 @@ fun DetailsContent(
     }
 
     LazyColumn(
+        state = listState,
         modifier = Modifier
             .fillMaxSize()
             .background(JetflixColors.Background),
@@ -312,13 +316,20 @@ fun DetailsContent(
                     .height(460.dp),
             ) {
                 if (item != null) {
-                    ArtImage(
-                        url = repo.backdropUrl(item, 1920),
-                        contentDescription = null,
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop,
-                        alignment = HeaderArtAlignment,
-                    )
+                    // The list scrolls the header up when focus moves down (season chips, episodes), leaving only the
+                    // header's bottom band on screen. Hold the art against that scroll so the band shows the top of the
+                    // art (the subject), not just its lower edge. Text and buttons still scroll normally.
+                    Box(Modifier.fillMaxSize().clipToBounds()) {
+                        ArtImage(
+                            url = repo.backdropUrl(item, 1920),
+                            contentDescription = null,
+                            modifier = Modifier.fillMaxSize().graphicsLayer {
+                                translationY = if (listState.firstVisibleItemIndex == 0) listState.firstVisibleItemScrollOffset.toFloat() else 0f
+                            },
+                            contentScale = ContentScale.Crop,
+                            alignment = HeaderArtAlignment,
+                        )
+                    }
                 }
                 Box(
                     Modifier
@@ -568,6 +579,10 @@ private fun MetaRow(item: BaseItemDto, is4k: Boolean = false, hdrFormats: List<S
         item.ProductionYear?.let {
             Text("$it", style = JetflixType.body, color = JetflixColors.TextSecondary)
         }
+        // A series also shows its premiere date beside the year; nothing when the server has none.
+        if (item.isSeries) item.airDateLabel()?.let {
+            Text("Premiered $it", style = JetflixType.body, color = JetflixColors.TextSecondary)
+        }
         item.OfficialRating?.takeIf { it.isNotBlank() }?.let { rating ->
             Box(
                 Modifier
@@ -678,6 +693,10 @@ private fun EpisodeRow(episode: BaseItemDto, thumbUrl: String?, onClick: () -> U
                         Spacer(Modifier.width(12.dp))
                         Text(it, style = JetflixType.caption, color = JetflixColors.TextMuted)
                     }
+                    episode.airDateLabel()?.let {
+                        Spacer(Modifier.width(12.dp))
+                        Text(it, style = JetflixType.caption, color = JetflixColors.TextMuted)
+                    }
                     if (is4k) {
                         Spacer(Modifier.width(10.dp))
                         FourKTag()
@@ -733,8 +752,7 @@ fun playLabel(target: BaseItemDto): String {
     return if (ep != null) "$verb $ep" else verb
 }
 
-/** Where the wide backdrop sits inside the fixed header box: anchored to the top of the art. Centring
- *  clipped the top of the subject (heads/titles sit high in fanart) - Randy's Shrinking screenshot. */
+/** Where the wide backdrop sits inside the fixed header box: anchored to the top of the art (heads/titles sit high in fanart). */
 val HeaderArtAlignment: Alignment = Alignment.TopCenter
 
 /** Hollow star, for "not on the Watchlist yet": the material-icons core outlined star renders solid,
