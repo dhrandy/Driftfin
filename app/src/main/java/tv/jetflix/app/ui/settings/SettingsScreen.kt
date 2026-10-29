@@ -46,6 +46,8 @@ fun SettingsScreen(
     onSignOut: () -> Unit,
     onForgetProfile: () -> Unit = {},
     onUserClick: () -> Unit = {},
+    /** Tests inject a flow pointed at a local server; the app builds the real one. */
+    updateFlow: tv.jetflix.app.update.UpdateFlow? = null,
 ) {
     val autoplay by AppSettings.autoplayNext.collectAsState()
     val myList by AppSettings.showMyList.collectAsState()
@@ -62,7 +64,7 @@ fun SettingsScreen(
         )
     }
     val flow = remember {
-        tv.jetflix.app.update.UpdateFlow(
+        updateFlow ?: tv.jetflix.app.update.UpdateFlow(
             updater = tv.jetflix.app.update.Updater(),
             installedBuild = tv.jetflix.app.BuildConfig.VERSION_CODE,
             installed = { tv.jetflix.app.update.AndroidUpdate.installed(context) },
@@ -70,6 +72,13 @@ fun SettingsScreen(
             install = { tv.jetflix.app.update.AndroidUpdate.install(context, it) },
             cacheFile = tv.jetflix.app.update.AndroidUpdate.cacheFile(context),
         )
+    }
+    // Opened with no known update (the startup notice ran before it existed): look once so the row reads Download.
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        if (update is tv.jetflix.app.update.UpdateUi.Idle) {
+            update = tv.jetflix.app.update.UpdateUi.Checking
+            update = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { flow.refreshOnOpen(tv.jetflix.app.update.UpdateUi.Idle) }
+        }
     }
     SettingsContent(
         autoplay, myList, nextUp, userName, serverUrl,

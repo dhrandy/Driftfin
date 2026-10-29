@@ -31,6 +31,20 @@ class UpdateFlow(
         is CheckResult.Failed -> UpdateUi.Error(r.reason)
     }
 
+    /**
+     * Settings opened with no known update: look once, quietly, so the row already reads "Download" when a newer
+     * build exists and installing is one OK press. The startup notice only runs when the app starts, so a TV that
+     * has been running since before a release would otherwise need Check, then Download. A failed look is silent.
+     * Nothing is downloaded here.
+     */
+    fun refreshOnOpen(current: UpdateUi): UpdateUi {
+        if (current !is UpdateUi.Idle) return current
+        return when (val r = check()) {
+            is UpdateUi.Error -> UpdateUi.Idle
+            else -> r
+        }
+    }
+
     fun downloadAndInstall(info: ReleaseInfo): UpdateUi {
         val file = try { updater.download(info, cacheFile) } catch (e: IOException) {
             return UpdateUi.Error("Download failed or did not verify. Nothing was installed.")

@@ -4,6 +4,11 @@ Each build lists its real changes here. The CI release workflow copies the secti
 matching the build tag onto the GitHub release page and appends the standard
 automated-build footer.
 
+## build-37
+
+Changes:
+- Settings now looks for an update when you open it, so a TV that has been running since before a release shows "Download" instead of "Check". Press OK on Download to download and verify the update and hand it to Android's installer; Android still asks you to confirm the install. If the look fails, the row stays on "Check".
+
 ## build-36
 
 Changes:
