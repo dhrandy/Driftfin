@@ -84,6 +84,28 @@ class HomeBannerReloadTest {
         assertEquals(null, vm.state.value.hero)
     }
 
+    private val started = """{"Id":"s1","Name":"Half Watched","Type":"Movie","CommunityRating":8.5,"BackdropImageTags":["t"],"Genres":["Drama"],"UserData":{"PlaybackPositionTicks":5000000,"Played":false}}"""
+
+    @Test fun animationFilterEmptyingTheUntouchedPoolFallsBackToStartedTitles() = runTest {
+        // Todd's row-86 repro: a successful load, animation excluded, and the only non-animated titles are
+        // started-but-unfinished. The banner must relax the untouched gate instead of vanishing.
+        AppSettings.setExcludeHomeAnimation(true)
+        bannerMovies = "$animated,$started"
+        val vm = HomeViewModel(JellyfinRepository())
+        vm.load(); settle(vm)
+        assertEquals("s1", vm.state.value.hero?.Id)
+        assertEquals(listOf("s1"), vm.state.value.heroes.map { it.Id })
+    }
+
+    @Test fun untouchedTitlesStillWinOverStartedOnes() = runTest {
+        AppSettings.setExcludeHomeAnimation(true)
+        bannerMovies = "$animated,$started,$movie"
+        val vm = HomeViewModel(JellyfinRepository())
+        vm.load(); settle(vm)
+        assertEquals("m1", vm.state.value.hero?.Id)
+        assertEquals(listOf("m1"), vm.state.value.heroes.map { it.Id })
+    }
+
     @Test fun successfulEmptyAnswerClearsTheBanner() = runTest {
         val vm = HomeViewModel(JellyfinRepository())
         vm.load(); settle(vm)

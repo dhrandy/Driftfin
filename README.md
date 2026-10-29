@@ -32,10 +32,11 @@ Driftfin is still in alpha. Its focus is making your Jellyfin library feel good 
 ## What it does
 
 - Sign in with server address, username and password (profile chips list the server's public users when the server shows them).
-- Home rows: My List (your Jellyfin favorites), Continue Watching, Next Up, Recently Added, More like (last watched), libraries.
-- Details with seasons and episodes, Play/Resume, mark watched, My List.
+- Home rows: My List (your Jellyfin favorites), Continue Watching, Next Up, Recently Added, More like (last watched), libraries. The rotating Home banner highlights highly rated unwatched movies; Settings can leave animated movies out of it.
+- Shows and Movies can narrow the library with a Show choice (All, Kids only, or No kids), based on libraries named "Kids Movies" and "Kids Shows".
+- Details with seasons and episodes, Play/Resume, mark watched, My List. A show's page names the episode Play/Resume will start and when it aired, shows the show's premiere date, and lists each episode's air date beside its runtime.
 - Search, Shows, Movies, My List, Settings tabs.
-- Player: seek, audio and text subtitle selection, playback speed, autoplay next episode (switchable).
+- Player: seek, audio and text subtitle selection, playback speed, autoplay next episode (switchable). With autoplay on, an "Up next" card counts down 5 seconds; OK plays the next episode now, Back cancels.
 - Skip Intro: shows a bottom-right button during an intro that your Jellyfin server has marked (Media Segments, server 10.10 or newer), and only skips when you press OK. It appears only where the server has segment data. Switchable in Settings.
 - Title logos on Home and Details where Jellyfin has a logo image, with plain text otherwise. Switchable in Settings.
 - HDR and Dolby Vision tags beside the 4K tag on a movie's Details page, read from the file's video stream metadata (shows what the file contains, not what the TV outputs; hidden when the metadata is missing or only says the Dolby Vision data is invalid). Switchable in Settings.

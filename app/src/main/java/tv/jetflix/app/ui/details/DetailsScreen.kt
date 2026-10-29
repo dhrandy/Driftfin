@@ -417,7 +417,7 @@ fun DetailsContent(
                             ) {
                                 Icon(Icons.Filled.PlayArrow, contentDescription = null)
                                 Spacer(Modifier.width(6.dp))
-                                Text(playLabel(target))
+                                Text(playLabel(target, episodeNamedAbove = episodeAir != null))
                             }
                             if (target.isResumeable) {
                                 Button(
@@ -623,11 +623,14 @@ private fun MetaRow(item: BaseItemDto, is4k: Boolean = false, hdrFormats: List<S
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        item.ProductionYear?.let {
-            Text("$it", style = JetflixType.body, color = JetflixColors.TextSecondary)
+        // A series with a premiere date skips the standalone year - the date already carries it (Randy:
+        // "no, I mean the date by itself. i like the primier and current"). The year stays for movies and
+        // for a series whose server has no premiere date.
+        metaYearText(item)?.let {
+            Text(it, style = JetflixType.body, color = JetflixColors.TextSecondary)
         }
-        // A series also shows its premiere date beside the year; nothing when the server has none.
-        if (item.isSeries) item.airDateLabel()?.let {
+        val premiered = if (item.isSeries) item.airDateLabel() else null
+        premiered?.let {
             Text("Premiered $it", style = JetflixType.body, color = JetflixColors.TextSecondary)
         }
         item.OfficialRating?.takeIf { it.isNotBlank() }?.let { rating ->
@@ -800,11 +803,20 @@ fun episodeAirLine(target: BaseItemDto): Pair<String, String>? {
     return label to "Aired $date"
 }
 
-/** "Resume S2:E5" / "Play S2:E5" for episodes, plain "Resume" / "Play" otherwise. */
-fun playLabel(target: BaseItemDto): String {
+/** The meta row's standalone year; dropped when a series already shows "Premiered <date>" (Randy, build 40). */
+fun metaYearText(item: BaseItemDto): String? =
+    if (item.isSeries && item.airDateLabel() != null) null else item.ProductionYear?.toString()
+
+/**
+ * "Resume S2:E5" / "Play S2:E5" for episodes, plain "Resume" / "Play" otherwise. When the episode is
+ * already named right above the button (the "S2:E1 · Aired ..." line), the button is just "Play"/"Resume"
+ * so the episode isn't named twice (Randy, build 40). When that line is absent - movie, or the server has
+ * no air date or episode numbers - the button keeps the episode label so the target is still identified.
+ */
+fun playLabel(target: BaseItemDto, episodeNamedAbove: Boolean = false): String {
     val verb = if (target.isResumeable) "Resume" else "Play"
     val ep = target.episodeLabel()
-    return if (ep != null) "$verb $ep" else verb
+    return if (ep != null && !episodeNamedAbove) "$verb $ep" else verb
 }
 
 /** Where the wide backdrop sits inside the fixed header box: anchored to the top of the art (heads/titles sit high in fanart). */

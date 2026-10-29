@@ -4,8 +4,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.setMain
+import okhttp3.mockwebserver.Dispatcher
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
+import okhttp3.mockwebserver.RecordedRequest
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -31,8 +33,12 @@ class SearchClearTest {
 
     @Before fun setUp() {
         Dispatchers.setMain(main)
-        server = MockWebServer().apply { start() }
-        server.enqueue(MockResponse().setBody("""{"Items":[]}"""))
+        server = MockWebServer().apply {
+            dispatcher = object : Dispatcher() {
+                override fun dispatch(request: RecordedRequest): MockResponse = MockResponse().setBody("""{"Items":[]}""")
+            }
+            start()
+        }
         SessionManager.signIn(Session(server.url("/").toString().trimEnd('/'), "u1", "n", "t", "d"))
         // Keep the idle-page recommendation load out of this test: it would fire its own HTTP
         // requests on ViewModel init and break the request-count assertions for clear().
@@ -42,6 +48,11 @@ class SearchClearTest {
     @After fun tearDown() {
         tv.jetflix.app.data.AppSettings.setSearchRecommendations(true)
         server.shutdown(); SessionManager.signOut(); Dispatchers.resetMain()
+    }
+
+    private fun awaitRequests(n: Int) {
+        var tries = 0
+        while (server.requestCount < n && tries++ < 400) { main.scheduler.advanceUntilIdle(); Thread.sleep(25) }
     }
 
     @Test fun clearEmptiesTheBarAndCancelsThePendingSearch() {
@@ -59,13 +70,23 @@ class SearchClearTest {
     }
 
     @Test fun queryLeftStandingDoesSearch() {
-        // Control: without clear(), the same debounce fires the search request.
+        // Control: without clear(), the same debounce fires the search.
         val vm = SearchViewModel(JellyfinRepository())
         vm.onQueryChange("dune")
         main.scheduler.advanceTimeBy(2_000)
-        var tries = 0
-        while (server.requestCount == 0 && tries++ < 200) { main.scheduler.advanceUntilIdle(); Thread.sleep(25) }
-        // A standing query now fires the title search and the actor lookup, so at least one request goes out.
-        assertTrue("search request fired, count=${server.requestCount}", server.requestCount >= 1)
+        awaitRequests(2)
+        // Precisely two requests: the title search and the actor lookup, each for the typed term.
+        assertEquals("exactly the title search and the actor lookup, count=${server.requestCount}", 2, server.requestCount)
+        val paths = listOfNotNull(
+            server.takeRequest(1, java.util.concurrent.TimeUnit.SECONDS)?.path,
+            server.takeRequest(1, java.util.concurrent.TimeUnit.SECONDS)?.path,
+        )
+        assertEquals(paths.toString(), 1, paths.count { it.orEmpty().startsWith("/Items") && it.orEmpty().contains("searchTerm=dune") })
+        assertEquals(paths.toString(), 1, paths.count { it.orEmpty().startsWith("/Persons") && it.orEmpty().contains("searchTerm=dune") })
+        // And nothing more fires afterwards.
+        main.scheduler.advanceTimeBy(2_000)
+        Thread.sleep(200)
+        main.scheduler.advanceUntilIdle()
+        assertEquals(2, server.requestCount)
     }
 }

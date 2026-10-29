@@ -4,6 +4,16 @@ Each build lists its real changes here. The CI release workflow copies the secti
 matching the build tag onto the GitHub release page and appends the standard
 automated-build footer.
 
+## build-40
+
+Changes:
+- The Home banner no longer disappears when every unwatched, non-animated movie has been started but not finished: it now falls back to those started-but-unfinished movies instead of showing nothing. Watched movies and the animation option still apply.
+- On a show's page, the Play/Resume button no longer repeats the episode number that the line right above it already shows; when that line is absent, the button still names the episode.
+- On a show's page, the standalone year is no longer repeated next to the premiere date; the premiere date and the episode's air date stay.
+- On the "Up next" card, Back now cancels the card as its own hint says, instead of leaving the player. The countdown number and the draining bar now run on the same clock, so they stay in step.
+- Search now says when a search failed instead of staying quiet, and if the next episode can't be looked up when an episode ends, the player says so instead of ending silently.
+- The startup screen is calmer: the DRIFTFIN logo on black with one slim dimmed row of posters along the bottom, replacing the angled poster wall.
+
 ## build-39
 
 Changes:

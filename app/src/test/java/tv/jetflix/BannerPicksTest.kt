@@ -61,6 +61,26 @@ class BannerPicksTest {
         assertTrue("picks should vary between loads", seen.size > 6)
     }
 
+    @Test fun homeBannerFallsBackToStartedButUnfinishedWhenNothingUntouchedSurvives() {
+        // Todd's row-82/86 repro: the animation option plus the untouched gate empty the pool. The banner
+        // retries with started-but-unfinished titles allowed; watched and animation stay excluded either way.
+        val started = movie("s", 8.5f, pos = 1000)
+        val watched = movie("w", 9.9f, played = true)
+        val animated = movie("a", 9.5f).copy(Genres = listOf("Animation"))
+        val picks = BannerPicks.randomTopUnwatchedMovies(listOf(started, watched, animated), all, 6, excludeAnimation = true)
+        assertEquals(listOf("s"), picks.map { it.Id })
+    }
+
+    @Test fun homeBannerPrefersUntouchedTitlesOverStartedOnes() {
+        val started = movie("s", 9.9f, pos = 1000)
+        val fresh = movie("f", 7.5f)
+        assertEquals(listOf("f"), BannerPicks.randomTopUnwatchedMovies(listOf(started, fresh), all, 6).map { it.Id })
+    }
+
+    @Test fun homeBannerStaysEmptyWhenEverythingIsWatched() {
+        assertTrue(BannerPicks.randomTopUnwatchedMovies(listOf(movie("w", 9.9f, played = true)), all, 6).isEmpty())
+    }
+
     @Test fun homeBannerWithFewEligibleShowsThemAll() {
         val items = listOf(movie("a", 8f), movie("b", 7.5f), movie("c", 9f, played = true))
         assertEquals(setOf("a", "b"), BannerPicks.randomTopUnwatchedMovies(items, all, 6).map { it.Id }.toSet())

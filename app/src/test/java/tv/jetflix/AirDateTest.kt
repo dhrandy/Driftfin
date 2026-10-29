@@ -22,4 +22,16 @@ class AirDateTest {
     @Test fun episodeUsesItsOwnPremiereDate() {
         assertEquals("Mar 10, 2021", BaseItemDto(Id = "e", Type = "Episode", PremiereDate = "2021-03-10T00:00:00.0000000Z").airDateLabel())
     }
+
+    @Test fun seriesWithAPremiereDateDropsTheStandaloneYear() {
+        val series = BaseItemDto(Id = "s", Type = "Series", ProductionYear = 2020, PremiereDate = "2020-05-15T00:00:00.0000000Z")
+        assertEquals(null, tv.jetflix.app.ui.details.metaYearText(series))
+    }
+
+    @Test fun seriesWithoutAPremiereDateKeepsTheYearAndMoviesAlwaysKeepIt() {
+        val noDate = BaseItemDto(Id = "s", Type = "Series", ProductionYear = 2020)
+        assertEquals("2020", tv.jetflix.app.ui.details.metaYearText(noDate))
+        val movie = BaseItemDto(Id = "m", Type = "Movie", ProductionYear = 2020, PremiereDate = "2020-05-15T00:00:00.0000000Z")
+        assertEquals("2020", tv.jetflix.app.ui.details.metaYearText(movie))
+    }
 }

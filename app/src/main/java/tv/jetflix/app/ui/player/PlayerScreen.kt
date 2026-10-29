@@ -152,7 +152,8 @@ fun PlayerScreen(
     var panelIndex by remember { mutableStateOf(0) }
     var ended by remember { mutableStateOf(false) }
     var upNext by remember { mutableStateOf<BaseItemDto?>(null) }
-    var countdown by remember { mutableStateOf(5) }
+    // Milliseconds left on the up-next countdown; the card's seconds and drain bar both read this one clock.
+    var countdownMs by remember { mutableStateOf(UP_NEXT_COUNTDOWN_MS) }
 
     // When playback ends: for episodes with autoplay on, look up the next episode in server order.
     // While an actor page covers the player (not interactive), the finish waits: the actor page stays until
@@ -163,16 +164,23 @@ fun PlayerScreen(
         if (!item.isEpisode || seriesId == null || !tv.jetflix.app.data.AppSettings.autoplayNext.value) {
             onFinished(); return@LaunchedEffect
         }
-        val next = try {
-            tv.jetflix.app.data.NextEpisode.pick(
-                api.getEpisodes(seriesId, session.userId).body()?.Items ?: emptyList(), item.Id,
-            )
-        } catch (_: Exception) { null }
-        if (next == null) { onFinished(); return@LaunchedEffect }
-        upNext = next
-        countdown = 5
-        while (countdown > 0) { delay(1_000); countdown-- }
-        onPlayNext(next)
+        when (val outcome = lookupUpNext(api, seriesId, session.userId, item.Id)) {
+            // The server answered and there is no next episode: leave the player as before.
+            UpNextLookup.None -> { onFinished(); return@LaunchedEffect }
+            // The lookup itself failed: say so instead of ending playback silently (Todd row 86). Back returns.
+            UpNextLookup.Failed -> { playbackError = "Couldn't load the next episode."; return@LaunchedEffect }
+            is UpNextLookup.Found -> {
+                upNext = outcome.next
+                val startedAt = System.nanoTime()
+                countdownMs = UP_NEXT_COUNTDOWN_MS
+                // Back during the countdown cancels the card (upNext goes null) and stops the auto-play.
+                while (countdownMs > 0L && upNext != null) {
+                    delay(16)
+                    countdownMs = (UP_NEXT_COUNTDOWN_MS - (System.nanoTime() - startedAt) / 1_000_000L).coerceAtLeast(0L)
+                }
+                if (upNext != null) onPlayNext(outcome.next)
+            }
+        }
     }
 
     LaunchedEffect(item.Id, transcodeRetry) {
@@ -340,8 +348,13 @@ fun PlayerScreen(
                 if (nativeEvent.action != KeyEvent.ACTION_DOWN) return@run false
                 lastInteraction = System.currentTimeMillis()
                 upNext?.let { n ->
-                    if (nativeEvent.keyCode in listOf(KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER)) onPlayNext(n)
-                    return@run nativeEvent.keyCode != KeyEvent.KEYCODE_BACK
+                    when (nativeEvent.keyCode) {
+                        KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER -> onPlayNext(n)
+                        // Back cancels the card, exactly what the card's own hint says; it must not exit the player (Todd row 86).
+                        KeyEvent.KEYCODE_BACK -> upNext = null
+                        else -> return@run false
+                    }
+                    return@run true
                 }
                 castIndex?.let { idx ->
                     when (val step = castKeys.onPress(nativeEvent.keyCode, idx, cast.size)) {
@@ -435,24 +448,16 @@ fun PlayerScreen(
             modifier = Modifier.fillMaxSize(),
         )
 
-        playbackError?.let { msg ->
-            androidx.tv.material3.Text(
-                text = msg + "\nPress Back to return.",
-                color = Color.White,
-                modifier = Modifier.align(androidx.compose.ui.Alignment.Center).padding(48.dp),
-            )
-        }
+        playbackError?.let { msg -> PlayerErrorOverlay(msg, Modifier.align(androidx.compose.ui.Alignment.Center)) }
         if (skipSegment != null) {
             SkipIntroPrompt(Modifier.align(androidx.compose.ui.Alignment.BottomEnd).padding(end = 48.dp, bottom = 120.dp))
         }
         upNext?.let { n ->
-            // Drains over the same 5 seconds the countdown runs; display only, no focus target and no key handling.
-            val drain = remember(n.Id) { androidx.compose.animation.core.Animatable(1f) }
-            LaunchedEffect(n.Id) { drain.animateTo(0f, androidx.compose.animation.core.tween(5_000, easing = androidx.compose.animation.core.LinearEasing)) }
+            // The seconds and the drain bar read the same countdown clock, so they cannot drift apart.
             UpNextCard(
                 title = listOfNotNull(n.episodeLabel(), n.Name).joinToString(" \u00B7 "),
-                seconds = countdown,
-                progress = drain.value,
+                seconds = ((countdownMs + 999L) / 1_000L).toInt(),
+                progress = (countdownMs / UP_NEXT_COUNTDOWN_MS.toFloat()).coerceIn(0f, 1f),
                 modifier = Modifier.align(androidx.compose.ui.Alignment.BottomEnd).padding(end = 48.dp, bottom = 120.dp),
             )
         }
@@ -690,6 +695,39 @@ fun PlayerBottomBar(positionTicks: Long, bufferedTicks: Long, durationTicks: Lon
     }
 }
 
+
+/** Centered player error note; the message always tells the user how to get back. */
+@Composable
+internal fun PlayerErrorOverlay(msg: String, modifier: Modifier = Modifier) {
+    androidx.tv.material3.Text(
+        text = msg + "\nPress Back to return.",
+        color = Color.White,
+        modifier = modifier.padding(48.dp),
+    )
+}
+
+/** Length of the up-next countdown in milliseconds. */
+internal const val UP_NEXT_COUNTDOWN_MS = 5_000L
+
+/** What the server said plays after the current episode. */
+internal sealed interface UpNextLookup {
+    /** There is a next episode. */
+    class Found(val next: BaseItemDto) : UpNextLookup
+    /** The server answered and there is no next episode (end of the series). */
+    object None : UpNextLookup
+    /** The lookup itself failed (timeout, server error). */
+    object Failed : UpNextLookup
+}
+
+/** The next episode in server order: Found / None / Failed, so a failed lookup is never mistaken for the end of the series. */
+internal suspend fun lookupUpNext(api: tv.jetflix.app.data.JellyfinApi, seriesId: String, userId: String, currentId: String): UpNextLookup {
+    val resp = try {
+        api.getEpisodes(seriesId, userId)
+    } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (_: Exception) { return UpNextLookup.Failed }
+    if (!resp.isSuccessful) return UpNextLookup.Failed
+    val next = tv.jetflix.app.data.NextEpisode.pick(resp.body()?.Items ?: emptyList(), currentId)
+    return if (next != null) UpNextLookup.Found(next) else UpNextLookup.None
+}
 
 /** An ended player finishes itself only while nothing covers it; covered (an actor page is open) it waits. */
 internal fun shouldAutoFinish(ended: Boolean, interactive: Boolean): Boolean = ended && interactive

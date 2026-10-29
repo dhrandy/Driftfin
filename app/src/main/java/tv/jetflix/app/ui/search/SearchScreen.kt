@@ -56,6 +56,8 @@ data class SearchUiState(
     val people: List<BaseItemDto> = emptyList(),
     /** "Recommended Movies"/"Recommended Shows" rows for the idle page, posters only. */
     val recommendations: List<Pair<String, List<BaseItemDto>>> = emptyList(),
+    /** The last search request failed; shown as a note instead of silently keeping or clearing results. */
+    val searchFailed: Boolean = false,
 )
 
 class SearchViewModel(val repo: JellyfinRepository) : ViewModel() {
@@ -101,7 +103,7 @@ class SearchViewModel(val repo: JellyfinRepository) : ViewModel() {
     }
 
     fun onQueryChange(query: String) {
-        _state.value = _state.value.copy(query = query)
+        _state.value = _state.value.copy(query = query, searchFailed = false)
         searchJob?.cancel()
         if (query.isBlank()) {
             _state.value = _state.value.copy(results = emptyList(), people = emptyList(), searching = false)
@@ -128,22 +130,25 @@ class SearchViewModel(val repo: JellyfinRepository) : ViewModel() {
         val session = SessionManager.session.value ?: return
         if (query.isBlank()) return
         val api = repo.apiFor(session.serverUrl)
-        _state.value = _state.value.copy(searching = true)
+        _state.value = _state.value.copy(searching = true, searchFailed = false)
         try {
             val people = try {
                 api.searchPersons(userId = session.userId, searchTerm = query).body()?.Items.orEmpty().filter { it.Name != null }
             } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (_: Exception) { emptyList() }
-            val results = api.getItems(
+            val resp = api.getItems(
                 userId = session.userId,
                 searchTerm = query,
                 recursive = true,
                 includeItemTypes = "Movie,Series",
                 sortBy = "SortName",
                 limit = 60,
-            ).body()?.Items ?: emptyList()
+            )
+            if (!resp.isSuccessful) throw java.io.IOException("search HTTP " + resp.code())
+            val results = resp.body()?.Items ?: emptyList()
             _state.value = _state.value.copy(searching = false, results = results, people = people)
-        } catch (_: Exception) {
-            _state.value = _state.value.copy(searching = false)
+        } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (_: Exception) {
+            // A failed search must say so (like Home's load error), not silently keep or drop results (Todd row 86).
+            _state.value = _state.value.copy(searching = false, results = emptyList(), people = emptyList(), searchFailed = true)
         }
     }
 }
@@ -254,6 +259,14 @@ fun SearchContent(
                             )
                         }
                     }
+                }
+                state.query.isNotBlank() && !state.searching && state.searchFailed -> {
+                    Text(
+                        "Search failed. Check the server and try again.",
+                        style = JetflixType.body,
+                        color = JetflixColors.TextSecondary,
+                        modifier = Modifier.padding(48.dp),
+                    )
                 }
                 state.query.isNotBlank() && !state.searching -> {
                     Text(
