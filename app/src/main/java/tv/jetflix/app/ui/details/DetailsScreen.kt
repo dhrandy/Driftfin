@@ -2,6 +2,8 @@ package tv.jetflix.app.ui.details
 
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.layout.layout
 import tv.jetflix.app.ui.components.resumePercent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -315,33 +317,65 @@ fun DetailsContent(
                     .fillMaxWidth()
                     .height(460.dp),
             ) {
+                // The list scrolls the header up when focus moves down (season chips, episodes), leaving only the
+                // header's bottom band on screen. Hold the art against that scroll so the band shows the top of the
+                // art (the subject). Text and buttons still scroll normally. For a series the art (same scale and
+                // top-aligned framing) carries down behind the description and season buttons and finishes fading to
+                // the page background right below the season buttons.
                 if (item != null) {
-                    // The list scrolls the header up when focus moves down (season chips, episodes), leaving only the
-                    // header's bottom band on screen. Hold the art against that scroll so the band shows the top of the
-                    // art (the subject), not just its lower edge. Text and buttons still scroll normally.
-                    Box(Modifier.fillMaxSize().clipToBounds()) {
+                    val headerPx = with(androidx.compose.ui.platform.LocalDensity.current) { 460.dp.roundToPx() }
+                    val extend = state.seasons.isNotEmpty()
+                    Box(
+                        Modifier
+                            .layout { measurable, c ->
+                                val info = listState.layoutInfo.visibleItemsInfo
+                                val atTop = listState.firstVisibleItemIndex == 0
+                                val shift = if (atTop) listState.firstVisibleItemScrollOffset else 0
+                                val hdr = info.firstOrNull { it.key == "header" }
+                                val last = info.firstOrNull { it.key == "seasons" }
+                                val h = if (extend && hdr != null && last != null) {
+                                    val artTop = if (atTop) 0 else hdr.offset
+                                    (last.offset + last.size - artTop).coerceAtLeast(1)
+                                } else (headerPx - shift).coerceAtLeast(1)
+                                val pl = measurable.measure(androidx.compose.ui.unit.Constraints.fixed(c.maxWidth, h))
+                                layout(c.maxWidth, c.maxHeight) { pl.place(0, shift) }
+                            }
+                            .drawWithContent {
+                                drawContent()
+                                // Gradient is laid out in header coordinates: the header top is `shift` above the art top.
+                                val shiftPx = if (listState.firstVisibleItemIndex == 0) listState.firstVisibleItemScrollOffset else 0
+                                val span = size.height + shiftPx
+                                val hp = headerPx.toFloat()
+                                drawRect(
+                                    Brush.verticalGradient(
+                                        0f to Color.Transparent,
+                                        (hp * 0.55f / span).coerceAtMost(1f) to JetflixColors.Background.copy(alpha = 0.35f),
+                                        (hp / span).coerceAtMost(1f) to JetflixColors.Background.copy(alpha = if (extend) 0.78f else 1f),
+                                        1f to JetflixColors.Background,
+                                        startY = -shiftPx.toFloat(),
+                                        endY = size.height,
+                                    ),
+                                )
+                            },
+                    ) {
                         ArtImage(
                             url = repo.backdropUrl(item, 1920),
                             contentDescription = null,
-                            modifier = Modifier.fillMaxSize().graphicsLayer {
-                                translationY = if (listState.firstVisibleItemIndex == 0) listState.firstVisibleItemScrollOffset.toFloat() else 0f
+                            modifier = Modifier.fillMaxSize(),
+                            // Same scale the 460dp header always used (Crop against the header height), so a taller
+                            // box shows more of the art below instead of enlarging it.
+                            contentScale = remember(headerPx) {
+                                object : ContentScale {
+                                    override fun computeScaleFactor(srcSize: androidx.compose.ui.geometry.Size, dstSize: androidx.compose.ui.geometry.Size): androidx.compose.ui.layout.ScaleFactor {
+                                        val f = maxOf(dstSize.width / srcSize.width, headerPx / srcSize.height)
+                                        return androidx.compose.ui.layout.ScaleFactor(f, f)
+                                    }
+                                }
                             },
-                            contentScale = ContentScale.Crop,
                             alignment = HeaderArtAlignment,
                         )
                     }
                 }
-                Box(
-                    Modifier
-                        .fillMaxSize()
-                        .background(
-                            Brush.verticalGradient(
-                                0f to Color.Transparent,
-                                0.55f to JetflixColors.Background.copy(alpha = 0.35f),
-                                1f to JetflixColors.Background,
-                            ),
-                        ),
-                )
                 if (item != null) {
                     Column(
                         Modifier

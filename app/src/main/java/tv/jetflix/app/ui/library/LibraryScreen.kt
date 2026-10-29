@@ -60,6 +60,22 @@ enum class WatchFilter(val label: String, val jellyfin: String?) {
     fun next() = values()[(ordinal + 1) % values().size]
 }
 
+/** Kids separation on the Shows and Movies tabs: everything, only the Kids libraries, or everything except them. Always within the tab's own kind. */
+enum class Audience(val label: String) { All("All"), KidsOnly("Kids only"), NoKids("No kids") }
+
+/**
+ * His two Kids libraries are named exactly "Kids Shows" and "Kids Movies" (his own words, Marquee notes). Exact names,
+ * not a contains-"kid" guess, so an unrelated library can never be hidden. The server has no kids flag to read.
+ */
+private val KidsLibraryNames = setOf("kids shows", "kids movies")
+fun isKidsLibrary(view: BaseItemDto) = view.Name?.trim()?.lowercase() in KidsLibraryNames
+
+fun Audience.allows(view: BaseItemDto) = when (this) {
+    Audience.All -> true
+    Audience.KidsOnly -> isKidsLibrary(view)
+    Audience.NoKids -> !isKidsLibrary(view)
+}
+
 /** Sections inside My Stuff, in his order: Favorites (Jellyfin heart), Watchlist (Driftfin's own star), Collections (box sets). */
 enum class MySection(val label: String) { Favorites("Favorites"), Watchlist("Watchlist"), Collections("Collections") }
 
@@ -82,6 +98,9 @@ data class LibraryUiState(
     /** Video libraries on the server that hold titles of this tab's kind (id to name). The picker shows when there is more than one. */
     val libraries: List<Pair<String, String>> = emptyList(),
     val libraryId: String? = null,
+    val audience: Audience = Audience.All,
+    /** True when the server has a Kids library for this tab, so the Kids choice is worth showing. */
+    val kidsAvailable: Boolean = false,
 )
 
 /** Libraries that can hold movies or shows. Mixed, untyped and custom-typed libraries count too; music, books, photos and live TV do not. */
@@ -110,6 +129,8 @@ class LibraryViewModel(val repo: JellyfinRepository, private val store: LibraryP
     private var loadJob: kotlinx.coroutines.Job? = null
     private var bannerTab: JetflixTab? = null
     private var libraryId: String? = null
+    private var audience = Audience.All
+    private var kidsAvailable = false
     private var knownLibraries = emptyList<Pair<String, String>>()
     private var collectionId: String? = null
     private var watch = WatchFilter.All
@@ -133,6 +154,7 @@ class LibraryViewModel(val repo: JellyfinRepository, private val store: LibraryP
         store.put(key(userId, tab, "genre"), genre)
         store.put(key(userId, tab, "year"), year?.toString())
         store.put(key(userId, tab, "library"), libraryId)
+        store.put(key(userId, tab, "audience"), audience.name.takeIf { audience != Audience.All })
     }
 
     /** Brings back what this user last chose in this section. Runs once, before the first load. */
@@ -146,8 +168,9 @@ class LibraryViewModel(val repo: JellyfinRepository, private val store: LibraryP
         genre = store.get(key(userId, tab, "genre"))
         year = store.get(key(userId, tab, "year"))?.toIntOrNull()
         libraryId = store.get(key(userId, tab, "library"))
+        audience = Audience.values().firstOrNull { it.name == store.get(key(userId, tab, "audience")) } ?: Audience.All
         if (tab != JetflixTab.MY_LIST) bannerTab = tab // keeps the restored library choice on the first load
-        _state.value = _state.value.copy(sort = sort, reversed = reversed, watch = watch, only4k = only4k, genre = genre, year = year, libraryId = libraryId)
+        _state.value = _state.value.copy(sort = sort, reversed = reversed, watch = watch, only4k = only4k, genre = genre, year = year, libraryId = libraryId, audience = audience)
     }
 
     private fun save(tab: JetflixTab) { SessionManager.session.value?.let { persistPrefs(it.userId, tab) } }
@@ -173,11 +196,12 @@ class LibraryViewModel(val repo: JellyfinRepository, private val store: LibraryP
     private fun order(): String = if (reversed) (if (sort.order == "Ascending") "Descending" else "Ascending") else sort.order
 
     private fun fresh(loading: Boolean = false, error: String? = null, items: List<BaseItemDto> = emptyList(), banner: BaseItemDto? = null) =
-        LibraryUiState(sort = sort, reversed = reversed, section = section, loading = loading, error = error, items = items, banner = banner, watch = watch, only4k = only4k, genre = genre, year = year, genres = knownGenres, years = knownYears, libraries = knownLibraries, libraryId = libraryId)
+        LibraryUiState(sort = sort, reversed = reversed, section = section, loading = loading, error = error, items = items, banner = banner, watch = watch, only4k = only4k, genre = genre, year = year, genres = knownGenres, years = knownYears, libraries = knownLibraries, libraryId = libraryId, audience = audience, kidsAvailable = kidsAvailable)
 
     fun cycleWatch(tab: JetflixTab) { watch = watch.next(); _state.value = _state.value.copy(watch = watch); save(tab); load(tab) }
     fun set4k(tab: JetflixTab, value: Boolean) { if (value == only4k) return; only4k = value; _state.value = _state.value.copy(only4k = value); save(tab); load(tab) }
     fun setLibrary(tab: JetflixTab, id: String?) { libraryId = id; _state.value = _state.value.copy(libraryId = id); save(tab); load(tab) }
+    fun setAudience(tab: JetflixTab, value: Audience) { if (value == audience) return; audience = value; libraryId = null; knownLibraries = emptyList(); _state.value = _state.value.copy(audience = value, libraryId = null); save(tab); load(tab) }
     fun setGenre(tab: JetflixTab, value: String?) { genre = value; _state.value = _state.value.copy(genre = value); save(tab); load(tab) }
     fun setYear(tab: JetflixTab, value: Int?) { year = value; _state.value = _state.value.copy(year = value); save(tab); load(tab) }
 
@@ -290,7 +314,15 @@ class LibraryViewModel(val repo: JellyfinRepository, private val store: LibraryP
                 }
                 if (bannerTab != tab) { bannerTab = tab; libraryId = null; knownLibraries = emptyList() }
                 val views = api.getUserViews(session.userId).body()?.Items ?: emptyList()
-                val candidates = views.filter { isVideoLibrary(it) }
+                val allVideo = views.filter { isVideoLibrary(it) }
+                kidsAvailable = allVideo.any { isKidsLibrary(it) }
+                val candidates = allVideo.filter { audience.allows(it) }
+                if (candidates.isEmpty() && audience != Audience.All) {
+                    // Never fall back to showing everything: say plainly that no library matched.
+                    val what = if (audience == Audience.KidsOnly) "No Kids Shows or Kids Movies library was found on the server." else "No libraries are left after hiding Kids."
+                    _state.value = fresh(error = "$what Change Show back to All to see everything.")
+                    return@launch
+                }
                 val wanted = if (libraryId != null) candidates.filter { it.Id == libraryId }.ifEmpty { libraryId = null; candidates } else candidates
                 val perView = wanted.map { view ->
                     view to async {
@@ -361,7 +393,7 @@ fun LibraryScreen(
         state, viewModel.repo, tab, userName, onTabSelected, onItemClick, onUserClick,
         onSort = { viewModel.setSort(tab, it) }, onPlay = onPlay,
         onReverse = { viewModel.setReversed(tab, it) }, onSection = { viewModel.setSection(tab, it) },
-        onWatch = { viewModel.cycleWatch(tab) }, on4k = { viewModel.set4k(tab, it) }, onGenre = { viewModel.setGenre(tab, it) }, onYear = { viewModel.setYear(tab, it) }, onLibrary = { viewModel.setLibrary(tab, it) },
+        onWatch = { viewModel.cycleWatch(tab) }, on4k = { viewModel.set4k(tab, it) }, onGenre = { viewModel.setGenre(tab, it) }, onYear = { viewModel.setYear(tab, it) }, onLibrary = { viewModel.setLibrary(tab, it) }, onAudience = { viewModel.setAudience(tab, it) },
         collectionTitle = collectionTitle,
     )
 }
@@ -385,6 +417,7 @@ fun LibraryContent(
     onGenre: (String?) -> Unit = {},
     onYear: (Int?) -> Unit = {},
     onLibrary: (String?) -> Unit = {},
+    onAudience: (Audience) -> Unit = {},
     collectionTitle: String? = null,
 ) {
     val focusMemory = rememberFocusMemory()
@@ -454,6 +487,8 @@ fun LibraryContent(
         }
     } else if (picker == "library") {
         OptionPicker("Library", state.libraries.map { it.second to it.first }, state.libraryId, { picker = null }, columns = 2) { onLibrary(it); picker = null }
+    } else if (picker == "audience") {
+        OptionPicker("Show", Audience.values().map { it.label to it }, state.audience, { picker = null }, allLabel = null) { onAudience(it ?: Audience.All); picker = null }
     } else if (picker == "genre") {
         OptionPicker("Genre", state.genres.map { it to it }, state.genre, { picker = null }) { onGenre(it); picker = null }
     } else if (picker == "year") {
@@ -605,6 +640,12 @@ fun LibraryContent(
                                 modifier = Modifier.focusRequester(filterFocus),
                                 colors = chipColors(active > 0),
                             ) { Text(if (active > 0) "Filter ($active)" else "Filter", style = JetflixType.body) }
+                            if (state.kidsAvailable || state.audience != Audience.All) {
+                                androidx.tv.material3.Button(
+                                    onClick = { picker = "audience" },
+                                    colors = chipColors(state.audience != Audience.All),
+                                ) { Text("Show: ${state.audience.label}", style = JetflixType.body) }
+                            }
                             if (state.libraries.size > 1) {
                                 androidx.tv.material3.Button(
                                     onClick = { picker = "library" },

@@ -4,6 +4,12 @@ Each build lists its real changes here. The CI release workflow copies the secti
 matching the build tag onto the GitHub release page and appends the standard
 automated-build footer.
 
+## build-36
+
+Changes:
+- Movies and Shows have a new "Show" choice next to Sort and Filter: All, Kids only, or No kids. It works from your two libraries named "Kids Movies" and "Kids Shows", and saves your pick per tab. If a library with that name isn't found, it says so instead of showing everything.
+- On a show's page, the backdrop picture now carries down behind the description and season buttons and fades out just below them. Picture size, text, buttons and the starting view are unchanged. Movies pages are unchanged.
+
 ## build-35
 
 Changes:

@@ -78,6 +78,9 @@ class DetailsHeaderScrollTest {
     private fun isRed(p: Int): Boolean { val r = android.graphics.Color.red(p); val g = android.graphics.Color.green(p); val b = android.graphics.Color.blue(p); return r > 25 && b > 25 && g * 2 < r && g * 2 < b }
     private fun redRows(b: Bitmap): List<Int> = (0 until b.height step 4).filter { y -> (0 until b.width step 40).any { x -> isRed(b.getPixel(x, y)) } }
 
+    /** Bottom edge (screen px) of the season-button row, where the art must finish. Null when it is scrolled off. */
+    private fun seasonsBottom(): Int? = ls.layoutInfo.visibleItemsInfo.firstOrNull { it.key == "seasons" }?.let { it.offset + it.size }
+
     private fun scrollTo(i: Int, off: Int) { rule.runOnUiThread { runBlocking { ls.scrollToItem(i, off) } }; rule.waitForIdle() }
 
     @Test fun zeroScrollFillsHeaderOnly() {
@@ -85,7 +88,9 @@ class DetailsHeaderScrollTest {
         val rows = redRows(shot())
         println("ZERO red rows ${rows.first()}..${rows.last()}")
         assertTrue("art must cover the header from the top", rows.first() <= 4)
-        assertTrue("no art below the 920px header (was ${rows.last()})", rows.last() <= 920)
+        val end = seasonsBottom()!!
+        assertTrue("art must reach below the 920px header, behind the description (was ${rows.last()})", rows.last() > 920)
+        assertTrue("art ends at the season buttons' bottom ($end), was ${rows.last()}", rows.last() <= end + 4)
     }
 
     @Test fun focusDrivenScrollKeepsArtInsideVisibleHeaderBand() {
@@ -100,8 +105,8 @@ class DetailsHeaderScrollTest {
         assertTrue("focusing a lower episode must scroll the list", idx > 0 || off > 0)
         val b = shot(); val rows = redRows(b)
         if (idx == 0) {
-            val headerBottom = 920 - off
-            assertTrue("art must not bleed below the header's visible bottom ($headerBottom), last red row ${rows.lastOrNull()}", (rows.lastOrNull() ?: 0) <= headerBottom + 4)
+            val end = seasonsBottom() ?: 1080
+            assertTrue("art must not bleed below the season buttons ($end), last red row ${rows.lastOrNull()}", (rows.lastOrNull() ?: 0) <= end + 4)
             assertTrue("art fills the visible band from the top", rows.first() <= 4)
         } else assertTrue("header is gone, so no art", rows.isEmpty())
     }
@@ -111,7 +116,9 @@ class DetailsHeaderScrollTest {
         val rows = redRows(shot())
         println("PARTIAL red rows ${rows.first()}..${rows.last()}")
         assertTrue("art starts at the top of the screen", rows.first() <= 4)
-        assertTrue("art ends at the header's visible bottom (220px), was ${rows.last()}", rows.last() <= 224)
+        val end = seasonsBottom()!!
+        assertTrue("art ends at the season buttons' bottom ($end), was ${rows.last()}", rows.last() <= end + 4)
+        assertTrue("art is carried past the header's visible bottom (220px), was ${rows.last()}", rows.last() > 224)
     }
 
     @Test fun headerGoneNoArtThenReturnUp() {
@@ -119,7 +126,7 @@ class DetailsHeaderScrollTest {
         assertTrue("header scrolled away: no art anywhere", redRows(shot()).isEmpty())
         scrollTo(0, 0)
         val rows = redRows(shot())
-        assertTrue("back at top: art at the top, inside header", rows.first() <= 4 && rows.last() <= 920)
+        assertTrue("back at top: art at the top, ending at the season buttons", rows.first() <= 4 && rows.last() <= seasonsBottom()!! + 4)
         assertEquals(0, ls.firstVisibleItemScrollOffset)
     }
 
@@ -131,7 +138,7 @@ class DetailsHeaderScrollTest {
         val rows = redRows(shot())
         if (idx == 0) {
             assertTrue("art at top of screen when opened", rows.first() <= 4)
-            assertTrue("no bleed below header's visible bottom", rows.last() <= 920 - off + 4)
+            assertTrue("no bleed below the season buttons", rows.last() <= (seasonsBottom() ?: 1080) + 4)
         } else assertTrue(rows.isEmpty())
     }
 }
