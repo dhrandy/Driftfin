@@ -4,6 +4,14 @@ Each build lists its real changes here. The CI release workflow copies the secti
 matching the build tag onto the GitHub release page and appends the standard
 automated-build footer.
 
+## build-33
+
+Fixes:
+- Search no longer opens just because focus rests on its icon. It opens only when you press OK on it or use the double-Left shortcut.
+- Home without a banner now puts focus on the first row, and Up from the first row goes to the Home tab, so Down and Up keep working instead of landing on Search.
+- Pressing OK on the Home tab you are already on clears leftover menu-sweep state first, so focus can return to the page.
+- When Home reloads (for example after changing the animated-movie setting) and the banner request fails, the banner that was showing stays instead of disappearing. A banner request that succeeds with no eligible titles still shows no banner, and the empty banner area no longer leaves a gap.
+
 ## build-32
 
 Fixes:

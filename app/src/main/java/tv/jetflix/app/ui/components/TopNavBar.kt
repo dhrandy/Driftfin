@@ -102,7 +102,7 @@ fun TopNavBar(
     }
     val openTab: (JetflixTab) -> Unit = { tab -> activate(tab, true) }
     // OK on the tab you are already on enters the page content (same target as Down); OK on another tab opens it.
-    val enterContent: () -> Unit = { try { downFocus?.requestFocus() } catch (_: Exception) { } }
+    val enterContent: () -> Unit = { NavSweep.active = false; NavSweep.tab = null; try { downFocus?.requestFocus() } catch (_: Exception) { } }
     androidx.compose.runtime.LaunchedEffect(Unit) {
         // Arrived by moving across the tabs: the new page's selected tab takes focus so the sweep can continue.
         // Only the page the sweep was heading to takes it, and only once - a stale sweep must not steal focus.
@@ -161,7 +161,8 @@ fun TopNavBar(
         SearchIconTab(
             selected = selected == JetflixTab.SEARCH,
             onClick = { if (selected == JetflixTab.SEARCH) enterContent() else activate(JetflixTab.SEARCH, false) },
-            onFocusGained = onTabFocusGained, onDwell = { openTab(JetflixTab.SEARCH) },
+            // Search opens only when selected (OK) or by the double-Left shortcut, never by focus resting on the magnifier.
+            onFocusGained = { false }, onDwell = {},
             // On the Search page the magnifier is the selected tab, so Back from the page lands here.
             modifier = if (selected == JetflixTab.SEARCH && selectedFocus != null) Modifier.focusRequester(selectedFocus) else Modifier,
         )

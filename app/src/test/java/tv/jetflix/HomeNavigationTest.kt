@@ -65,13 +65,14 @@ class HomeNavigationTest {
         heroTrailers: Map<String, tv.jetflix.app.data.TrailerSource> = emptyMap(),
         trailerClicks: MutableList<tv.jetflix.app.data.TrailerSource> = mutableListOf(),
         trailerNeeded: MutableList<String> = mutableListOf(),
+        noHero: Boolean = false,
     ) {
         val repo = JellyfinRepository().apply { apiFor("http://demo.test") }
         val cont = items.take(6).map { it.copy(UserData = UserItemDataDto(PlaybackPositionTicks = 1, PlayedPercentage = 35.0)) }
         val state = HomeUiState(
             loading = false,
-            hero = items.first { it.Name == "The Gold Rush" },
-            heroes = heroes,
+            hero = if (noHero) null else items.first { it.Name == "The Gold Rush" },
+            heroes = if (noHero) emptyList() else heroes,
             heroTrailers = heroTrailers,
             sections = listOf(
                 HomeSection("Continue Watching", cont, wide = true),
@@ -270,5 +271,48 @@ class HomeNavigationTest {
         // Play/Resume and More Info are untouched (the fixture hero is part-watched, so its button is Resume).
         rule.onNodeWithText("Resume").assertExists()
         rule.onNodeWithText("More Info").assertExists()
+    }
+
+    private fun searchMagnifierFocused() = rule.onAllNodes(isFocused()).fetchSemanticsNodes().any { n ->
+        n.config.getOrNull(SemanticsProperties.ContentDescription)?.contains("Search") == true
+    }
+
+    /** Animation excluded and no eligible banner title: focus must land on the first row (never the Search magnifier), Down and Up still work. */
+    @Test fun noBannerLandsOnFirstRowNotSearchAndDownUpWork() {
+        val tabs = mutableListOf<String>()
+        setHome(tabs = tabs, noHero = true)
+        rule.mainClock.advanceTimeBy(3_000); rule.waitForIdle()
+        assertFalse("must not land on Search", searchMagnifierFocused())
+        assertEquals("row", zone())
+        press(Key.DirectionDown); assertEquals("row", zone()); assertFalse(searchMagnifierFocused())
+        val trail = mutableListOf<String>()
+        repeat(3) { press(Key.DirectionUp); trail += focusedText() + (if (searchMagnifierFocused()) "[SEARCH]" else "") }
+        assertEquals("nav trail=$trail", "nav", zone())
+        assertFalse("Up reaches the Home tab, not Search: $trail", searchMagnifierFocused())
+        rule.mainClock.advanceTimeBy(2_000); rule.waitForIdle()
+        assertFalse("Search must not open: $tabs", tabs.contains("Search"))
+    }
+
+    /** Reported on build 32: the remembered Continue Watching card is gone; focus must not fall onto Search and open it. */
+    @Test fun goneRememberedCardNeverOpensSearchAndHomeStillGoesDown() {
+        val tabs = mutableListOf<String>()
+        setHome(tabs = tabs, restoredKey = "card-that-was-removed")
+        rule.mainClock.advanceTimeBy(3_000); rule.waitForIdle()
+        press(Key.DirectionDown)
+        rule.mainClock.advanceTimeBy(1_000); rule.waitForIdle()
+        assertFalse("Search must not open without being selected: $tabs", tabs.contains("Search"))
+        assertFalse(searchMagnifierFocused())
+        assertTrue("Home content takes focus: zone=${zone()}", zone() == "hero" || zone() == "row")
+        press(Key.DirectionDown)
+        assertTrue("Down keeps working: zone=${zone()}", zone() == "row" || zone() == "hero")
+    }
+
+    @Test fun focusRestingOnSearchMagnifierDoesNotOpenIt() {
+        val tabs = mutableListOf<String>()
+        setHome(tabs = tabs)
+        press(Key.DirectionUp)
+        repeat(4) { press(Key.DirectionLeft) }
+        rule.mainClock.advanceTimeBy(2_000); rule.waitForIdle()
+        assertFalse("resting on the magnifier must not open Search: $tabs", tabs.contains("Search"))
     }
 }

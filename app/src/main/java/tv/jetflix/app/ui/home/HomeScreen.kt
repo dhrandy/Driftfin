@@ -26,7 +26,11 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.focus.focusProperties
+import androidx.compose.foundation.focusGroup
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.type
 import kotlinx.coroutines.delay
 import tv.jetflix.app.data.fromStart
 import androidx.compose.runtime.remember
@@ -91,6 +95,8 @@ data class HomeUiState(
     val sections: List<HomeSection> = emptyList(),
     /** Banner title id -> what its Trailer button plays; absent means no trailer or not looked up yet. */
     val heroTrailers: Map<String, tv.jetflix.app.data.TrailerSource> = emptyMap(),
+    /** Counts-only note on how the banner was chosen; no titles or account data. */
+    val bannerDiag: String? = null,
 )
 
 class HomeViewModel(val repo: JellyfinRepository) : ViewModel() {
@@ -99,6 +105,9 @@ class HomeViewModel(val repo: JellyfinRepository) : ViewModel() {
     val state = _state.asStateFlow()
 
     private val trailerPending = mutableSetOf<String>()
+
+    /** Server + user the current state was loaded for; a failed reload never keeps another account's banner. */
+    private var stateOwner: String? = null
 
     /** Lazy per-banner-title trailer lookup: one small call, cached by title id, failures just hide the button. */
     fun loadTrailer(item: BaseItemDto) {
@@ -117,7 +126,9 @@ class HomeViewModel(val repo: JellyfinRepository) : ViewModel() {
     fun load() {
         val session = SessionManager.session.value ?: return
         val api = repo.apiFor(session.serverUrl)
+        val owner = session.serverUrl + "|" + session.userId
         viewModelScope.launch {
+            if (stateOwner != owner) { _state.value = HomeUiState(loading = true); stateOwner = owner }
             if (_state.value.sections.isEmpty()) _state.value = HomeUiState(loading = true)
             try {
                 val resume = async { api.getResumeItems(session.userId).body()?.Items ?: emptyList() }
@@ -184,8 +195,9 @@ class HomeViewModel(val repo: JellyfinRepository) : ViewModel() {
 
                 // Banner: six random picks from the 50 highest-rated unwatched movies (Jellyfin CommunityRating, 7.0 or more when there are any), new on each Home load.
                 // If none reach 7.0 the best-rated unwatched movies are used; if there are no unwatched movies there is no banner.
-                val unwatchedMovies = try {
-                    api.getItems(
+                // null = the request failed (timeout, server error); an empty list = the server answered with no titles.
+                val unwatchedMovies: List<BaseItemDto>? = try {
+                    val resp = api.getItems(
                         userId = session.userId,
                         includeItemTypes = "Movie",
                         recursive = true,
@@ -194,12 +206,27 @@ class HomeViewModel(val repo: JellyfinRepository) : ViewModel() {
                         limit = 120,
                         fields = "Overview,Genres,RemoteTrailers",
                         filters = "IsUnplayed",
-                    ).body()?.Items ?: emptyList()
-                } catch (_: Exception) { emptyList() }
-                val heroes = tv.jetflix.app.data.BannerPicks.randomTopUnwatchedMovies(unwatchedMovies, hasBackdrop = { repo.backdropUrl(it) != null }, count = HeroRotation.MAX_TITLES, excludeAnimation = tv.jetflix.app.data.AppSettings.excludeHomeAnimation.value)
+                    )
+                    if (resp.isSuccessful) resp.body()?.Items ?: emptyList() else null
+                } catch (_: Exception) { null }
+                val excludeAnimation = tv.jetflix.app.data.AppSettings.excludeHomeAnimation.value
+                val heroes = if (unwatchedMovies != null) {
+                    tv.jetflix.app.data.BannerPicks.randomTopUnwatchedMovies(unwatchedMovies, hasBackdrop = { repo.backdropUrl(it) != null }, count = HeroRotation.MAX_TITLES, excludeAnimation = excludeAnimation)
+                } else {
+                    // A failed banner request must not blank a banner that was already showing: keep those titles
+                    // (still honouring the animation setting) until the next successful load.
+                    (if (stateOwner == owner) _state.value.heroes.ifEmpty { listOfNotNull(_state.value.hero) } else emptyList())
+                        .filterNot { h -> excludeAnimation && h.Genres.orEmpty().any { it.trim().equals("Animation", ignoreCase = true) } }
+                }
+                // Counts only, never titles: why the banner is or is not there (request failed, nothing fetched, filtered out).
+                val bannerDiag = if (unwatchedMovies == null) "banner request failed; kept=${heroes.size}" else {
+                    val afterExclude = if (excludeAnimation) unwatchedMovies.count { m -> m.Genres.orEmpty().none { it.trim().equals("Animation", ignoreCase = true) } } else unwatchedMovies.size
+                    "banner fetched=${unwatchedMovies.size} afterAnimationFilter=$afterExclude picked=${heroes.size}"
+                }
+                try { android.util.Log.i("DriftfinHome", bannerDiag) } catch (_: Throwable) { }
                 val hero = heroes.firstOrNull()
 
-                _state.value = HomeUiState(loading = false, hero = hero, heroes = heroes, sections = sections)
+                _state.value = HomeUiState(loading = false, hero = hero, heroes = heroes, sections = sections, bannerDiag = bannerDiag)
             } catch (e: Exception) {
                 _state.value = HomeUiState(loading = false, error = "Couldn't load your library (${e.javaClass.simpleName})")
             }
@@ -297,7 +324,7 @@ fun orderHomeSections(
     return out
 }
 
-@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class, androidx.compose.ui.ExperimentalComposeUiApi::class)
 @Composable
 fun HomeContent(
     state: HomeUiState,
@@ -408,6 +435,11 @@ fun HomeContent(
             // Moving across the top tabs keeps focus on the tabs until Down. Only a sweep heading for
             // Home's own bar matters here; a stale flag for another tab's page must not block the hero.
             if (tv.jetflix.app.ui.components.NavSweep.active && tv.jetflix.app.ui.components.NavSweep.tab == tv.jetflix.app.ui.components.JetflixTab.HOME) return
+            // No banner (animation excluded, nothing unwatched): the first row is the landing spot. Never leave
+            // it to the default, which is the first control in the bar, the Search magnifier.
+            if (state.hero == null) {
+                try { firstRowFocus.requestFocus(); delay(60); return } catch (_: Exception) { delay(60); return@repeat }
+            }
             try { heroPlayFocus.requestFocus() } catch (_: Exception) { }
             delay(60)
             if (heroHasFocus) return
@@ -423,8 +455,8 @@ fun HomeContent(
         sweep
     }
     // First visit: land on the hero Play button. Returning: the remembered card wins.
-    LaunchedEffect(state.hero?.Id) {
-        if (state.hero != null && !focusMemory.hasKey && !openedBySweepToHome) focusHero()
+    LaunchedEffect(state.hero?.Id, state.sections.isNotEmpty()) {
+        if ((state.hero != null || state.sections.isNotEmpty()) && !focusMemory.hasKey && !openedBySweepToHome) focusHero()
     }
     // Returning from playback: the remembered card may be gone (Next Up and Continue Watching change after
     // watching) or scrolled out of composition. If focus was not restored, fall back to the hero instead of
@@ -483,7 +515,12 @@ fun HomeContent(
             scrolledBy = { if (listState.firstVisibleItemIndex == 0) listState.firstVisibleItemScrollOffset.toFloat() else 0f },
         )
     }
-    Box(Modifier.fillMaxSize().background(JetflixColors.Background)) {
+    // When nothing holds focus (a focused card was removed, the window just regained focus) the first D-pad press
+    // enters Home here: the banner or first row, never the first control in the bar (the Search magnifier).
+    Box(Modifier
+        .focusProperties { enter = { if (state.hero != null) heroPlayFocus else if (state.sections.isNotEmpty()) firstRowFocus else FocusRequester.Default } }
+        .focusGroup()
+        .fillMaxSize().background(JetflixColors.Background)) {
         androidx.compose.runtime.CompositionLocalProvider(androidx.compose.foundation.gestures.LocalBringIntoViewSpec provides spec) {
         LazyColumn(
             state = listState,
@@ -492,7 +529,9 @@ fun HomeContent(
             contentPadding = PaddingValues(bottom = 140.dp),
             verticalArrangement = Arrangement.spacedBy(28.dp),
         ) {
-            item(key = "hero") {
+            // No eligible banner title: no banner and no empty gap (the rows start under the bar).
+            if (heroes.isEmpty() && state.hero == null) item(key = "hero-spacer") { Spacer(Modifier.height(76.dp)) }
+            else item(key = "hero") {
                 val currentHero = heroes.getOrNull(heroIndex) ?: state.hero
     // The Trailer button appears once the lookup for the showing title comes back; rotation reuses the cache.
     LaunchedEffect(currentHero?.Id) { currentHero?.let(onHeroTrailerNeeded) }
@@ -543,6 +582,12 @@ fun HomeContent(
                         title = section.title,
                         items = section.items,
                         wide = wide,
+                        // No banner: Up from the first row goes to the page's own tab, never the Search magnifier.
+                        modifier = if (section === state.sections.first() && state.hero == null) Modifier.onPreviewKeyEvent { e ->
+                            if (e.key == androidx.compose.ui.input.key.Key.DirectionUp && e.type == androidx.compose.ui.input.key.KeyEventType.KeyDown) {
+                                try { navFocus.requestFocus(); true } catch (_: Exception) { false }
+                            } else false
+                        } else Modifier,
                         imageUrlFor = { item ->
                             if (wide) repo.backdropUrl(item, 480) else repo.posterUrl(item)
                         },
@@ -575,7 +620,7 @@ fun HomeContent(
                             }
                         },
                         firstItemFocus = if (section === state.sections.first()) firstRowFocus else null,
-                        upFocus = if (section === state.sections.first() && state.hero != null) heroPlayFocus else null,
+                        upFocus = if (section === state.sections.first()) (if (state.hero != null) heroPlayFocus else navFocus) else null,
                     )
                 }
             }
