@@ -4,6 +4,11 @@ Each build lists its real changes here. The CI release workflow copies the secti
 matching the build tag onto the GitHub release page and appends the standard
 automated-build footer.
 
+## build-34
+
+Changes:
+- The next-episode countdown is redesigned to match the player: a dark card with a faint outline and soft shadow, an "UP NEXT" label, the episode title in bold, a large countdown number, "OK plays now / Back cancels" on its own line, and a thicker bar that drains over the same 5 seconds. The countdown length and the OK and Back keys behave as before.
+
 ## build-33
 
 Fixes:

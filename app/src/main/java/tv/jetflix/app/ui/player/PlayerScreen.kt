@@ -32,6 +32,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -42,6 +43,7 @@ import androidx.compose.ui.graphics.vector.VectorPainter
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.MediaItem
@@ -444,15 +446,14 @@ fun PlayerScreen(
             SkipIntroPrompt(Modifier.align(androidx.compose.ui.Alignment.BottomEnd).padding(end = 48.dp, bottom = 120.dp))
         }
         upNext?.let { n ->
-            androidx.tv.material3.Text(
-                text = "Up next: " + listOfNotNull(n.episodeLabel(), n.Name).joinToString(" · ") +
-                    "\nPlaying in $countdown  (OK plays now, Back cancels)",
-                color = Color.White,
-                modifier = Modifier
-                    .align(androidx.compose.ui.Alignment.BottomEnd)
-                    .padding(end = 48.dp, bottom = 120.dp)
-                    .background(Color.Black.copy(alpha = 0.85f))
-                    .padding(20.dp),
+            // Drains over the same 5 seconds the countdown runs; display only, no focus target and no key handling.
+            val drain = remember(n.Id) { androidx.compose.animation.core.Animatable(1f) }
+            LaunchedEffect(n.Id) { drain.animateTo(0f, androidx.compose.animation.core.tween(5_000, easing = androidx.compose.animation.core.LinearEasing)) }
+            UpNextCard(
+                title = listOfNotNull(n.episodeLabel(), n.Name).joinToString(" \u00B7 "),
+                seconds = countdown,
+                progress = drain.value,
+                modifier = Modifier.align(androidx.compose.ui.Alignment.BottomEnd).padding(end = 48.dp, bottom = 120.dp),
             )
         }
         if (panelOpen) {
@@ -751,6 +752,35 @@ fun PauseCastStrip(
                     Text(p.Name ?: "", style = JetflixType.caption, color = Color.White, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                 }
             }
+        }
+    }
+}
+
+/** The next-episode countdown card: near-black, faint stroke, soft shadow; the seconds are the hero; a bar drains over the 5 seconds. */
+@Composable
+fun UpNextCard(title: String, seconds: Int, progress: Float, modifier: Modifier = Modifier) {
+    val shape = RoundedCornerShape(12.dp)
+    Column(
+        modifier = modifier
+            .width(420.dp)
+            .shadow(16.dp, shape, ambientColor = Color.Black, spotColor = Color.Black)
+            .background(Color(0xF2080808), shape)
+            .border(1.dp, Color(0x33FFFFFF), shape)
+            .padding(horizontal = 24.dp, vertical = 18.dp),
+    ) {
+        androidx.tv.material3.Text("UP NEXT", style = JetflixType.caption, color = JetflixColors.TextSecondary, letterSpacing = 2.sp)
+        Spacer(Modifier.height(6.dp))
+        androidx.tv.material3.Text(title, style = JetflixType.body, color = Color.White, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, maxLines = 2)
+        Spacer(Modifier.height(10.dp))
+        Row(verticalAlignment = Alignment.Bottom) {
+            androidx.tv.material3.Text("Playing in ", style = JetflixType.body, color = JetflixColors.TextSecondary, modifier = Modifier.padding(bottom = 6.dp))
+            androidx.tv.material3.Text("$seconds", color = Color.White, fontSize = 44.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.ExtraBold, lineHeight = 48.sp)
+        }
+        Spacer(Modifier.height(6.dp))
+        androidx.tv.material3.Text("OK plays now  \u00B7  Back cancels", style = JetflixType.caption, color = Color(0xFFD0D0D0))
+        Spacer(Modifier.height(14.dp))
+        Box(Modifier.fillMaxWidth().height(5.dp).clip(RoundedCornerShape(3.dp)).background(Color(0x33FFFFFF))) {
+            Box(Modifier.fillMaxWidth(progress.coerceIn(0f, 1f)).height(5.dp).background(Color.White))
         }
     }
 }
