@@ -389,9 +389,22 @@ fun DetailsContent(
                         )
                         Spacer(Modifier.height(8.dp))
                         MetaRow(item, state.is4k, state.hdrFormats)
-                        Spacer(Modifier.height(14.dp))
+                        val target = state.playTarget ?: item
+                        // A series page opens on the episode Play will start: say which one and when it aired,
+                        // separate from the show's own premiere date above.
+                        val episodeAir = if (item.isSeries) episodeAirLine(target) else null
+                        if (episodeAir != null) {
+                            Spacer(Modifier.height(8.dp))
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Text(episodeAir.first, style = JetflixType.body.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold), color = JetflixColors.TextPrimary)
+                                Text("·", style = JetflixType.body, color = JetflixColors.TextMuted)
+                                Text(episodeAir.second, style = JetflixType.body, color = JetflixColors.TextSecondary)
+                            }
+                            Spacer(Modifier.height(12.dp))
+                        } else {
+                            Spacer(Modifier.height(14.dp))
+                        }
                         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            val target = state.playTarget ?: item
                             Button(
                                 onClick = { onPlay(target) },
                                 modifier = Modifier.focusRequester(playFocus),
@@ -777,6 +790,14 @@ fun CastChip(person: BaseItemPerson, imageUrl: String?, onClick: () -> Unit = {}
             }
         }
     }
+}
+
+/** ("S1:E3", "Aired Apr 7, 2023") for the episode a series page will play; null for anything else or when the server has no date. */
+fun episodeAirLine(target: BaseItemDto): Pair<String, String>? {
+    if (target.Type != "Episode") return null
+    val label = target.episodeLabel() ?: return null
+    val date = target.airDateLabel() ?: return null
+    return label to "Aired $date"
 }
 
 /** "Resume S2:E5" / "Play S2:E5" for episodes, plain "Resume" / "Play" otherwise. */

@@ -4,6 +4,11 @@ Each build lists its real changes here. The CI release workflow copies the secti
 matching the build tag onto the GitHub release page and appends the standard
 automated-build footer.
 
+## build-38
+
+Changes:
+- On a show's page, a line above the buttons now shows the episode that Play or Resume will start and when it aired, for example "S1:E3 · Aired Apr 21, 2023". The show's own premiere date stays where it was. If the server has no air date for that episode, the line is left out. Nothing else on the page changes.
+
 ## build-37
 
 Changes:
