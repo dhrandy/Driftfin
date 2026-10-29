@@ -762,25 +762,25 @@ fun UpNextCard(title: String, seconds: Int, progress: Float, modifier: Modifier 
     val shape = RoundedCornerShape(12.dp)
     Column(
         modifier = modifier
-            .width(420.dp)
-            .shadow(16.dp, shape, ambientColor = Color.Black, spotColor = Color.Black)
+            .width(300.dp)
+            .shadow(12.dp, shape, ambientColor = Color.Black, spotColor = Color.Black)
             .background(Color(0xF2080808), shape)
             .border(1.dp, Color(0x33FFFFFF), shape)
-            .padding(horizontal = 24.dp, vertical = 18.dp),
+            .padding(horizontal = 16.dp, vertical = 12.dp),
     ) {
         androidx.tv.material3.Text("UP NEXT", style = JetflixType.caption, color = JetflixColors.TextSecondary, letterSpacing = 2.sp)
-        Spacer(Modifier.height(6.dp))
+        Spacer(Modifier.height(4.dp))
         androidx.tv.material3.Text(title, style = JetflixType.body, color = Color.White, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, maxLines = 2)
-        Spacer(Modifier.height(10.dp))
-        Row(verticalAlignment = Alignment.Bottom) {
-            androidx.tv.material3.Text("Playing in ", style = JetflixType.body, color = JetflixColors.TextSecondary, modifier = Modifier.padding(bottom = 6.dp))
-            androidx.tv.material3.Text("$seconds", color = Color.White, fontSize = 44.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.ExtraBold, lineHeight = 48.sp)
-        }
         Spacer(Modifier.height(6.dp))
+        Row(verticalAlignment = Alignment.Bottom) {
+            androidx.tv.material3.Text("Playing in ", style = JetflixType.body, color = JetflixColors.TextSecondary, modifier = Modifier.padding(bottom = 4.dp))
+            androidx.tv.material3.Text("$seconds", color = Color.White, fontSize = 30.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.ExtraBold, lineHeight = 34.sp)
+        }
+        Spacer(Modifier.height(4.dp))
         androidx.tv.material3.Text("OK plays now  \u00B7  Back cancels", style = JetflixType.caption, color = Color(0xFFD0D0D0))
-        Spacer(Modifier.height(14.dp))
-        Box(Modifier.fillMaxWidth().height(5.dp).clip(RoundedCornerShape(3.dp)).background(Color(0x33FFFFFF))) {
-            Box(Modifier.fillMaxWidth(progress.coerceIn(0f, 1f)).height(5.dp).background(Color.White))
+        Spacer(Modifier.height(10.dp))
+        Box(Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)).background(Color(0x33FFFFFF))) {
+            Box(Modifier.fillMaxWidth(progress.coerceIn(0f, 1f)).height(4.dp).background(Color.White))
         }
     }
 }

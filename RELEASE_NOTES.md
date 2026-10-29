@@ -4,6 +4,11 @@ Each build lists its real changes here. The CI release workflow copies the secti
 matching the build tag onto the GitHub release page and appends the standard
 automated-build footer.
 
+## build-39
+
+Changes:
+- The "Up next" countdown card shown before the next episode starts is smaller, so it covers less of the picture. The wording, the 5-second countdown, and the OK and Back keys are unchanged.
+
 ## build-38
 
 Changes:
