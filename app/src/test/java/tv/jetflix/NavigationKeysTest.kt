@@ -244,7 +244,10 @@ class NavigationKeysTest {
             }
         }
         rule.waitForIdle()
-        press(Key.DirectionDown) // focus enters the bar on a tab that is not the selected one
+        press(Key.DirectionDown) // focus enters the bar on the Search magnifier, which never opens by resting on it
+        rule.mainClock.advanceTimeBy(TAB_OPEN_DELAY_MS + 300); rule.waitForIdle()
+        assertEquals("resting on the Search magnifier must not open Search", 0, opened)
+        press(Key.DirectionRight); press(Key.DirectionRight) // Search -> Home -> Shows: a tab that is not the selected one
         rule.mainClock.advanceTimeBy(TAB_OPEN_DELAY_MS + 300); rule.waitForIdle()
         assertEquals(1, opened)
     }
