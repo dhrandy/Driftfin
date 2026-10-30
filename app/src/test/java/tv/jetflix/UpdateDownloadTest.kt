@@ -24,7 +24,7 @@ import tv.jetflix.app.update.UpdateNoticeState
 import tv.jetflix.app.update.UpdateUi
 
 /**
- * Randy on build 25: "the download button too, I'm having to select twice to download".
+ * The user on build 25: "the download button too, I'm having to select twice to download".
  * The Download row itself fires on a single OK; the second press he hit was the intentional
  * Check -> Download gate. When the startup notice already found the build, Settings now opens
  * straight on Download, so installing is one press.

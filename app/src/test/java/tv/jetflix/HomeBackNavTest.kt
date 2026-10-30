@@ -28,7 +28,7 @@ import tv.jetflix.app.ui.home.HomeUiState
 import tv.jetflix.app.ui.theme.JetflixTheme
 
 /**
- * Randy on build 21: "on the home screen, if you click the back button, it should go to the top and you
+ * The user on build 21: "on the home screen, if you click the back button, it should go to the top and you
  * be able to click right, just like how it works on movies and shows". Movies/Shows land Back on the top
  * menu; Home used to land it on the hero Play button, where Right only walks the hero buttons.
  */
@@ -71,7 +71,7 @@ class HomeBackNavTest {
     }
 
     @Test fun backToHomeFromAnotherSectionLandsOnTheHomeTabAndStays() {
-        // Randy: "when it goes to home screen, the button defaults to the play instead staying on home".
+        // The user: "when it goes to home screen, the button defaults to the play instead staying on home".
         // MainActivity's Back-to-Home handler raises the sweep handoff for HOME; Home must put focus on the
         // Home tab and a late-loading hero must not steal it down to Play.
         NavSweep.active = true; NavSweep.tab = JetflixTab.HOME

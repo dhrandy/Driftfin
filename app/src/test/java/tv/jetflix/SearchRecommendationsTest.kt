@@ -121,7 +121,7 @@ class SearchRecommendationsTest {
         // Bar and results are reset for the fresh visit...
         assertEquals("", v.state.value.query)
         assertTrue(v.state.value.results.isEmpty())
-        // ...and the recommended rows come back instead of staying blank (Randy's build-40 report).
+        // ...and the recommended rows come back instead of staying blank (the user's build-40 report).
         awaitRows(v)
         assertEquals(listOf("Recommended Movies", "Recommended Shows"), v.state.value.recommendations.map { it.first })
         assertEquals(listOf("m1"), v.state.value.recommendations[0].second.map { it.Id })

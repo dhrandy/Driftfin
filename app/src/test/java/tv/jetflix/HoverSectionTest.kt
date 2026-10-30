@@ -23,7 +23,7 @@ import tv.jetflix.app.ui.library.MySection
 import tv.jetflix.app.ui.theme.JetflixTheme
 
 /**
- * Randy on build 25: "just like the top navigation, on hover the favorites, watchlist, and
+ * The user on build 25: "just like the top navigation, on hover the favorites, watchlist, and
  * collections should change as you move across them" - no OK press. Driven by real D-pad keys.
  */
 @OptIn(ExperimentalTestApi::class)

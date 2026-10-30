@@ -47,7 +47,7 @@ import tv.jetflix.app.ui.library.MySection
 import tv.jetflix.app.ui.theme.JetflixTheme
 
 /**
- * Randy on build 25: sections switch on hover "just like the top navigation" and "make sure the
+ * The user on build 25: sections switch on hover "just like the top navigation" and "make sure the
  * navigation works right on those". Matrix: across all three on focus alone, Down into the Sort
  * row and the grid, Up back to the section row, empty sections, and no accidental item opening.
  */

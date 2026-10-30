@@ -15,7 +15,7 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalFocusManager
 
 /**
- * "Double click on the far left" (Randy, strict form after the build-21 device report): a Left press
+ * "Double click on the far left" (strict form after the build-21 device report): a Left press
  * fires [onEdge] only when the previous fresh Left press found focus ALREADY at rest on the boundary.
  * A press that moves focus - including the press that ARRIVES at the edge - never counts, so no single
  * press can open Search regardless of what was pressed or armed before. The first at-rest press arms;

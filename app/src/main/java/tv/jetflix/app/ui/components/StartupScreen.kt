@@ -20,7 +20,7 @@ import tv.jetflix.app.R
 internal fun showStartupWall(loading: Boolean, hasContent: Boolean, initialLoadFinished: Boolean): Boolean =
     loading && !hasContent && !initialLoadFinished
 
-/** Randy 22:50: the wall stays up 3s on a cold start even when the library answers faster. */
+/** 22:50 note: the wall stays up 3s on a cold start even when the library answers faster. */
 const val STARTUP_WALL_MIN_MS = 3000L
 
 /** Replaces the empty first Home composition, never login, playback or an already-visible Home refresh. */

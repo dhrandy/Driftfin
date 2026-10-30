@@ -10,7 +10,7 @@ sealed interface UpdateUi {
     data class Available(val info: ReleaseInfo) : UpdateUi
     data object Downloading : UpdateUi
     /** The APK was downloaded, verified and handed to the installer; [file] is kept so a dismissed
-     * installer can be reopened without downloading the same build again (Randy: "download twice"). */
+     * installer can be reopened without downloading the same build again (user: "download twice"). */
     data class ReadyToInstall(val build: Int, val file: File) : UpdateUi
     data class Error(val message: String) : UpdateUi
 }

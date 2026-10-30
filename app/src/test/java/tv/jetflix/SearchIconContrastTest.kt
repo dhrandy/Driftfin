@@ -20,7 +20,7 @@ import tv.jetflix.app.ui.components.TopNavBar
 import tv.jetflix.app.ui.theme.JetflixTheme
 
 /**
- * Randy on build 22: on Search "you can't see the search icon, it doesn't turn grey" - the magnifier
+ * The user on build 22: on Search "you can't see the search icon, it doesn't turn grey" - the magnifier
  * was hardcoded white, invisible on the white/light pill. It now follows the pill's content color:
  * dark on the selected and focused pill, light on the plain bar. Pixel-verified in all three states.
  */

@@ -65,7 +65,7 @@ class NavigationKeysTest {
     }
 
     @Test fun arrivingAtTheEdgeDoesNotCountOnlyTwoAtRestPressesFire() {
-        // Randy on build 21: "the double click left isn't working, it goes the first time". The press
+        // The user on build 21: "the double click left isn't working, it goes the first time". The press
         // that ARRIVES at the edge is not a press AT the edge: only presses that find focus already at
         // rest on the boundary count, and the first of those can never open Search.
         var edge = 0

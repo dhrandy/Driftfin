@@ -472,7 +472,7 @@ fun HomeContent(
             }
         }
     }
-    // Back from anywhere in Home goes to the top bar first, as on Movies/Shows (Randy: "it should go to the
+    // Back from anywhere in Home goes to the top bar first, as on Movies/Shows (user: "it should go to the
     // top and you be able to click right, just like how it works on movies and shows"). Back from the bar exits.
     BackHandler(enabled = !navHasFocus) {
         focusMemory.key = null

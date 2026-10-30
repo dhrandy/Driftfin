@@ -104,7 +104,7 @@ internal fun ScreensaverText(
     ) {
         Column(Modifier.padding(start = 56.dp, end = 56.dp, bottom = 40.dp).fillMaxWidth(0.62f)) {
             if (!slide.title.isNullOrBlank()) {
-                // The title's logo art when the server has it (Randy), the plain-text title otherwise.
+                // The title's logo art when the server has it (requested), the plain-text title otherwise.
                 TitleOrLogo(
                     title = slide.title, logoUrl = slide.logoUrl,
                     maxLogoHeight = 48.dp, maxLogoWidth = 300.dp,

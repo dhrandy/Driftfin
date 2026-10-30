@@ -617,7 +617,7 @@ fun LibraryContent(
                                 .then(if (banner != null) Modifier.focusProperties { up = bannerFocus } else Modifier)
                                 .then(if (isMine) Modifier.focusProperties { up = sectionFocus } else Modifier)
                                 // Plain Movies/Shows had no Up target here: default search landed on the Search
-                                // icon instead of the selected tab (Randy's report on build 20).
+                                // icon instead of the selected tab (the user's report on build 20).
                                 .then(if (banner == null && !isMine) Modifier.focusProperties { up = navFocus } else Modifier),
                         ) {
                             val ascending = (state.sort.order == "Ascending") != state.reversed

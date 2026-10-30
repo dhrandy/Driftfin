@@ -18,7 +18,7 @@ import tv.jetflix.app.ui.components.ScreensaverSlide
 import tv.jetflix.app.ui.components.ScreensaverText
 import tv.jetflix.app.ui.theme.JetflixTheme
 
-/** Randy on build 40: "for the screensaver can we use the title logo?" The slide shows the title's
+/** The user on build 40: "for the screensaver can we use the title logo?" The slide shows the title's
  * logo art when the server has it and falls back to the plain-text title when it does not. */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], qualifiers = "w1920dp-h1080dp-mdpi")

@@ -21,7 +21,7 @@ import tv.jetflix.app.data.SessionManager
 import tv.jetflix.app.ui.search.SearchViewModel
 
 /**
- * Randy on build 25: "search bar should clear if you go away and back to it". The screen clears
+ * The user on build 25: "search bar should clear if you go away and back to it". The screen clears
  * through SearchViewModel.clear(); this pins the state reset and that a pending debounced search
  * is cancelled with it. Details-over-Search keeps the stack entry, so Back from a result keeps
  * the query (wired in MainActivity, not reset here).

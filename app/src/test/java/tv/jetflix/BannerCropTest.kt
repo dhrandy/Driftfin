@@ -25,7 +25,7 @@ import tv.jetflix.app.ui.theme.JetflixTheme
 
 /**
  * Details header banner crop: the 460dp header box is wider (2.09:1) than 16:9 art, so Crop drops
- * vertical slices. Randy's Shrinking photo showed the subject's top clipped by centering; the header
+ * vertical slices. the user's Shrinking photo showed the subject's top clipped by centering; the header
  * must anchor the TOP of the art (TopCenter) so heads/titles at the top of fanart stay visible.
  * Proof: synthetic 1600x900 art with a red band only in its top 30px - visible only under TopCenter.
  */

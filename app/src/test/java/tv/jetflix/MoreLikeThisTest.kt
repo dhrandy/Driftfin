@@ -29,7 +29,7 @@ import tv.jetflix.app.ui.details.DetailsUiState
 import tv.jetflix.app.ui.theme.JetflixTheme
 
 /**
- * Randy (Oct 26): verify "More Like This" works - the row must show the server's similar titles and
+ * The user (Oct 26): verify "More Like This" works - the row must show the server's similar titles and
  * choosing one must open THAT title. The list comes from Jellyfin's Items/{id}/Similar endpoint
  * (filtered by RelatedItems, covered in RelatedAndHeroTest); this test proves the row renders those
  * titles and a pick reports the chosen item, which the host opens as its own details page.

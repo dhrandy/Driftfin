@@ -33,7 +33,7 @@ import tv.jetflix.app.ui.library.LibraryUiState
 import tv.jetflix.app.ui.theme.JetflixTheme
 
 /**
- * Randy on build 21, with a photo: scrolled down on Shows, Back goes to the menu bar (good), sweep to
+ * The user on build 21, with a photo: scrolled down on Shows, Back goes to the menu bar (good), sweep to
  * the next tab, and Down can't get back into the grid - the grid comes back still scrolled, the sort
  * row is offscreen and disposed, and the bar's hard-wired Down target is gone with it.
  */
@@ -90,7 +90,7 @@ class LibraryDownReentryTest {
         val deepCard = focusedText()
         assertNotEquals("must be inside the grid", "Shows", deepCard)
 
-        // Back to the bar (the behavior Randy likes), then sweep right to Movies.
+        // Back to the bar (the behavior the user likes), then sweep right to Movies.
         back()
         press(Key.DirectionRight) // Movies tab focus
         dwell() // dwell opens Movies, sweep handoff lands on its tab

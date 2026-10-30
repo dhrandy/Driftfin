@@ -28,7 +28,7 @@ import tv.jetflix.app.ui.library.MySection
 import tv.jetflix.app.ui.theme.JetflixTheme
 
 /**
- * Randy's emergency on build 24: on My Driftfin, select Watchlist and Down "can't select anything"
+ * the user's emergency on build 24: on My Driftfin, select Watchlist and Down "can't select anything"
  * (Right was his workaround). The section row's Down hard-pointed at the sort row's focus requester,
  * which is detached when the sort row is hidden - a detached target swallows the move. Now Watchlist
  * shows the same Sort/Filter row as Favorites, and Down falls back to the first card otherwise.
