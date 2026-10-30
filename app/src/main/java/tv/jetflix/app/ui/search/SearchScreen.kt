@@ -115,10 +115,14 @@ class SearchViewModel(val repo: JellyfinRepository) : ViewModel() {
         }
     }
 
-    /** Empties the bar and results for a fresh visit after Search was fully left. */
+    /** Empties the bar and results for a fresh visit after Search was fully left. The idle
+     * recommendations reload with it: the reset state starts without them, and leaving them
+     * empty made the rows vanish on every later visit (Randy on build 40: "go back off and go
+     * back then the recommended movies and shows are not there"). */
     fun clear() {
         searchJob?.cancel()
         _state.value = SearchUiState()
+        loadRecommendations()
     }
 
     fun searchNow() {

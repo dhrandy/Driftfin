@@ -110,6 +110,23 @@ class SearchRecommendationsTest {
         assertEquals("tom", v.state.value.query)
     }
 
+    @Test fun clearReloadsTheIdleRows() {
+        val v = SearchViewModel(JellyfinRepository())
+        awaitRows(v)
+        assertTrue(v.state.value.recommendations.isNotEmpty())
+
+        v.onQueryChange("dune")
+        v.clear()
+
+        // Bar and results are reset for the fresh visit...
+        assertEquals("", v.state.value.query)
+        assertTrue(v.state.value.results.isEmpty())
+        // ...and the recommended rows come back instead of staying blank (Randy's build-40 report).
+        awaitRows(v)
+        assertEquals(listOf("Recommended Movies", "Recommended Shows"), v.state.value.recommendations.map { it.first })
+        assertEquals(listOf("m1"), v.state.value.recommendations[0].second.map { it.Id })
+    }
+
     @Test fun clearingTheQueryClearsActors() {
         val v = SearchViewModel(JellyfinRepository())
         awaitRows(v)
