@@ -39,7 +39,19 @@ android {
         }
     }
 
-    testOptions { unitTests { isIncludeAndroidResources = true; all { it.maxHeapSize = "800m" } } }
+    testOptions {
+        unitTests {
+            isIncludeAndroidResources = true
+            all {
+                it.maxHeapSize = "800m"
+                // Robolectric + Compose state piles up in a long-lived JVM and makes whichever UI
+                // test runs late stop rendering (clicks land, nothing recomposes, awaits time out).
+                // A fresh JVM every few classes keeps every class on the clean slate it expects.
+                it.forkEvery = 8L
+                it.maxParallelForks = 1
+            }
+        }
+    }
 
     buildTypes {
         release {
