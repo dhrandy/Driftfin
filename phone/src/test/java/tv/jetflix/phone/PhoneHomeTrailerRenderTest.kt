@@ -29,11 +29,12 @@ import java.util.concurrent.atomic.AtomicReference
 @Config(sdk = [34], qualifiers = "w411dp-h891dp-xxhdpi")
 class PhoneHomeTrailerRenderTest {
     @get:Rule val rule = createAndroidComposeRule<androidx.activity.ComponentActivity>()
+    private lateinit var server: MockWebServer
 
     @Test fun bannerRequestsTrailersAndShowsIcon() {
         val heroFields = AtomicReference<String?>(null)
         val seen = java.util.Collections.synchronizedList(mutableListOf<String>())
-        val server = MockWebServer()
+        server = MockWebServer()
         server.dispatcher = object : Dispatcher() {
             override fun dispatch(request: RecordedRequest): MockResponse {
                 val path = request.path.orEmpty()
@@ -94,6 +95,7 @@ class PhoneHomeTrailerRenderTest {
             if ((px shr 16 and 0xFF) > 200 && (px shr 8 and 0xFF) > 200 && (px and 0xFF) > 200) white++
         }
         assertTrue("expected white clapperboard pixels in the trailer icon area (found $white)", white > 20)
-        server.shutdown()
     }
+
+    @org.junit.After fun teardown() { server.shutdown() }
 }

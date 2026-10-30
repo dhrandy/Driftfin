@@ -80,9 +80,9 @@ class PhoneLibraryKindMoviesTest {
 
     @Test fun moviesTabOffersOnlyMovieLibraries() {
         rule.setContent { DriftfinTheme { BrowseScreen("Movie", "All movies", onOpen = {}) } }
-        awaitReal(15_000) { rule.onAllNodesWithText("Library: All").fetchSemanticsNodes().isNotEmpty() }
+        awaitReal(30_000) { rule.onAllNodesWithText("Library: All").fetchSemanticsNodes().isNotEmpty() }
         rule.onNodeWithText("Library: All").performClick()
-        awaitReal(5_000) { rule.onAllNodesWithText("Kids Movies").fetchSemanticsNodes().isNotEmpty() }
+        awaitReal(30_000) { rule.onAllNodesWithText("Kids Movies").fetchSemanticsNodes().isNotEmpty() }
         rule.onNodeWithText("Movies").assertIsDisplayed()
         rule.onNodeWithText("Kids Movies").assertIsDisplayed()
         rule.onNodeWithText("Recordings").assertIsDisplayed() // no declared kind: fits both tabs

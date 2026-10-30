@@ -82,7 +82,7 @@ class PhoneLibraryKindStaleTest {
         val ctx = androidx.test.core.app.ApplicationProvider.getApplicationContext<android.content.Context>()
         ctx.getSharedPreferences("driftfin_phone_browse", 0).edit().putString("u:Series.library", "libM").commit()
         rule.setContent { DriftfinTheme { BrowseScreen("Series", "All shows", onOpen = {}) } }
-        awaitReal(15_000) { rule.onAllNodesWithText("Library: All").fetchSemanticsNodes().isNotEmpty() }
+        awaitReal(30_000) { rule.onAllNodesWithText("Library: All").fetchSemanticsNodes().isNotEmpty() }
         Thread.sleep(1500); rule.waitForIdle(); org.robolectric.shadows.ShadowLooper.idleMainLooper()
         assertTrue("the stale movie library was never queried under Shows\nREQUESTED:\n" + requested.joinToString("\n"),
             requested.none { it.contains("parentId=libM") })

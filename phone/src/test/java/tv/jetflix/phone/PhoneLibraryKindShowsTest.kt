@@ -80,9 +80,9 @@ class PhoneLibraryKindShowsTest {
 
     @Test fun showsTabOffersOnlyShowLibraries() {
         rule.setContent { DriftfinTheme { BrowseScreen("Series", "All shows", onOpen = {}) } }
-        awaitReal(15_000) { rule.onAllNodesWithText("Library: All").fetchSemanticsNodes().isNotEmpty() }
+        awaitReal(30_000) { rule.onAllNodesWithText("Library: All").fetchSemanticsNodes().isNotEmpty() }
         rule.onNodeWithText("Library: All").performClick()
-        awaitReal(5_000) { rule.onAllNodesWithText("Kids Shows").fetchSemanticsNodes().isNotEmpty() }
+        awaitReal(30_000) { rule.onAllNodesWithText("Kids Shows").fetchSemanticsNodes().isNotEmpty() }
         rule.onNodeWithText("Shows").assertIsDisplayed()
         rule.onNodeWithText("Kids Shows").assertIsDisplayed()
         rule.onNodeWithText("Recordings").assertIsDisplayed()

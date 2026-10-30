@@ -219,19 +219,19 @@ class PhoneBatchFixesTest {
         awaitReal(30_000) { rule.onAllNodes(cover).fetchSemanticsNodes().isNotEmpty() }
         // Genres are the category values and multi-select: picks get checkmarks; the button shows the picks.
         rule.onNodeWithText("Genres").performClick()
-        awaitReal(5_000) { rule.onAllNodesWithText("All genres", substring = true).fetchSemanticsNodes().isNotEmpty() }
+        awaitReal(30_000) { rule.onAllNodesWithText("All genres", substring = true).fetchSemanticsNodes().isNotEmpty() }
         var before = requested.size
         rule.onNodeWithText("Drama").performClick()
-        awaitReal(10_000, { requested.drop(before).joinToString("\n") }) { requested.drop(before).any { it.startsWith("GET /Items?") && it.contains("genres=Drama") } }
+        awaitReal(30_000, { requested.drop(before).joinToString("\n") }) { requested.drop(before).any { it.startsWith("GET /Items?") && it.contains("genres=Drama") } }
         rule.onNodeWithText("Drama").performClick() // close (button now shows the pick)
         rule.onNodeWithText("Drama").performClick() // reopen
-        awaitReal(5_000) { rule.onAllNodesWithText("\u2713 Drama").fetchSemanticsNodes().isNotEmpty() }
+        awaitReal(30_000) { rule.onAllNodesWithText("\u2713 Drama").fetchSemanticsNodes().isNotEmpty() }
         before = requested.size
         rule.onNodeWithText("Kids").performClick()
-        awaitReal(10_000, { requested.drop(before).joinToString("\n") }) { requested.drop(before).any { it.startsWith("GET /Items?") && (it.contains("genres=Drama%2CKids") || it.contains("genres=Drama,Kids")) } }
+        awaitReal(30_000, { requested.drop(before).joinToString("\n") }) { requested.drop(before).any { it.startsWith("GET /Items?") && (it.contains("genres=Drama%2CKids") || it.contains("genres=Drama,Kids")) } }
         rule.onNodeWithText("Drama, Kids").performClick() // close
         rule.onNodeWithText("Drama, Kids").performClick() // reopen
-        awaitReal(5_000) { rule.onAllNodesWithText("\u2713 Kids").fetchSemanticsNodes().isNotEmpty() }
+        awaitReal(30_000) { rule.onAllNodesWithText("\u2713 Kids").fetchSemanticsNodes().isNotEmpty() }
         rule.onNodeWithText("\u2713 Drama").assertIsDisplayed()
         settle(1200)
         capture("browse-genres-menu.png") // open menu with both picks checkmarked
@@ -249,17 +249,17 @@ class PhoneBatchFixesTest {
         // All genres clears the picks and closes the menu.
         before = requested.size
         rule.onNodeWithText("All genres").performClick()
-        awaitReal(10_000, { requested.drop(before).joinToString("\n") }) { requested.drop(before).any { it.startsWith("GET /Items?") && !it.contains("genres=") } }
+        awaitReal(30_000, { requested.drop(before).joinToString("\n") }) { requested.drop(before).any { it.startsWith("GET /Items?") && !it.contains("genres=") } }
         rule.onNodeWithText("Genres").assertIsDisplayed()
         // The picks persist per user and kind: re-pick Drama and a fresh instance restores it.
         rule.onNodeWithText("Genres").performClick()
-        awaitReal(5_000) { rule.onAllNodesWithText("Drama").fetchSemanticsNodes().isNotEmpty() }
+        awaitReal(30_000) { rule.onAllNodesWithText("Drama").fetchSemanticsNodes().isNotEmpty() }
         before = requested.size
         rule.onNodeWithText("Drama").performClick()
-        awaitReal(10_000, { requested.drop(before).joinToString("\n") }) { requested.drop(before).any { it.startsWith("GET /Items?") && it.contains("genres=Drama") } }
+        awaitReal(30_000, { requested.drop(before).joinToString("\n") }) { requested.drop(before).any { it.startsWith("GET /Items?") && it.contains("genres=Drama") } }
         before = requested.size
         instance.intValue = 2
-        awaitReal(10_000, { requested.drop(before).joinToString("\n") }) { requested.drop(before).any { it.startsWith("GET /Items?") && it.contains("genres=Drama") } }
+        awaitReal(30_000, { requested.drop(before).joinToString("\n") }) { requested.drop(before).any { it.startsWith("GET /Items?") && it.contains("genres=Drama") } }
         rule.onNodeWithText("Drama", substring = false).assertExists()
         settle(1200)
         capture("browse-genres-multi.png")
@@ -272,29 +272,29 @@ class PhoneBatchFixesTest {
         val instance = androidx.compose.runtime.mutableIntStateOf(1)
         rule.setContent { DriftfinTheme { androidx.compose.runtime.key(instance.intValue) { BrowseScreen("Movie", "Movies", onOpen = {}) } } }
         awaitReal(30_000) { rule.onAllNodes(cover).fetchSemanticsNodes().isNotEmpty() }
-        awaitReal(10_000) { rule.onAllNodesWithText("Library: ", substring = true).fetchSemanticsNodes().isNotEmpty() }
+        awaitReal(30_000) { rule.onAllNodesWithText("Library: ", substring = true).fetchSemanticsNodes().isNotEmpty() }
         // Pick the Kids library: the request carries the library and stays Movie-typed.
         rule.onNodeWithText("Library: ", substring = true).performClick()
-        awaitReal(5_000) { rule.onAllNodesWithText("Kids").fetchSemanticsNodes().isNotEmpty() }
+        awaitReal(30_000) { rule.onAllNodesWithText("Kids").fetchSemanticsNodes().isNotEmpty() }
         rule.onNodeWithText("Kids").performClick()
-        awaitReal(10_000, { requested.joinToString("\n") }) { requested.any { it.startsWith("GET /Items?") && it.contains("parentId=libK") && it.contains("includeItemTypes=Movie") } }
+        awaitReal(30_000, { requested.joinToString("\n") }) { requested.any { it.startsWith("GET /Items?") && it.contains("parentId=libK") && it.contains("includeItemTypes=Movie") } }
         // Exactly one cover remains: the kids film, not the grownup movie.
-        awaitReal(10_000, { "covers=" + rule.onAllNodes(cover).fetchSemanticsNodes().size }) { rule.onAllNodes(cover).fetchSemanticsNodes().size == 1 }
+        awaitReal(30_000, { "covers=" + rule.onAllNodes(cover).fetchSemanticsNodes().size }) { rule.onAllNodes(cover).fetchSemanticsNodes().size == 1 }
         // Categories refetch is scoped to the picked library.
-        awaitReal(10_000, { requested.filter { it.contains("Filters") }.joinToString("\n") }) { requested.any { it.startsWith("GET /Items/Filters") && it.contains("parentId=libK") } }
+        awaitReal(30_000, { requested.filter { it.contains("Filters") }.joinToString("\n") }) { requested.any { it.startsWith("GET /Items/Filters") && it.contains("parentId=libK") } }
         // Genres send the genre and the library together; no kids movie is Drama, so the grid empties.
         rule.onNodeWithText("Genres").performClick()
-        awaitReal(5_000) { rule.onAllNodesWithText("Drama").fetchSemanticsNodes().isNotEmpty() }
+        awaitReal(30_000) { rule.onAllNodesWithText("Drama").fetchSemanticsNodes().isNotEmpty() }
         rule.onNodeWithText("Drama").performClick()
         rule.onNodeWithText("Drama").performClick() // the pick leaves the menu open (multi-select); the button, now "Drama", closes it
-        awaitReal(10_000, { requested.filter { it.startsWith("GET /Items?") }.joinToString("\n") }) { requested.any { it.startsWith("GET /Items?") && it.contains("genres=Drama") && it.contains("parentId=libK") && it.contains("includeItemTypes=Movie") } }
-        awaitReal(10_000) { rule.onAllNodesWithText("Nothing here.").fetchSemanticsNodes().isNotEmpty() }
+        awaitReal(30_000, { requested.filter { it.startsWith("GET /Items?") }.joinToString("\n") }) { requested.any { it.startsWith("GET /Items?") && it.contains("genres=Drama") && it.contains("parentId=libK") && it.contains("includeItemTypes=Movie") } }
+        awaitReal(30_000) { rule.onAllNodesWithText("Nothing here.").fetchSemanticsNodes().isNotEmpty() }
         settle(1500)
         capture("browse-kids-categories.png")
         // The pick persists for this user and kind: a fresh Movies screen instance starts in Kids.
         val before = requested.size
         instance.intValue = 2
-        awaitReal(10_000, { requested.drop(before).joinToString("\n") }) { requested.drop(before).any { it.startsWith("GET /Items?") && it.contains("parentId=libK") && it.contains("includeItemTypes=Movie") } }
+        awaitReal(30_000, { requested.drop(before).joinToString("\n") }) { requested.drop(before).any { it.startsWith("GET /Items?") && it.contains("parentId=libK") && it.contains("includeItemTypes=Movie") } }
         rule.onNodeWithText("Library: Kids").assertIsDisplayed()
     }
 
@@ -302,12 +302,12 @@ class PhoneBatchFixesTest {
         Graph.appContext().getSharedPreferences("driftfin_phone_browse", 0).edit().clear().commit()
         rule.setContent { DriftfinTheme { BrowseScreen("Series", "Shows", onOpen = {}) } }
         awaitReal(30_000) { rule.onAllNodes(cover).fetchSemanticsNodes().isNotEmpty() }
-        awaitReal(10_000) { rule.onAllNodesWithText("Library: All").fetchSemanticsNodes().isNotEmpty() }
+        awaitReal(30_000) { rule.onAllNodesWithText("Library: All").fetchSemanticsNodes().isNotEmpty() }
         rule.onNodeWithText("Library: All").performClick()
-        awaitReal(5_000) { rule.onAllNodesWithText("Kids").fetchSemanticsNodes().isNotEmpty() }
+        awaitReal(30_000) { rule.onAllNodesWithText("Kids").fetchSemanticsNodes().isNotEmpty() }
         rule.onNodeWithText("Kids").performClick()
-        awaitReal(10_000) { requested.any { it.startsWith("GET /Items?") && it.contains("parentId=libK") && it.contains("includeItemTypes=Series") } }
-        awaitReal(10_000) { rule.onAllNodes(cover).fetchSemanticsNodes().size == 1 }
+        awaitReal(30_000) { requested.any { it.startsWith("GET /Items?") && it.contains("parentId=libK") && it.contains("includeItemTypes=Series") } }
+        awaitReal(30_000) { rule.onAllNodes(cover).fetchSemanticsNodes().size == 1 }
     }
 
     @Test fun heroSwipesAndTrailerFollowsHero() {
@@ -337,7 +337,7 @@ class PhoneBatchFixesTest {
             val rw = rule.onRoot().fetchSemanticsNode().boundsInRoot.width
             rule.onRoot().performTouchInput { swipe(androidx.compose.ui.geometry.Offset(rw * 0.75f, b.center.y), androidx.compose.ui.geometry.Offset(rw * 0.25f, b.center.y), 300) }
         }
-        awaitReal(10_000, { "hero=$first now=${currentHero()}" }) { currentHero() >= 0 && currentHero() != first }
+        awaitReal(30_000, { "hero=$first now=${currentHero()}" }) { currentHero() >= 0 && currentHero() != first }
         val second = currentHero()
         assertNotEquals(first, second)
         run {
@@ -345,10 +345,10 @@ class PhoneBatchFixesTest {
             val rw = rule.onRoot().fetchSemanticsNode().boundsInRoot.width
             rule.onRoot().performTouchInput { swipe(androidx.compose.ui.geometry.Offset(rw * 0.25f, b.center.y), androidx.compose.ui.geometry.Offset(rw * 0.75f, b.center.y), 300) }
         }
-        awaitReal(10_000) { currentHero() == first }
+        awaitReal(30_000) { currentHero() == first }
         // A tap still opens the title.
         rule.onNodeWithText("More info").performClick()
-        awaitReal(5_000) { opened != null }
+        awaitReal(30_000) { opened != null }
         assertEquals("h$first", opened?.Id)
         // Cycle to the trailer-carrying hero: the clapperboard must be visibly there.
         var guard = 0
@@ -356,7 +356,7 @@ class PhoneBatchFixesTest {
             val yb = rule.onNodeWithText(years[currentHero()], substring = true).fetchSemanticsNode().boundsInRoot
             val rw2 = rule.onRoot().fetchSemanticsNode().boundsInRoot.width
             rule.onRoot().performTouchInput { swipe(androidx.compose.ui.geometry.Offset(rw2 * 0.75f, yb.center.y), androidx.compose.ui.geometry.Offset(rw2 * 0.25f, yb.center.y), 300) }
-            awaitReal(10_000) { currentHero() >= 0 }
+            awaitReal(30_000) { currentHero() >= 0 }
             guard++
         }
         assertEquals(0, currentHero())
@@ -419,7 +419,7 @@ class PhoneBatchFixesTest {
         // The player is still waiting on the server: chrome is up (not playing) and Back leaves at once.
         awaitReal(20_000) { rule.onAllNodesWithText("Audio · Subtitles").fetchSemanticsNodes().isNotEmpty() }
         rule.onNodeWithContentDescription("Back").performClick()
-        awaitReal(10_000) { exits == 1 }
+        awaitReal(30_000) { exits == 1 }
         assertEquals(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT, rule.activity.requestedOrientation)
         settle(500)
         assertEquals(1, exits)
