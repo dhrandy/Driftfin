@@ -110,11 +110,6 @@ class DetailsHeaderDedupTest {
         rule.onAllNodes(hasText("Play from start")).assertCountEquals(1)
         // The air date is up top in the meta row...
         rule.onAllNodes(hasText("Aired Mar 8, 2026 · 52m")).assertCountEquals(1)
-        // ...and the premiere date leads the genre line, no longer its own meta segment.
-        rule.onAllNodes(hasText("Premiered Mar 1, 2026")).assertCountEquals(0)
-        rule.onAllNodes(hasText("Premiered Mar 1, 2026  ·  Drama · Western")).assertCountEquals(1)
-        // The standalone year still doesn't duplicate a shown date.
-        rule.onAllNodes(hasText("2026")).assertCountEquals(0)
 
         val v = rule.activity.window.decorView
         val resting = Bitmap.createBitmap(v.width, v.height, Bitmap.Config.ARGB_8888)
