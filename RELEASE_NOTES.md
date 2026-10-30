@@ -4,6 +4,11 @@ Each build lists its real changes here. The CI release workflow copies the secti
 matching the build tag onto the GitHub release page and appends the standard
 automated-build footer.
 
+## build-42
+
+Changes:
+- On a show's page, the title or logo and the air-date row move down to the compact spacing shown in the approved preview; the gap above the buttons is back to what was agreed. The buttons themselves stay exactly where they were, and the dates, genre line, and episode-named button from build-41 are unchanged.
+
 ## build-41
 
 Changes:

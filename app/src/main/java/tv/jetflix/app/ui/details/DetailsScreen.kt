@@ -392,10 +392,10 @@ fun DetailsContent(
                         val target = state.playTarget ?: item
                         // The episode's air date sits in the meta row and the premiere date leads the genre
                         // line below (Randy's swap after the genre-line pick); the button names the episode.
-                        // The column is bottom-anchored, so the removed "S2:E1 - Aired ..." line would have
-                        // dropped the title and meta row; this spacer keeps their build-40 position, per
-                        // Randy's ship condition "keep the positioning up higher" (8 + body 22 + 12 = 42).
-                        Spacer(Modifier.height(42.dp))
+                        // Compact gap, as in the mock he approved - reserving the removed line's height here
+                        // pushed the title and meta row too high ("the title is way too high", "the air date
+                        // row shouldn't be so high"). The column is bottom-anchored, so the buttons stay put.
+                        Spacer(Modifier.height(14.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                             Button(
                                 onClick = { onPlay(target) },
