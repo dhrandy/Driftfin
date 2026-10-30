@@ -39,7 +39,7 @@ class SettingsTallSnapshotTest {
                 row(UpdateUi.UpToDate(15))()
                 row(UpdateUi.Available(ReleaseInfo(99, GhAsset("jetflix-release.apk"), null)))()
                 row(UpdateUi.Downloading)()
-                row(UpdateUi.ReadyToInstall(99))()
+                row(UpdateUi.ReadyToInstall(99, java.io.File("/tmp/build-99.apk")))()
                 row(UpdateUi.Error("The downloaded app is signed by a different certificate. Nothing was installed."))()
             }
         }

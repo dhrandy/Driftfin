@@ -185,8 +185,9 @@ class UpdaterTest {
     @Test fun installerIsLaunchedWhenEverythingChecksOut() {
         enqueueRelease(); server.enqueue(MockResponse().setBody("${sha(apk)}  x\n")); server.enqueue(MockResponse().setBody(Buffer().write(apk)))
         var launched = false
-        val flow = UpdateFlow(updater(), 10, { ApkIdentity("tv.jetflix.app", 10, setOf("aa")) }, { ApkIdentity("tv.jetflix.app", 20, setOf("aa")) }, { launched = true; null }, dest())
+        val d = dest()
+        val flow = UpdateFlow(updater(), 10, { ApkIdentity("tv.jetflix.app", 10, setOf("aa")) }, { ApkIdentity("tv.jetflix.app", 20, setOf("aa")) }, { launched = true; null }, d)
         val r = flow.downloadAndInstall((flow.check() as UpdateUi.Available).info)
-        assertEquals(UpdateUi.ReadyToInstall(20), r); assertTrue(launched)
+        assertEquals(UpdateUi.ReadyToInstall(20, d), r); assertTrue(launched)
     }
 }

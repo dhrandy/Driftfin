@@ -71,6 +71,7 @@ fun SettingsScreen(
             readApk = { tv.jetflix.app.update.AndroidUpdate.readApk(context, it) },
             install = { tv.jetflix.app.update.AndroidUpdate.install(context, it) },
             cacheFile = tv.jetflix.app.update.AndroidUpdate.cacheFile(context),
+            canInstall = { tv.jetflix.app.update.AndroidUpdate.installPermissionProblem(context) },
         )
     }
     // Opened with no known update (the startup notice ran before it existed): look once so the row reads Download.
@@ -108,6 +109,9 @@ fun SettingsScreen(
                     if (cur is tv.jetflix.app.update.UpdateUi.Available) {
                         update = tv.jetflix.app.update.UpdateUi.Downloading
                         update = flow.downloadAndInstall(cur.info)
+                    } else if (cur is tv.jetflix.app.update.UpdateUi.ReadyToInstall) {
+                        // The APK is already downloaded and verified: reopen the installer, never re-download.
+                        update = flow.installAgain(cur)
                     } else {
                         update = tv.jetflix.app.update.UpdateUi.Checking
                         update = flow.check()
@@ -307,7 +311,7 @@ fun updateTexts(u: tv.jetflix.app.update.UpdateUi): Pair<String, String> {
         is tv.jetflix.app.update.UpdateUi.UpToDate -> "Up to date" to "You have the latest build (${u.build})."
         is tv.jetflix.app.update.UpdateUi.Available -> "Download" to "Build ${u.info.build} is available. Press OK to download it, verify it, and hand it to Android's installer."
         is tv.jetflix.app.update.UpdateUi.Downloading -> "Downloading..." to "Downloading and verifying the update."
-        is tv.jetflix.app.update.UpdateUi.ReadyToInstall -> "Installer open" to "Build ${u.build} was verified and passed to Android's installer. Confirm there to finish."
+        is tv.jetflix.app.update.UpdateUi.ReadyToInstall -> "Installer open" to "Build ${u.build} was verified and passed to Android's installer. Confirm there to finish, or press OK to reopen it."
         is tv.jetflix.app.update.UpdateUi.Error -> "Retry" to u.message
     }
 }

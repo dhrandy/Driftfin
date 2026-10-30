@@ -28,13 +28,18 @@ object AndroidUpdate {
         identity(context.packageManager.getPackageArchiveInfo(f.path, PackageManager.GET_SIGNING_CERTIFICATES))
     } catch (_: Exception) { null }
 
+    /** The message to show when the app may not install packages yet, opening the system page that grants
+     * it; null when installs are allowed. Used before the APK download so the grant never costs a download. */
+    fun installPermissionProblem(context: Context): String? {
+        if (context.packageManager.canRequestPackageInstalls()) return null
+        val s = Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:${context.packageName}")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        return try { context.startActivity(s); "Allow installs from Driftfin in the screen that just opened, then press Check for updates again." }
+        catch (_: Exception) { "Allow \"Install unknown apps\" for Driftfin in your TV's settings, then try again." }
+    }
+
     /** Opens the system installer. Returns a message when the user must first allow installs from this app. */
     fun install(context: Context, f: File): String? {
-        if (!context.packageManager.canRequestPackageInstalls()) {
-            val s = Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:${context.packageName}")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            return try { context.startActivity(s); "Allow installs from Driftfin in the screen that just opened, then press Check for updates again." }
-            catch (_: Exception) { "Allow \"Install unknown apps\" for Driftfin in your TV's settings, then try again." }
-        }
+        installPermissionProblem(context)?.let { return it }
         val uri = FileProvider.getUriForFile(context, context.packageName + ".updates", f)
         val i = Intent(Intent.ACTION_VIEW).setDataAndType(uri, "application/vnd.android.package-archive")
             .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
