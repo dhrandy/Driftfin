@@ -13,4 +13,4 @@ dependencyResolutionManagement {
     }
 }
 rootProject.name = "Jetflix"
-include(":app")
+include(":app", ":phone")

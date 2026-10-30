@@ -1,0 +1,111 @@
+name: Build Driftfin Phone
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["phone-v*"]
+
+permissions:
+  contents: write   # lets the job attach the APK to a release with the built-in token
+
+# One phone release build at a time, so two runs can never pick the same build number.
+concurrency:
+  group: release-build-phone
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest   # standard runner: free for public repositories
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # full tag history: build numbers must survive release deletions
+
+      - name: Pick the next phone build number
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Phone builds are their own phone-build-N line, separate from the TV app's build-N
+          # numbering: a phone-only release never prompts or renumbers the TV app. Numbers follow
+          # the published phone releases; deleting a release keeps its tag, so take the max of both.
+          REL=$(gh release list --limit 300 --json tagName --jq '[.[].tagName | select(test("^phone-build-[0-9]+$")) | ltrimstr("phone-build-") | tonumber] | max // 0')
+          TAGS=$(git tag -l 'phone-build-*' | sed 's/^phone-build-//' | sort -n | tail -1); TAGS=${TAGS:-0}
+          LAST=$(( REL > TAGS ? REL : TAGS ))
+          echo "BUILD_NUMBER=$((LAST + 1))" >> "$GITHUB_ENV"
+          echo "Next phone build number: $((LAST + 1)) (releases max $REL, tags max $TAGS)"
+
+      - name: Embed What's New notes
+        run: |
+          # Same rule as the TV build: the in-app What's New card reads the release's own notes
+          # section, and the build refuses to proceed without one. Phone notes live in
+          # PHONE_RELEASE_NOTES.md so the TV notes file keeps its exact TV format.
+          TAG="phone-build-${BUILD_NUMBER}"
+          mkdir -p phone/src/main/assets
+          awk -v tag="$TAG" '/^## /{if(found)exit; if(tolower($0) ~ tolower(tag))found=1; next} found' PHONE_RELEASE_NOTES.md | sed -n 's/^- //p' > phone/src/main/assets/whatsnew.txt
+          if [ ! -s phone/src/main/assets/whatsnew.txt ]; then echo "PHONE_RELEASE_NOTES.md has no bullet notes for $TAG; add them before building." >&2; exit 1; fi
+          cat phone/src/main/assets/whatsnew.txt
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.10.2"
+
+      - name: Android SDK packages
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Require signing secrets
+        env:
+          B64: ${{ secrets.JETFLIX_KEYSTORE_B64 }}
+        run: |
+          if [ -z "$B64" ]; then echo "JETFLIX_KEYSTORE_B64 is not set; refusing to build with a throwaway key." >&2; exit 1; fi
+          echo "$B64" | base64 -d > "$RUNNER_TEMP/jetflix-release.jks"
+
+      - name: Unit tests
+        run: gradle --no-daemon :phone:testDebugUnitTest
+
+      - name: Build signed phone release APK
+        env:
+          JETFLIX_KEYSTORE_FILE: ${{ runner.temp }}/jetflix-release.jks
+          JETFLIX_KEYSTORE_PASSWORD: ${{ secrets.JETFLIX_KEYSTORE_PASSWORD }}
+          JETFLIX_KEY_ALIAS: ${{ secrets.JETFLIX_KEY_ALIAS }}
+          JETFLIX_KEY_PASSWORD: ${{ secrets.JETFLIX_KEY_PASSWORD }}
+        run: gradle --no-daemon :phone:assembleRelease
+
+      - name: Show APK hash and signer
+        run: |
+          APK=$(ls phone/build/outputs/apk/release/*.apk | head -1)
+          cp "$APK" driftfin-phone-release.apk
+          sha256sum driftfin-phone-release.apk | tee driftfin-phone-release.apk.sha256
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs driftfin-phone-release.apk
+
+      - name: Publish phone prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          if [ "${GITHUB_REF_TYPE}" != "tag" ]; then TAG="phone-build-${BUILD_NUMBER}"; fi
+          # Phone releases are marked prerelease on purpose: GitHub's releases/latest then keeps
+          # pointing at a TV build-N release, so the TV updater never sees a phone tag.
+          NOTES=$(awk -v tag="$TAG" '/^## /{if(found)exit; if(tolower($0) ~ tolower(tag))found=1; next} found' PHONE_RELEASE_NOTES.md)
+          if [ -z "$NOTES" ]; then NOTES="See PHONE_RELEASE_NOTES.md for what changed in this build."; fi
+          NOTES="$NOTES
+
+          Automated build. Unit tests ran in CI, but this build was not run on a phone by CI."
+          gh release create "$TAG" driftfin-phone-release.apk driftfin-phone-release.apk.sha256 \
+            --prerelease \
+            --target "${GITHUB_SHA}" \
+            --title "Driftfin Phone $TAG" \
+            --notes "$NOTES"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: driftfin-phone-release
+          path: |
+            driftfin-phone-release.apk
+            driftfin-phone-release.apk.sha256

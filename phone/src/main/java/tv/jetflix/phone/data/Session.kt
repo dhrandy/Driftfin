@@ -1,0 +1,215 @@
+package tv.jetflix.phone.data
+
+import android.content.Context
+import android.content.SharedPreferences
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import android.security.keystore.KeyGenParameterSpec
+import android.security.keystore.KeyProperties
+import android.util.Base64
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import java.security.KeyStore
+import java.util.UUID
+import javax.crypto.Cipher
+import javax.crypto.KeyGenerator
+import javax.crypto.SecretKey
+import javax.crypto.spec.GCMParameterSpec
+
+/** One signed-in Jellyfin session. The access token never leaves [TokenStore] unencrypted. */
+data class Session(
+    val serverUrl: String,
+    val userId: String,
+    val userName: String,
+    val token: String,
+    val deviceId: String,
+)
+
+/**
+ * Stores the Jellyfin access token encrypted with an AES/GCM key held in the
+ * Android Keystore. The plaintext token is never written to disk or logs.
+ */
+/** Encrypts saved logins. The real one uses the Android Keystore; tests supply a stand-in. */
+interface TokenCrypto {
+    fun encrypt(plain: String): String?
+    fun decrypt(blob: String): String?
+}
+
+class TokenStore(context: Context, private val crypto: TokenCrypto? = null) {
+
+    private val prefs: SharedPreferences =
+        context.getSharedPreferences("driftfin_phone_session", Context.MODE_PRIVATE)
+
+    /** Returns false when the login could not be encrypted and saved, so the caller can tell the user. */
+    fun save(serverUrl: String, userId: String, userName: String, token: String): Boolean {
+        val payload = listOf(serverUrl, userId, userName, token).joinToString("\u0001")
+        val encrypted = encrypt(payload)
+        val pk = profileKey(serverUrl, userId)
+        if (encrypted == null) {
+            prefs.edit().remove(KEY_BLOB).remove(pk).apply() // never leave an older login behind that no longer matches
+            return false
+        }
+        // The active login, plus a saved copy so this profile can be picked again later without a password.
+        prefs.edit().putString(KEY_BLOB, encrypted).putString(pk, encrypted).putString("last_server", serverUrl).apply()
+        return true
+    }
+
+    private fun profileKey(serverUrl: String, userId: String): String {
+        val h = java.security.MessageDigest.getInstance("SHA-256").digest("$serverUrl\u0001$userId".toByteArray())
+        return PROFILE_PREFIX + h.joinToString("") { "%02x".format(it) }.take(32)
+    }
+
+    private fun parse(plain: String): Session? {
+        val parts = plain.split("\u0001")
+        if (parts.size != 4) return null
+        return Session(serverUrl = parts[0], userId = parts[1], userName = parts[2], token = parts[3], deviceId = deviceId())
+    }
+
+    /** Saved profiles for one server only. A login saved for another server is never returned. */
+    fun profiles(serverUrl: String): List<Session> =
+        prefs.all.filterKeys { it.startsWith(PROFILE_PREFIX) }.values.mapNotNull { v ->
+            (v as? String)?.let { decrypt(it) }?.let { parse(it) }
+        }.plus(listOfNotNull(load())).distinctBy { it.userId + "\u0001" + it.serverUrl }
+            .filter { it.serverUrl == serverUrl }.sortedBy { it.userName.lowercase() }
+
+    /** Removes one saved profile (and the active login if it is that profile). */
+    fun forget(serverUrl: String, userId: String) {
+        val e = prefs.edit().remove(profileKey(serverUrl, userId))
+        val active = load()
+        if (active != null && active.serverUrl == serverUrl && active.userId == userId) e.remove(KEY_BLOB)
+        e.apply()
+    }
+
+    /** Makes a saved profile the active login for the next launch. */
+    fun activate(session: Session): Boolean = save(session.serverUrl, session.userId, session.userName, session.token)
+
+    fun load(): Session? {
+        val blob = prefs.getString(KEY_BLOB, null) ?: return null
+        val plain = decrypt(blob) ?: return null
+        return parse(plain)
+    }
+
+    /** Signs out of this device's active login. Other saved profiles stay, so they can be picked again. */
+    fun clear() {
+        // Make sure the profile being signed out stays pickable (older installs only had the active login).
+        val active = load()
+        val e = prefs.edit()
+        if (active != null) prefs.getString(KEY_BLOB, null)?.let { e.putString(profileKey(active.serverUrl, active.userId), it) }
+        e.remove(KEY_BLOB).apply()
+    }
+
+    /** Server address only (not secret) so "switch profile" can skip retyping it. */
+    fun lastServer(): String = prefs.getString("last_server", "") ?: ""
+    fun saveLastServer(url: String) = prefs.edit().putString("last_server", url).apply()
+
+    fun deviceId(): String {
+        val existing = prefs.getString(KEY_DEVICE_ID, null)
+        if (existing != null) return existing
+        val created = "driftfin-phone-" + UUID.randomUUID().toString()
+        prefs.edit().putString(KEY_DEVICE_ID, created).apply()
+        return created
+    }
+
+    private fun key(): SecretKey? {
+        return try {
+            val ks = KeyStore.getInstance(ANDROID_KEYSTORE).apply { load(null) }
+            (ks.getEntry(KEY_ALIAS, null) as? KeyStore.SecretKeyEntry)?.secretKey ?: run {
+                val gen = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, ANDROID_KEYSTORE)
+                gen.init(
+                    KeyGenParameterSpec.Builder(
+                        KEY_ALIAS,
+                        KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT,
+                    )
+                        .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
+                        .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
+                        .setKeySize(256)
+                        .build(),
+                )
+                gen.generateKey()
+            }
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    private fun encrypt(plain: String): String? = if (crypto != null) crypto.encrypt(plain) else keystoreEncrypt(plain)
+    private fun decrypt(blob: String): String? = if (crypto != null) crypto.decrypt(blob) else keystoreDecrypt(blob)
+
+    private fun keystoreEncrypt(plain: String): String? {
+        val k = key() ?: return null
+        return try {
+            val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+            cipher.init(Cipher.ENCRYPT_MODE, k)
+            val iv = cipher.iv
+            val ct = cipher.doFinal(plain.toByteArray(Charsets.UTF_8))
+            Base64.encodeToString(iv + ct, Base64.NO_WRAP)
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    private fun keystoreDecrypt(blob: String): String? {
+        val k = key() ?: return null
+        return try {
+            val raw = Base64.decode(blob, Base64.NO_WRAP)
+            val iv = raw.copyOfRange(0, 12)
+            val ct = raw.copyOfRange(12, raw.size)
+            val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+            cipher.init(Cipher.DECRYPT_MODE, k, GCMParameterSpec(128, iv))
+            String(cipher.doFinal(ct), Charsets.UTF_8)
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    companion object {
+        private const val ANDROID_KEYSTORE = "AndroidKeyStore"
+        private const val KEY_ALIAS = "driftfin_phone_token_key"
+        private const val KEY_BLOB = "session_blob"
+        private const val PROFILE_PREFIX = "profile_"
+        private const val KEY_DEVICE_ID = "device_id"
+    }
+}
+
+object SessionManager {
+    private val _session = MutableStateFlow<Session?>(null)
+    val session: StateFlow<Session?> = _session
+
+    fun signIn(session: Session) { _session.value = session; Watchlist.setUser(session.serverUrl, session.userId) }
+    fun signOut() { _session.value = null; Watchlist.setUser(null, null) }
+
+    /**
+     * Adds the auth header only when the request goes to the signed-in server (same scheme, host and port).
+     * Absolute URLs that come back in server metadata (subtitles, transcode links, artwork) can point
+     * anywhere, and the token must not travel to those hosts.
+     */
+    fun authorize(request: okhttp3.Request): okhttp3.Request {
+        val server = _session.value?.serverUrl?.toHttpUrlOrNull() ?: return request
+        val url = request.url
+        return if (url.scheme == server.scheme && url.host.equals(server.host, ignoreCase = true) && url.port == server.port) {
+            request.newBuilder().header("Authorization", authorizationHeader()).build()
+        } else {
+            request
+        }
+    }
+
+    /** HTTP client builder for image and media requests: carries the token to the signed-in server only. */
+    fun authenticatedClientBuilder(): okhttp3.OkHttpClient.Builder =
+        okhttp3.OkHttpClient.Builder().addInterceptor { chain -> chain.proceed(authorize(chain.request())) }
+
+    /** Persistent install ID, set once at startup so pre-login requests carry it too. */
+    @Volatile var deviceIdProvider: (() -> String)? = null
+
+    fun authorizationHeader(token: String? = null, deviceId: String? = null, includeToken: Boolean = true): String {
+        val id = deviceId ?: _session.value?.deviceId ?: deviceIdProvider?.invoke() ?: "driftfin-phone"
+        val base = "MediaBrowser Client=\"Driftfin\", Device=\"Android Phone\", " +
+            "DeviceId=\"$id\", Version=\"${tv.jetflix.phone.BuildConfig.VERSION_NAME}.${tv.jetflix.phone.BuildConfig.VERSION_CODE}\""
+        val t = if (includeToken) token ?: _session.value?.token else null
+        return if (t != null) "$base, Token=\"$t\"" else base
+    }
+
+    /** API header for [baseUrl]: the signed-in token goes only to the signed-in server, never to a different one being signed in to. */
+    fun authorizationHeaderFor(baseUrl: String): String {
+        val s = _session.value
+        return authorizationHeader(includeToken = s != null && s.serverUrl == baseUrl)
+    }
+}

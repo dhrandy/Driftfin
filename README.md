@@ -8,7 +8,7 @@
 
 An Android TV client for your own Jellyfin server, with a TV-first layout (home rows, hero banner, My List, details, search, player). Not affiliated with Jellyfin.
 
-**Status: alpha, TV-only.** Expect rough edges and bugs. It is unit-tested and snapshot-tested, and it has had hands-on use on one Android TV, but that is not broad device coverage. Playback, HLS transcodes, subtitle loading, remote-control focus and scrolling smoothness are still being checked on real hardware, and known issues are open. Do not rely on it as your only way to watch.
+**Status: alpha.** Expect rough edges and bugs. It is unit-tested and snapshot-tested, and it has had hands-on use on one Android TV, but that is not broad device coverage. Playback, HLS transcodes, subtitle loading, remote-control focus and scrolling smoothness are still being checked on real hardware, and known issues are open. Do not rely on it as your only way to watch.
 
 ## Screenshots
 
@@ -69,6 +69,10 @@ Typing a long link with a remote is slow. The same file is on the [releases page
 
 Each release page lists a SHA-256 file next to the APK if you want to check the download.
 
+## Driftfin Phone (alpha)
+
+An Android phone companion app lives in `phone/`: the same Jellyfin server with a phone-first layout. It is sideloaded the same way, from its own `phone-build-N` prereleases on the releases page, and Settings has Check for updates. Phone builds are numbered and published separately, so they never change the TV app's build numbers or update prompts. Earlier phone test builds were debug-signed, so the first release build gets one manual install; the button takes over after that.
+
 ## Limits
 
 - Text subtitles only (SRT, WebVTT, ASS/SSA). Picture subtitles are not supported.
@@ -82,7 +86,7 @@ Android SDK 35, JDK 17, Gradle 8.10.2. `gradle testDebugUnitTest assembleDebug`.
 
 ## Releases and signing
 
-The workflow in `.github/workflows/android.yml` builds a signed release APK from repository secrets (`JETFLIX_KEYSTORE_B64`, `JETFLIX_KEYSTORE_PASSWORD`, `JETFLIX_KEY_ALIAS`, `JETFLIX_KEY_PASSWORD`). It refuses to build without them. No key is stored in the repo.
+The workflow in `.github/workflows/android.yml` builds a signed release APK from repository secrets (`JETFLIX_KEYSTORE_B64`, `JETFLIX_KEYSTORE_PASSWORD`, `JETFLIX_KEY_ALIAS`, `JETFLIX_KEY_PASSWORD`). It refuses to build without them. No key is stored in the repo. The phone app ships from its own workflow (`.github/workflows/phone.yml`) as signed `phone-build-N` prereleases with the same secrets; see `docs/phone-release-ci.md`.
 
 ## License
 
