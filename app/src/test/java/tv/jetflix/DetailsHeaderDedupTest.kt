@@ -23,8 +23,8 @@ import tv.jetflix.app.ui.theme.JetflixTheme
 import java.io.File
 
 /**
- * The header layout Randy settled on after build 40: the episode is named once, in the Play/Resume
- * button; its air date sits in the header's meta row ("Aired Nov 19, 2021"); the show's premiere date
+ * The header layout settled on after build 40: the episode is named once, in the Play/Resume
+ * button; its air date sits in the header's meta row ("Aired Nov 19, 2021 · 52m"); the show's premiere date
  * leads the genre line below ("Premiered May 15, 2020 · Drama · ..."); the standalone year still
  * doesn't duplicate a shown date. Renders the real details screen.
  */
@@ -70,7 +70,7 @@ class DetailsHeaderDedupTest {
         rule.onAllNodes(hasText("S2:E1 · Aired Nov 19, 2021")).assertCountEquals(0)
         rule.onAllNodes(hasText("Play S2:E1")).assertCountEquals(1)
         // The air date is up top in the meta row...
-        rule.onAllNodes(hasText("Aired Nov 19, 2021")).assertCountEquals(1)
+        rule.onAllNodes(hasText("Aired Nov 19, 2021 · 52m")).assertCountEquals(1)
         // ...and the premiere date leads the genre line, no longer its own meta segment.
         rule.onAllNodes(hasText("Premiered May 15, 2020")).assertCountEquals(0)
         rule.onAllNodes(hasText("Premiered May 15, 2020  ·  Drama · Comedy · History")).assertCountEquals(1)

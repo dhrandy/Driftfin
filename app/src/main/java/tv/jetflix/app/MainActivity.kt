@@ -98,7 +98,7 @@ fun JetflixRoot() {
     androidx.compose.runtime.SideEffect { tv.jetflix.app.ui.components.ButtonSounds.onPlayer = current is Screen.Player }
 
     fun push(screen: Screen) {
-        // A fresh open of a details page starts at the top (Randy: reopened pages must not come
+        // A fresh open of a details page starts at the top (review: reopened pages must not come
         // back scrolled); pop() below keeps the saved state, so Back-returns restore the old spot.
         if (screen is Screen.Details) stateHolder.removeState(screen.toString())
         backStack = backStack + screen
@@ -113,7 +113,7 @@ fun JetflixRoot() {
 
     BackHandler(enabled = !switchingProfile && session != null && backStack.size > 1) { pop() }
     // From Shows/Movies/My List/Search/Settings, Back goes to Home first; Back on Home exits.
-    // The sweep handoff lands focus on the Home tab (Randy: Back to Home must not drop onto the hero
+    // The sweep handoff lands focus on the Home tab (review: Back to Home must not drop onto the hero
     // Play button), and it stops a remembered card or a late-loading hero from stealing it back.
     BackHandler(enabled = !switchingProfile && session != null && backStack.size == 1 && current != Screen.Home) {
         tv.jetflix.app.ui.components.NavSweep.active = true
@@ -257,6 +257,9 @@ fun JetflixRoot() {
                 // PlayerScreen only reports "finished" while the player itself is on top, so this pop is always the player.
                 onFinished = { pop() },
                 onPlayNext = { next -> if (current is Screen.Player) backStack = backStack.dropLast(1) + Screen.Player(next) },
+                // Replace the player with the next episode's series page focused on that episode; the
+                // fresh load picks it as Play/Resume and shows the finished episode's red check below.
+                onOpenNext = { next -> if (current is Screen.Player) backStack = backStack.dropLast(1) + Screen.Details(next.seriesOrSelfId(), next.Id) },
                 onOpenActor = { id, name -> push(Screen.Actor(id, name)) },
                 interactive = hostLayer == tv.jetflix.app.ui.player.PlayerHost.Layer.Interactive,
             )

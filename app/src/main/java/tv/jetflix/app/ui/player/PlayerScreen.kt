@@ -92,6 +92,8 @@ fun PlayerScreen(
     repo: JellyfinRepository,
     onFinished: () -> Unit,
     onPlayNext: (BaseItemDto) -> Unit = {},
+    /** Episode ended with autoplay off and a next episode exists: open that episode's page. */
+    onOpenNext: (BaseItemDto) -> Unit = {},
     onOpenActor: (personId: String, name: String) -> Unit = { _, _ -> },
     /** False while the actor page is over the player: playback stays paused where it was, keys go to the page. */
     interactive: Boolean = true,
@@ -161,8 +163,18 @@ fun PlayerScreen(
     LaunchedEffect(ended, interactive) {
         if (!shouldAutoFinish(ended, interactive)) return@LaunchedEffect
         val seriesId = item.SeriesId
-        if (!item.isEpisode || seriesId == null || !tv.jetflix.app.data.AppSettings.autoplayNext.value) {
+        if (!item.isEpisode || seriesId == null) {
             onFinished(); return@LaunchedEffect
+        }
+        // Autoplay off: when an episode ends and there is a next one, open the next episode's
+        // page instead of dropping back to where playback started. Navigation only - nothing plays.
+        // Back-cancel of the countdown below is untouched: canceling stays canceling.
+        if (!tv.jetflix.app.data.AppSettings.autoplayNext.value) {
+            when (val outcome = lookupUpNext(api, seriesId, session.userId, item.Id)) {
+                is UpNextLookup.Found -> reportStopThenOpenNext(api, item, mediaSourceId, playSessionId, player.currentPosition.coerceAtLeast(0L) * 10_000) { onOpenNext(outcome.next) }
+                else -> onFinished()
+            }
+            return@LaunchedEffect
         }
         when (val outcome = lookupUpNext(api, seriesId, session.userId, item.Id)) {
             // The server answered and there is no next episode: leave the player as before.
@@ -727,6 +739,32 @@ internal suspend fun lookupUpNext(api: tv.jetflix.app.data.JellyfinApi, seriesId
     if (!resp.isSuccessful) return UpNextLookup.Failed
     val next = tv.jetflix.app.data.NextEpisode.pick(resp.body()?.Items ?: emptyList(), currentId)
     return if (next != null) UpNextLookup.Found(next) else UpNextLookup.None
+}
+
+/** Autoplay-off completion path: report playback stopped and WAIT for the server before opening the
+ *  next episode's page, so the fresh page's fetch already carries the finished episode's red check
+ *  (the fire-and-forget dispose report alone races that fetch). A failed report still navigates -
+ *  nothing is marked locally, the page simply shows the server as it is. The dispose report fires
+ *  again afterwards with the same final position, which is harmless. */
+internal suspend fun reportStopThenOpenNext(
+    api: tv.jetflix.app.data.JellyfinApi,
+    item: BaseItemDto,
+    mediaSourceId: String?,
+    playSessionId: String?,
+    positionTicks: Long,
+    onOpenNext: () -> Unit,
+) {
+    try {
+        api.reportPlaybackStopped(
+            PlaybackStopInfo(
+                ItemId = item.Id,
+                MediaSourceId = mediaSourceId,
+                PlaySessionId = playSessionId,
+                PositionTicks = positionTicks,
+            ),
+        )
+    } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (_: Exception) { }
+    onOpenNext()
 }
 
 /** An ended player finishes itself only while nothing covers it; covered (an actor page is open) it waits. */

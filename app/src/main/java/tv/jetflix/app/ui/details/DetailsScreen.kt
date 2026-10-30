@@ -62,10 +62,12 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import tv.jetflix.app.data.BaseItemDto
 import tv.jetflix.app.data.EpisodeTarget
+import tv.jetflix.app.data.NextEpisode
 import tv.jetflix.app.data.fromStart
 import tv.jetflix.app.data.BaseItemPerson
 import tv.jetflix.app.data.JellyfinRepository
 import tv.jetflix.app.data.SessionManager
+import tv.jetflix.app.data.UserItemDataDto
 import tv.jetflix.app.ui.components.ArtImage
 import tv.jetflix.app.ui.components.restoreFocus
 import tv.jetflix.app.ui.components.MediaRow
@@ -153,7 +155,7 @@ class DetailsViewModel(val repo: JellyfinRepository) : ViewModel() {
                     ).body()?.Items ?: emptyList()
                 }
                 val episodesDef = async {
-                    api.getEpisodes(item.Id, session.userId, fields = "Overview,PremiereDate", limit = 2000).body()?.Items ?: emptyList()
+                    api.getEpisodes(item.Id, session.userId, fields = "Overview,PremiereDate,People", limit = 2000).body()?.Items ?: emptyList()
                 }
                 // Which episodes have a 4K version: the server's own is4K filter, IDs only, one request per page open.
                 // A failure just means no episode badges.
@@ -227,20 +229,84 @@ class DetailsViewModel(val repo: JellyfinRepository) : ViewModel() {
     fun toggleWatched() {
         val session = SessionManager.session.value ?: return
         val item = _state.value.item ?: return
+        // On a show page the check acts on the play-target episode named in Play/Resume,
+        // never the series itself - marking the series ID marks every episode on the server.
+        val target = watchedToggleTarget(item, _state.value.playTarget)
         val api = repo.apiFor(session.serverUrl)
         viewModelScope.launch {
             try {
-                val updated = if (item.UserData?.Played == true) {
-                    api.markUnplayed(item.Id, session.userId).body()
+                val updated = if (target.UserData?.Played == true) {
+                    api.markUnplayed(target.Id, session.userId).body()
                 } else {
-                    api.markPlayed(item.Id, session.userId).body()
+                    api.markPlayed(target.Id, session.userId).body()
                 }
-                if (updated != null) {
-                    _state.value = _state.value.copy(item = item.copy(UserData = updated))
-                }
+                if (updated != null) applyWatchedUpdate(target, updated)
             } catch (_: Exception) { }
         }
     }
+
+    /** Applies the server's watched/unwatched response. Movies: the page item. Episodes: the
+     *  episode's row below updates immediately (red check appears or clears), and Play/Resume
+     *  advances to the next episode when the target was just watched, or back onto it when
+     *  unwatched - "marked off loads the next one", in server order. */
+    private fun applyWatchedUpdate(target: BaseItemDto, updated: UserItemDataDto) {
+        val state = _state.value
+        if (target.Type != "Episode") {
+            state.item?.takeIf { it.Id == target.Id }?.let { item ->
+                _state.value = state.copy(item = item.copy(UserData = updated))
+            }
+            return
+        }
+        val newAll = allEpisodes.map { if (it.Id == target.Id) it.copy(UserData = updated) else it }
+        allEpisodes = newAll
+        val newTarget = advancedTargetAfterWatched(newAll, target.Id, updated.Played == true, state.playTarget)
+        _state.value = state.copy(
+            playTarget = newTarget ?: state.playTarget,
+            episodes = newAll.filter { it.SeasonId == state.selectedSeasonId }.ifEmpty { newAll },
+        )
+    }
+}
+
+/** Which item the details-page watched check toggles: on a series page, the play-target episode
+ *  named in Play/Resume; anywhere else the page item itself. Never the series ID - that would
+ *  mark every episode watched on the server. */
+internal fun watchedToggleTarget(item: BaseItemDto, playTarget: BaseItemDto?): BaseItemDto =
+    if (item.isSeries && playTarget?.Type == "Episode") playTarget else item
+
+/** Play/Resume target after the target episode's watched state flips. Watched: the next episode in
+ *  server order ("marked off loads the next one"), falling back to the general pick at season/series
+ *  end. Unwatched: back onto the just-cleared episode. */
+internal fun advancedTargetAfterWatched(
+    all: List<BaseItemDto>,
+    markedId: String,
+    played: Boolean,
+    current: BaseItemDto?,
+): BaseItemDto? =
+    if (played) NextEpisode.pick(all, markedId) ?: EpisodeTarget.pick(all) ?: current
+    else all.firstOrNull { it.Id == markedId } ?: current
+
+/** Cast row on a series page: the series' own actors first, then the play-target episode's actors the
+ *  series list doesn't name (sparse series metadata must not hide the episode's own
+ *  guest cast still belongs). Deduped by person Id, name as fallback; capped at 15 as before. */
+internal fun mergedCast(
+    seriesPeople: List<BaseItemPerson>?,
+    episodePeople: List<BaseItemPerson>?,
+): List<BaseItemPerson> {
+    val seriesActors = seriesPeople?.filter { it.Type == "Actor" } ?: emptyList()
+    val episodeActors = episodePeople?.filter { it.Type == "Actor" } ?: emptyList()
+    val seen = seriesActors.map { it.Id ?: "name:" + it.Name.orEmpty() }.toMutableSet()
+    return (seriesActors + episodeActors.filter { seen.add(it.Id ?: "name:" + it.Name.orEmpty()) }).take(15)
+}
+
+/** Meta-row date on a series page: the play-target episode's air date with its runtime beside it
+ *  ("Aired Mar 8, 2026 · 42m"). The series premiere date holds this slot only when the episode has
+ *  no date of its own, and the runtime is omitted when the episode carries none. */
+internal fun metaAiredText(item: BaseItemDto, playTarget: BaseItemDto?): String? {
+    val ep = playTarget?.takeIf { item.isSeries && it.Type == "Episode" }
+    ep?.airDateLabel()?.let { aired ->
+        return "Aired $aired" + (ep.runtimeLabel()?.let { " · $it" } ?: "")
+    }
+    return if (item.isSeries) item.airDateLabel()?.let { "Premiered $it" } else null
 }
 
 @Composable
@@ -391,7 +457,7 @@ fun DetailsContent(
                         MetaRow(item, state.playTarget, state.is4k, state.hdrFormats)
                         val target = state.playTarget ?: item
                         // The episode's air date sits in the meta row and the premiere date leads the genre
-                        // line below (Randy's swap after the genre-line pick); the button names the episode.
+                        // line below (the swap settled after the genre-line pick); the button names the episode.
                         // Compact gap, as in the mock he approved - reserving the removed line's height here
                         // pushed the title and meta row too high ("the title is way too high", "the air date
                         // row shouldn't be so high"). The column is bottom-anchored, so the buttons stay put.
@@ -446,7 +512,7 @@ fun DetailsContent(
                                     focusedContentColor = Color.White,
                                 ),
                             ) {
-                                val played = item.UserData?.Played == true
+                                val played = watchedToggleTarget(item, state.playTarget).UserData?.Played == true
                                 Icon(
                                     if (played) Icons.Filled.CheckCircle else Icons.Outlined.CheckCircle,
                                     contentDescription = if (played) "Watched. Press OK to mark unwatched" else "Mark as watched",
@@ -561,7 +627,7 @@ fun DetailsContent(
             }
         }
 
-        val cast = item?.People?.filter { it.Type == "Actor" }?.take(15) ?: emptyList()
+        val cast = mergedCast(item?.People, state.playTarget?.People)
         if (cast.isNotEmpty()) {
             item(key = "cast-title") {
                 Text(
@@ -615,18 +681,20 @@ private fun MetaRow(item: BaseItemDto, playTarget: BaseItemDto?, is4k: Boolean =
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        // A series with a premiere date skips the standalone year - the date already carries it (Randy:
+        // A series with a premiere date skips the standalone year - the date already carries it (review note:
         // "no, I mean the date by itself. i like the primier and current"). The year stays for movies and
         // for a series whose server has no premiere date.
         metaYearText(item)?.let {
             Text(it, style = JetflixType.body, color = JetflixColors.TextSecondary)
         }
-        // Randy's swap after the genre-line pick ("premiered goes down beside the genre, aired goes up
+        // The swap settled after the genre-line pick ("premiered goes down beside the genre, aired goes up
         // top"): the play target episode's air date takes the premiere date's slot up here, and the
         // premiere date moves to the genre line. If the episode has no date, the premiere date stays
         // here as before so the date isn't lost.
-        val epAired = playTarget?.takeIf { item.isSeries && it.Type == "Episode" }?.airDateLabel()
-        val dateText = epAired?.let { "Aired $it" } ?: if (item.isSeries) item.airDateLabel()?.let { "Premiered $it" } else null
+        // Same swap as before, plus the requested addition: the target episode's runtime sits beside its
+        // air date ("Aired Mar 8, 2026 · 42m"). No runtime on the episode - nothing invented, the
+        // date shows alone. The "N Seasons" segment further right is untouched.
+        val dateText = metaAiredText(item, playTarget)
         dateText?.let {
             Text(it, style = JetflixType.body, color = JetflixColors.TextSecondary)
         }
@@ -793,24 +861,24 @@ fun CastChip(person: BaseItemPerson, imageUrl: String?, onClick: () -> Unit = {}
 }
 
 /** The genre line on a series page leads with the play target's air date: "Aired Oct 22, 2026 · Drama · Comedy"
- * (Randy's pick after build 40 - the date leaves the header and joins this existing quiet line). Movies and
+ * (settled after build 40 - the date leaves the header and joins this existing quiet line). Movies and
  * missing dates leave the genres alone. */
 fun genreLine(item: BaseItemDto, playTarget: BaseItemDto?): String {
     val genres = item.Genres.joinToString(" · ")
     // The premiere date leads the genre line only when the episode's air date took its meta-row slot
     // (otherwise it stays up top and this line is plain genres). A little extra room between the date
-    // and the first genre, on Randy's "little, not a lot" note.
+    // and the first genre, on the "little, not a lot" review note.
     val epAired = playTarget?.takeIf { item.isSeries && it.Type == "Episode" }?.airDateLabel()
     val premiered = if (item.isSeries && epAired != null) item.airDateLabel() else null
     return listOfNotNull(premiered?.let { "Premiered $it" }, genres.takeIf { it.isNotBlank() }).joinToString("  ·  ")
 }
 
-/** The meta row's standalone year; dropped when a series already shows "Premiered <date>" (Randy, build 40). */
+/** The meta row's standalone year; dropped when a series already shows "Premiered <date>" (settled in build 40). */
 fun metaYearText(item: BaseItemDto): String? =
     if (item.isSeries && item.airDateLabel() != null) null else item.ProductionYear?.toString()
 
 /** "Resume S2:E5" / "Play S2:E5" for episodes, plain "Resume" / "Play" otherwise (movie, or the server
- * has no episode numbers). The episode is named here and nowhere else up top (Randy, build 41). */
+ * has no episode numbers). The episode is named here and nowhere else up top (settled in build 41). */
 fun playLabel(target: BaseItemDto): String {
     val verb = if (target.isResumeable) "Resume" else "Play"
     val ep = target.episodeLabel()
