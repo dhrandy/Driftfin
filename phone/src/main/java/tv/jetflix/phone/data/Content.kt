@@ -18,8 +18,10 @@ object Content {
 
     /** Unwatched movies with a good rating, best first. The Home hero picks from these. */
     suspend fun heroCandidates(): List<BaseItemDto> = safe(emptyList()) {
+        // RemoteTrailers carries the banner's Trailer button: Jellyfin only sends those links when the field
+        // is requested, so without it the button never appears even for movies that have trailer links.
         api.getItems(userId, includeItemTypes = "Movie", recursive = true, sortBy = "CommunityRating", sortOrder = "Descending",
-            limit = 50, filters = "IsUnplayed", fields = "Overview,Genres").body()?.Items.orEmpty()
+            limit = 50, filters = "IsUnplayed", fields = "Overview,Genres,RemoteTrailers").body()?.Items.orEmpty()
     }
 
     suspend fun browse(type: String, sort: Sort, unwatchedOnly: Boolean, genres: Collection<String>? = null, libraryId: String? = null): List<BaseItemDto> = safe(emptyList()) {

@@ -3,6 +3,11 @@
 The phone app has its own release line: `phone-build-N` prereleases, separate from the TV app's
 `build-N` releases. The phone's Check for updates reads these; the TV app never sees them.
 
+## phone-build-2
+
+- Fix: the Home banner's Trailer button appears now. The banner's movie fetch asks Jellyfin for each title's trailer links; a list response only includes them when asked, so the button never showed.
+- New render check locks it in: the hero request must ask for trailer links, and the banner must show the clapperboard icon in its pixels.
+
 ## phone-build-1
 
 - First CI release build of Driftfin Phone (alpha).
