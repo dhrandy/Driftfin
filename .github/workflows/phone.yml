@@ -21,6 +21,12 @@ jobs:
         with:
           fetch-depth: 0   # full tag history: build numbers must survive release deletions
 
+      - name: Diagnose release token permissions
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api /repos/$GITHUB_REPOSITORY --jq '.permissions'
+
       - name: Pick the next phone build number
         env:
           GH_TOKEN: ${{ github.token }}
