@@ -8,3 +8,4 @@ local.properties
 *.keystore
 *.p12
 .kotlin/
+!phone/keystore/debug.keystore  # public test-only signing identity, intentionally tracked
