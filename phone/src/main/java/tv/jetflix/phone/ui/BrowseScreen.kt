@@ -106,6 +106,10 @@ fun BrowseScreen(type: String, title: String, onOpen: (BaseItemDto) -> Unit) {
             TopArt.url.value = list.getOrNull((i - 1).coerceAtLeast(0) * 3)?.let { Graph.repo.backdropUrl(it, 960) }
         }
     }
+    // Snapshot the rows for this composition so the grid's interval content reads one
+    // fixed list instead of state that can change mid-measure (LazyGrid IndexOutOfBounds race).
+    val rowsLoaded = items != null
+    val rows = items.orEmpty()
     LazyVerticalGrid(
         columns = GridCells.Fixed(tv.jetflix.phone.data.PhoneSettings.posterSize.collectAsState().value.gridColumns), state = grid,
         modifier = Modifier.fillMaxSize().statusBarsPadding(),
@@ -145,8 +149,7 @@ fun BrowseScreen(type: String, title: String, onOpen: (BaseItemDto) -> Unit) {
                 }
             }
         }
-        val list = items
-        if (list != null && list.isEmpty()) item(span = { GridItemSpan(maxLineSpan) }) { Text("Nothing here.", color = DriftfinColors.TextSecondary) }
-        items(list.orEmpty(), key = { it.Id }) { PosterCard(it, Modifier.fillMaxWidth()) { onOpen(it) } }
+        if (rowsLoaded && rows.isEmpty()) item(span = { GridItemSpan(maxLineSpan) }) { Text("Nothing here.", color = DriftfinColors.TextSecondary) }
+        items(rows, key = { it.Id }) { PosterCard(it, Modifier.fillMaxWidth()) { onOpen(it) } }
     }
 }
