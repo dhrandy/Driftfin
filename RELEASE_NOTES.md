@@ -4,6 +4,17 @@ Each build lists its real changes here. The CI release workflow copies the secti
 matching the build tag onto the GitHub release page and appends the standard
 automated-build footer.
 
+## build-43
+
+Changes:
+- On a show's page, the watched check now marks the episode named in Play/Resume, not the whole series. Marking an episode watched shows its red check in the episode list right away and points Play/Resume at the next episode.
+- When an episode ends and there is a next one, the app opens the next episode's page if it isn't going to autoplay (autoplay off, or the "Up next" card not used). Autoplay itself is unchanged.
+- On a show's page, the episode's length now sits beside its air date ("Aired Mar 8, 2026 · 52m"). If an episode has no runtime, the date shows alone.
+- The Cast row now includes the episode's own actors when the series' cast list is sparse, so guest cast shows up too.
+- Search's recommendation rows now reload on a fresh visit instead of staying blank after the first search.
+- The screensaver shows the title's logo art when the server has one.
+- The updater no longer makes you start the same download twice.
+
 ## build-42
 
 Changes:
