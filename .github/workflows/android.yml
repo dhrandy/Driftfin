@@ -67,7 +67,8 @@ jobs:
           echo "$B64" | base64 -d > "$RUNNER_TEMP/jetflix-release.jks"
 
       - name: Unit tests
-        run: gradle --no-daemon testDebugUnitTest
+        # TV release track runs the TV module's tests; the phone module's tests run in the phone workflow.
+        run: gradle --no-daemon :app:testDebugUnitTest
 
       - name: Build signed release APK
         env:
