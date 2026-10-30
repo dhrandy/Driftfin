@@ -388,22 +388,14 @@ fun DetailsContent(
                             logoUrl = repo.logoUrl(item),
                         )
                         Spacer(Modifier.height(8.dp))
-                        MetaRow(item, state.is4k, state.hdrFormats)
+                        MetaRow(item, state.playTarget, state.is4k, state.hdrFormats)
                         val target = state.playTarget ?: item
-                        // A series page opens on the episode Play will start: say which one and when it aired,
-                        // separate from the show's own premiere date above.
-                        val episodeAir = if (item.isSeries) episodeAirLine(target) else null
-                        if (episodeAir != null) {
-                            Spacer(Modifier.height(8.dp))
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Text(episodeAir.first, style = JetflixType.body.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold), color = JetflixColors.TextPrimary)
-                                Text("·", style = JetflixType.body, color = JetflixColors.TextMuted)
-                                Text(episodeAir.second, style = JetflixType.body, color = JetflixColors.TextSecondary)
-                            }
-                            Spacer(Modifier.height(12.dp))
-                        } else {
-                            Spacer(Modifier.height(14.dp))
-                        }
+                        // The episode's air date sits in the meta row and the premiere date leads the genre
+                        // line below (Randy's swap after the genre-line pick); the button names the episode.
+                        // The column is bottom-anchored, so the removed "S2:E1 - Aired ..." line would have
+                        // dropped the title and meta row; this spacer keeps their build-40 position, per
+                        // Randy's ship condition "keep the positioning up higher" (8 + body 22 + 12 = 42).
+                        Spacer(Modifier.height(42.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                             Button(
                                 onClick = { onPlay(target) },
@@ -417,7 +409,7 @@ fun DetailsContent(
                             ) {
                                 Icon(Icons.Filled.PlayArrow, contentDescription = null)
                                 Spacer(Modifier.width(6.dp))
-                                Text(playLabel(target, episodeNamedAbove = episodeAir != null))
+                                Text(playLabel(target))
                             }
                             if (target.isResumeable) {
                                 Button(
@@ -525,7 +517,7 @@ fun DetailsContent(
         if (item != null && item.Genres.isNotEmpty()) {
             item(key = "genres") {
                 Text(
-                    text = item.Genres.joinToString(" · "),
+                    text = genreLine(item, state.playTarget),
                     style = JetflixType.caption,
                     color = JetflixColors.TextMuted,
                     modifier = Modifier.padding(horizontal = 48.dp),
@@ -618,7 +610,7 @@ fun DetailsContent(
 }
 
 @Composable
-private fun MetaRow(item: BaseItemDto, is4k: Boolean = false, hdrFormats: List<String> = emptyList()) {
+private fun MetaRow(item: BaseItemDto, playTarget: BaseItemDto?, is4k: Boolean = false, hdrFormats: List<String> = emptyList()) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -629,9 +621,14 @@ private fun MetaRow(item: BaseItemDto, is4k: Boolean = false, hdrFormats: List<S
         metaYearText(item)?.let {
             Text(it, style = JetflixType.body, color = JetflixColors.TextSecondary)
         }
-        val premiered = if (item.isSeries) item.airDateLabel() else null
-        premiered?.let {
-            Text("Premiered $it", style = JetflixType.body, color = JetflixColors.TextSecondary)
+        // Randy's swap after the genre-line pick ("premiered goes down beside the genre, aired goes up
+        // top"): the play target episode's air date takes the premiere date's slot up here, and the
+        // premiere date moves to the genre line. If the episode has no date, the premiere date stays
+        // here as before so the date isn't lost.
+        val epAired = playTarget?.takeIf { item.isSeries && it.Type == "Episode" }?.airDateLabel()
+        val dateText = epAired?.let { "Aired $it" } ?: if (item.isSeries) item.airDateLabel()?.let { "Premiered $it" } else null
+        dateText?.let {
+            Text(it, style = JetflixType.body, color = JetflixColors.TextSecondary)
         }
         item.OfficialRating?.takeIf { it.isNotBlank() }?.let { rating ->
             Box(
@@ -795,28 +792,29 @@ fun CastChip(person: BaseItemPerson, imageUrl: String?, onClick: () -> Unit = {}
     }
 }
 
-/** ("S1:E3", "Aired Apr 7, 2023") for the episode a series page will play; null for anything else or when the server has no date. */
-fun episodeAirLine(target: BaseItemDto): Pair<String, String>? {
-    if (target.Type != "Episode") return null
-    val label = target.episodeLabel() ?: return null
-    val date = target.airDateLabel() ?: return null
-    return label to "Aired $date"
+/** The genre line on a series page leads with the play target's air date: "Aired Oct 22, 2026 · Drama · Comedy"
+ * (Randy's pick after build 40 - the date leaves the header and joins this existing quiet line). Movies and
+ * missing dates leave the genres alone. */
+fun genreLine(item: BaseItemDto, playTarget: BaseItemDto?): String {
+    val genres = item.Genres.joinToString(" · ")
+    // The premiere date leads the genre line only when the episode's air date took its meta-row slot
+    // (otherwise it stays up top and this line is plain genres). A little extra room between the date
+    // and the first genre, on Randy's "little, not a lot" note.
+    val epAired = playTarget?.takeIf { item.isSeries && it.Type == "Episode" }?.airDateLabel()
+    val premiered = if (item.isSeries && epAired != null) item.airDateLabel() else null
+    return listOfNotNull(premiered?.let { "Premiered $it" }, genres.takeIf { it.isNotBlank() }).joinToString("  ·  ")
 }
 
 /** The meta row's standalone year; dropped when a series already shows "Premiered <date>" (Randy, build 40). */
 fun metaYearText(item: BaseItemDto): String? =
     if (item.isSeries && item.airDateLabel() != null) null else item.ProductionYear?.toString()
 
-/**
- * "Resume S2:E5" / "Play S2:E5" for episodes, plain "Resume" / "Play" otherwise. When the episode is
- * already named right above the button (the "S2:E1 · Aired ..." line), the button is just "Play"/"Resume"
- * so the episode isn't named twice (Randy, build 40). When that line is absent - movie, or the server has
- * no air date or episode numbers - the button keeps the episode label so the target is still identified.
- */
-fun playLabel(target: BaseItemDto, episodeNamedAbove: Boolean = false): String {
+/** "Resume S2:E5" / "Play S2:E5" for episodes, plain "Resume" / "Play" otherwise (movie, or the server
+ * has no episode numbers). The episode is named here and nowhere else up top (Randy, build 41). */
+fun playLabel(target: BaseItemDto): String {
     val verb = if (target.isResumeable) "Resume" else "Play"
     val ep = target.episodeLabel()
-    return if (ep != null && !episodeNamedAbove) "$verb $ep" else verb
+    return if (ep != null) "$verb $ep" else verb
 }
 
 /** Where the wide backdrop sits inside the fixed header box: anchored to the top of the art (heads/titles sit high in fanart). */

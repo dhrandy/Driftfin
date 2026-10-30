@@ -7,6 +7,7 @@ import androidx.compose.ui.graphics.painter.BitmapPainter
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.performScrollTo
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.Rule
 import org.junit.Test
@@ -22,13 +23,14 @@ import tv.jetflix.app.ui.theme.JetflixTheme
 import java.io.File
 
 /**
- * Randy on build 39, The Great: the episode is named twice ("S2:E1 · Aired ..." above a "Play S2:E1" button)
- * and the standalone year repeats the premiere date's year. The button is a plain Play/Resume when the line
- * above names the episode, and the year is dropped when the premiere date is shown. Renders the real header.
+ * The header layout Randy settled on after build 40: the episode is named once, in the Play/Resume
+ * button; its air date sits in the header's meta row ("Aired Nov 19, 2021"); the show's premiere date
+ * leads the genre line below ("Premiered May 15, 2020 · Drama · ..."); the standalone year still
+ * doesn't duplicate a shown date. Renders the real details screen.
  */
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @RunWith(AndroidJUnit4::class)
-@Config(sdk = [34], qualifiers = "w960dp-h540dp-xhdpi")
+@Config(sdk = [34], qualifiers = "w1920dp-h1080dp-mdpi")
 class DetailsHeaderDedupTest {
     @get:Rule val rule = createAndroidComposeRule<androidx.activity.ComponentActivity>()
 
@@ -44,7 +46,7 @@ class DetailsHeaderDedupTest {
         RunTimeTicks = 52L * 60 * 10_000_000,
     )
 
-    @Test fun seriesHeaderNamesTheEpisodeAndTheDateOnce() {
+    @Test fun seriesHeaderPutsTheAirDateUpTopAndThePremiereDateByTheGenres() {
         val art = Bitmap.createBitmap(128, 72, Bitmap.Config.ARGB_8888).also { it.eraseColor(0xFF30425E.toInt()) }
         val repo = JellyfinRepository().apply { apiFor("http://demo.test") }
         rule.setContent {
@@ -64,15 +66,20 @@ class DetailsHeaderDedupTest {
         }
         rule.waitForIdle()
 
-        // The episode air line stays, naming the episode once above the button.
-        rule.onAllNodes(hasText("S2:E1")).assertCountEquals(1)
+        // The header's old combined line is gone; the episode is named once, in the button.
+        rule.onAllNodes(hasText("S2:E1 · Aired Nov 19, 2021")).assertCountEquals(0)
+        rule.onAllNodes(hasText("Play S2:E1")).assertCountEquals(1)
+        // The air date is up top in the meta row...
         rule.onAllNodes(hasText("Aired Nov 19, 2021")).assertCountEquals(1)
-        // The button is a plain Play: no "Play S2:E1" doubling the label above it.
-        rule.onAllNodes(hasText("Play S2:E1")).assertCountEquals(0)
-        rule.onAllNodes(hasText("Play")).assertCountEquals(1)
-        // The premiere date stays; the standalone year duplicating it is gone.
-        rule.onAllNodes(hasText("Premiered May 15, 2020")).assertCountEquals(1)
+        // ...and the premiere date leads the genre line, no longer its own meta segment.
+        rule.onAllNodes(hasText("Premiered May 15, 2020")).assertCountEquals(0)
+        rule.onAllNodes(hasText("Premiered May 15, 2020  ·  Drama · Comedy · History")).assertCountEquals(1)
+        // The standalone year still doesn't duplicate a shown date.
         rule.onAllNodes(hasText("2020")).assertCountEquals(0)
+
+        // Bring the genre line into view so the capture shows both halves of the swap.
+        rule.onNode(hasText("Premiered May 15, 2020  ·  Drama · Comedy · History")).performScrollTo()
+        rule.waitForIdle()
 
         val v = rule.activity.window.decorView
         val b = Bitmap.createBitmap(v.width, v.height, Bitmap.Config.ARGB_8888)

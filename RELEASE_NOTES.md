@@ -4,6 +4,11 @@ Each build lists its real changes here. The CI release workflow copies the secti
 matching the build tag onto the GitHub release page and appends the standard
 automated-build footer.
 
+## build-41
+
+Changes:
+- On a show's page, the episode's air date now sits in the top info row ("Aired Oct 22, 2026"), the show's premiere date leads the genre line ("Premiered May 15, 2020 · Drama · Comedy"), and the episode is named in the Play/Resume button ("Resume S3:E6"). The separate "S3:E6 · Aired ..." line above the buttons is gone.
+
 ## build-40
 
 Changes:

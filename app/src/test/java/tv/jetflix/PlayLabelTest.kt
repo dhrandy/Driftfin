@@ -7,9 +7,9 @@ import tv.jetflix.app.data.UserItemDataDto
 import tv.jetflix.app.ui.details.playLabel
 
 /**
- * Randy on build 39: "Don't need the episode named twice where the play is and right above it." When the
- * "S2:E1 · Aired ..." line above the button already names the episode, the button is a plain Play/Resume;
- * when that line is absent the button keeps the episode label so the target is still identified.
+ * The button names the episode it will play ("Resume S2:E5"), and with the header's air-date line gone
+ * (build 41: the date moved to the genre line) nothing up top names it twice. Movies and episodes without
+ * numbers get a plain Play/Resume.
  */
 class PlayLabelTest {
     private fun ep(resume: Boolean = false, withNumbers: Boolean = true) = BaseItemDto(
@@ -18,12 +18,7 @@ class PlayLabelTest {
         UserData = if (resume) UserItemDataDto(PlaybackPositionTicks = 1000, Played = false) else null,
     )
 
-    @Test fun episodeNamedAboveGetsAPlainVerb() {
-        assertEquals("Play", playLabel(ep(), episodeNamedAbove = true))
-        assertEquals("Resume", playLabel(ep(resume = true), episodeNamedAbove = true))
-    }
-
-    @Test fun episodeNotNamedAboveKeepsItsLabel() {
+    @Test fun episodesKeepTheirLabel() {
         assertEquals("Play S2:E5", playLabel(ep()))
         assertEquals("Resume S2:E5", playLabel(ep(resume = true)))
     }
