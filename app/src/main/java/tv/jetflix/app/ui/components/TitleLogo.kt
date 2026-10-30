@@ -38,11 +38,13 @@ fun TitleOrLogo(
     maxLogoHeight: Dp = 96.dp,
     maxLogoWidth: Dp = 420.dp,
     maxTextLines: Int = 2,
+    textStyle: androidx.compose.ui.text.TextStyle = JetflixType.heroTitle,
+    textColor: androidx.compose.ui.graphics.Color = JetflixColors.TextPrimary,
 ) {
     val enabled by AppSettings.titleLogos.collectAsState()
     val text: @Composable () -> Unit = {
         androidx.tv.material3.Text(
-            text = title, style = JetflixType.heroTitle, color = JetflixColors.TextPrimary,
+            text = title, style = textStyle, color = textColor,
             maxLines = maxTextLines, overflow = TextOverflow.Ellipsis, modifier = modifier,
         )
     }

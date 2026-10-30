@@ -60,8 +60,8 @@ object ScreensaverRules {
     fun mayRun(onPlayer: Boolean, urls: List<ScreensaverSlide>) = !onPlayer && urls.isNotEmpty()
 }
 
-/** One screensaver picture with the title's name and description shown over it. */
-data class ScreensaverSlide(val url: String, val title: String? = null, val overview: String? = null)
+/** One screensaver picture with the title's name (as logo art when the server has it) and description shown over it. */
+data class ScreensaverSlide(val url: String, val title: String? = null, val overview: String? = null, val logoUrl: String? = null)
 
 /** Fullscreen, rotating backdrops of unwatched movies. The caller consumes the first key press to dismiss it. */
 @Composable
@@ -104,7 +104,12 @@ internal fun ScreensaverText(
     ) {
         Column(Modifier.padding(start = 56.dp, end = 56.dp, bottom = 40.dp).fillMaxWidth(0.62f)) {
             if (!slide.title.isNullOrBlank()) {
-                Text(slide.title, style = JetflixType.heroTitle.copy(fontSize = 28.sp, lineHeight = 32.sp), color = Color.White, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                // The title's logo art when the server has it (Randy), the plain-text title otherwise.
+                TitleOrLogo(
+                    title = slide.title, logoUrl = slide.logoUrl,
+                    maxLogoHeight = 48.dp, maxLogoWidth = 300.dp,
+                    textStyle = JetflixType.heroTitle.copy(fontSize = 28.sp, lineHeight = 32.sp), textColor = Color.White,
+                )
             }
             if (!slide.overview.isNullOrBlank()) {
                 LaunchedEffect(slide) {

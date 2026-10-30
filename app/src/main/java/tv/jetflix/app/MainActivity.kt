@@ -235,7 +235,7 @@ fun JetflixRoot() {
             if (sess == null) emptyList() else {
                 val api = app.repo.apiFor(sess.serverUrl)
                 val pool = api.getItems(userId = sess.userId, includeItemTypes = "Movie", recursive = true, sortBy = "Random", limit = 40, filters = "IsUnplayed", fields = "Overview").body()?.Items ?: emptyList()
-                tv.jetflix.app.data.BannerPicks.randomUnwatchedList(pool) { app.repo.backdropUrl(it, 1920) != null }.mapNotNull { m -> app.repo.backdropUrl(m, 1920)?.let { tv.jetflix.app.ui.components.ScreensaverSlide(it, m.displayTitle(), m.Overview) } }
+                tv.jetflix.app.data.BannerPicks.randomUnwatchedList(pool) { app.repo.backdropUrl(it, 1920) != null }.mapNotNull { m -> app.repo.backdropUrl(m, 1920)?.let { tv.jetflix.app.ui.components.ScreensaverSlide(it, m.displayTitle(), m.Overview, app.repo.logoUrl(m)) } }
             }
         },
     ) {
