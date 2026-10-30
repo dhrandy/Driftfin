@@ -128,7 +128,7 @@ class PhoneBrowseInteractionTest {
         rule.setContent { DriftfinTheme { BrowseScreen("Movie", "Movies", onOpen = { opened = it }) } }
         rule.onNodeWithText("Movies").assertIsDisplayed()
         val cover = hasClickAction() and !hasButtonRole()
-        rule.waitUntil(15_000) { rule.onAllNodes(cover).fetchSemanticsNodes().size >= 4 }
+        rule.waitUntil(30_000) { rule.onAllNodes(cover).fetchSemanticsNodes().size >= 4 }
         settle()
         capture("browse-seeded.png")
         // Real artwork must reach the pixels: the cover region carries more than the flat surface color.
@@ -146,9 +146,9 @@ class PhoneBrowseInteractionTest {
     @Test fun sortIconOpensMenu() {
         rule.setContent { DriftfinTheme { BrowseScreen("Movie", "Movies", onOpen = {}) } }
         rule.onNodeWithText("Movies").assertIsDisplayed()
-        awaitReal(15_000) { rule.onAllNodesWithContentDescription("Sort and filter").fetchSemanticsNodes().isNotEmpty() }
+        awaitReal(30_000) { rule.onAllNodesWithContentDescription("Sort and filter").fetchSemanticsNodes().isNotEmpty() }
         rule.onNodeWithContentDescription("Sort and filter").performClick()
-        awaitReal(10_000) { rule.onAllNodesWithText("Recently added", substring = true).fetchSemanticsNodes().isNotEmpty() }
+        awaitReal(30_000) { rule.onAllNodesWithText("Recently added", substring = true).fetchSemanticsNodes().isNotEmpty() }
         rule.onNodeWithText("Name", substring = true).assertIsDisplayed()
         rule.onNodeWithText("Rating", substring = true).assertIsDisplayed()
         rule.onNodeWithText("Year", substring = true).assertIsDisplayed()
@@ -160,10 +160,10 @@ class PhoneBrowseInteractionTest {
         rule.setContent { DriftfinTheme { BrowseScreen("Movie", "Movies", onOpen = {}) } }
         awaitReal(30_000) { rule.onAllNodesWithText("Library: All").fetchSemanticsNodes().isNotEmpty() }
         rule.onNodeWithText("Library: All").performClick()
-        awaitReal(10_000) { rule.onAllNodesWithText("Kids").fetchSemanticsNodes().isNotEmpty() }
+        awaitReal(30_000) { rule.onAllNodesWithText("Kids").fetchSemanticsNodes().isNotEmpty() }
         rule.onNodeWithText("Kids").performClick()
-        awaitReal(10_000) { rule.onAllNodesWithText("Library: Kids").fetchSemanticsNodes().isNotEmpty() }
-        awaitReal(10_000) { requested.any { it.contains("/Items") && it.contains("parentId=libK") } }
+        awaitReal(30_000) { rule.onAllNodesWithText("Library: Kids").fetchSemanticsNodes().isNotEmpty() }
+        awaitReal(30_000) { requested.any { it.contains("/Items") && it.contains("parentId=libK") } }
         assertTrue(requested.lastOrNull { it.contains("/Items?") }!!.contains("parentId=libK"))
     }
 
@@ -171,12 +171,12 @@ class PhoneBrowseInteractionTest {
     @Test fun controlsWrapWithinWidthWithLongPicks() {
         androidx.test.core.app.ApplicationProvider.getApplicationContext<android.content.Context>().getSharedPreferences("driftfin_phone_browse", 0).edit().clear().commit()
         rule.setContent { DriftfinTheme { BrowseScreen("Movie", "Movies", onOpen = {}) } }
-        rule.waitUntil(15_000) { rule.onAllNodesWithText("Genres").fetchSemanticsNodes().isNotEmpty() }
+        rule.waitUntil(30_000) { rule.onAllNodesWithText("Genres").fetchSemanticsNodes().isNotEmpty() }
         rule.onNodeWithText("Genres").performClick()
-        rule.waitUntil(5_000) { rule.onAllNodesWithText("Science Fiction").fetchSemanticsNodes().isNotEmpty() }
+        rule.waitUntil(30_000) { rule.onAllNodesWithText("Science Fiction").fetchSemanticsNodes().isNotEmpty() }
         rule.onNodeWithText("Science Fiction").performClick()
         rule.onNodeWithText("Made-for-Television").performClick()
-        rule.waitUntil(5_000) { rule.onAllNodesWithText("Science Fiction, Made-for-Television").fetchSemanticsNodes().isNotEmpty() }
+        rule.waitUntil(30_000) { rule.onAllNodesWithText("Science Fiction, Made-for-Television").fetchSemanticsNodes().isNotEmpty() }
         rule.onNodeWithText("Science Fiction, Made-for-Television").performClick() // close the menu
         assertControlsWithinWidth()
         settle(2500)

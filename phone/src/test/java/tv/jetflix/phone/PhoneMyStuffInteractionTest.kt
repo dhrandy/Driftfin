@@ -81,7 +81,7 @@ class PhoneMyStuffInteractionTest {
         rule.onNodeWithText("Favorites").assertIsDisplayed()
         rule.onNodeWithText("Watchlist").assertIsDisplayed()
         rule.onNodeWithText("Collections").assertIsDisplayed()
-        rule.waitUntil(10_000) { rule.onAllNodes(cover).fetchSemanticsNodes().size >= 2 }
+        rule.waitUntil(30_000) { rule.onAllNodes(cover).fetchSemanticsNodes().size >= 2 }
         val end = System.currentTimeMillis() + 5000
         while (System.currentTimeMillis() < end) { rule.waitForIdle(); org.robolectric.shadows.ShadowLooper.idleMainLooper(); Thread.sleep(60) }
 

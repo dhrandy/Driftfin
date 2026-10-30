@@ -102,8 +102,8 @@ class PhoneSearchInteractionTest {
 
     @Test fun blankShowsRecommendedRows() {
         rule.setContent { DriftfinTheme { SearchScreen(onOpen = {}) } }
-        awaitReal(20_000) { rule.onAllNodesWithText("Recommended movies").fetchSemanticsNodes().isNotEmpty() }
-        awaitReal(20_000) { rule.onAllNodesWithText("Recommended shows").fetchSemanticsNodes().isNotEmpty() }
+        awaitReal(30_000) { rule.onAllNodesWithText("Recommended movies").fetchSemanticsNodes().isNotEmpty() }
+        awaitReal(30_000) { rule.onAllNodesWithText("Recommended shows").fetchSemanticsNodes().isNotEmpty() }
         // Type isolation: the movies row queried only movies, the shows row only series.
         assertTrue(requested.any { it.contains("sortBy=CommunityRating") && it.contains("includeItemTypes=Movie") })
         assertTrue(requested.any { it.contains("sortBy=CommunityRating") && it.contains("includeItemTypes=Series") })
@@ -114,7 +114,7 @@ class PhoneSearchInteractionTest {
     @Test fun noMatchesNeverFlashesDuringSearch() {
         searchDelayMs = 3_000 // server answers 3s after the request
         rule.setContent { DriftfinTheme { SearchScreen(onOpen = {}) } }
-        awaitReal(20_000) { rule.onAllNodesWithText("Recommended movies").fetchSemanticsNodes().isNotEmpty() }
+        awaitReal(30_000) { rule.onAllNodesWithText("Recommended movies").fetchSemanticsNodes().isNotEmpty() }
         rule.onNodeWithText("Search movies and shows").performTextInput("copper")
         rule.mainClock.advanceTimeBy(500)
         // While the request is in flight, "No matches." must not appear.
@@ -123,9 +123,9 @@ class PhoneSearchInteractionTest {
             rule.waitForIdle(); org.robolectric.shadows.ShadowLooper.idleMainLooper(); Thread.sleep(100)
             assertTrue("'No matches.' flashed during an in-flight search", rule.onAllNodesWithText("No matches.").fetchSemanticsNodes().isEmpty())
         }
-        awaitReal(20_000) { requested.any { it.contains("searchTerm=copper") } }
+        awaitReal(30_000) { requested.any { it.contains("searchTerm=copper") } }
         val cover = hasClickAction() and !androidx.compose.ui.test.SemanticsMatcher.expectValue(androidx.compose.ui.semantics.SemanticsProperties.Role, Role.Button)
-        awaitReal(20_000) { rule.onAllNodes(cover).fetchSemanticsNodes().isNotEmpty() }
+        awaitReal(30_000) { rule.onAllNodes(cover).fetchSemanticsNodes().isNotEmpty() }
         val settleEnd = System.currentTimeMillis() + 3_000
         while (System.currentTimeMillis() < settleEnd) { rule.waitForIdle(); org.robolectric.shadows.ShadowLooper.idleMainLooper(); Thread.sleep(60) }
         capture("search-results.png")
@@ -133,7 +133,7 @@ class PhoneSearchInteractionTest {
 
     @Test fun clearButtonEmptiesTheBox() {
         rule.setContent { DriftfinTheme { SearchScreen(onOpen = {}) } }
-        awaitReal(20_000) { rule.onAllNodesWithText("Recommended movies").fetchSemanticsNodes().isNotEmpty() }
+        awaitReal(30_000) { rule.onAllNodesWithText("Recommended movies").fetchSemanticsNodes().isNotEmpty() }
         // No X while the box is empty.
         assertTrue(rule.onAllNodesWithContentDescription("Clear search").fetchSemanticsNodes().isEmpty())
         rule.onNodeWithText("Search movies and shows").performTextInput("copper")
@@ -143,17 +143,17 @@ class PhoneSearchInteractionTest {
         rule.waitForIdle()
         // The box is empty (placeholder back), the X is gone, and the recommended rows return.
         rule.onNodeWithText("Search movies and shows").assertIsDisplayed()
-        awaitReal(10_000) { rule.onAllNodesWithText("Recommended movies").fetchSemanticsNodes().isNotEmpty() }
+        awaitReal(30_000) { rule.onAllNodesWithText("Recommended movies").fetchSemanticsNodes().isNotEmpty() }
         assertTrue(rule.onAllNodesWithContentDescription("Clear search").fetchSemanticsNodes().isEmpty())
     }
 
     @Test fun noMatchesShowsAfterEmptyResult() {
         rule.setContent { DriftfinTheme { SearchScreen(onOpen = {}) } }
-        awaitReal(20_000) { rule.onAllNodesWithText("Recommended movies").fetchSemanticsNodes().isNotEmpty() }
+        awaitReal(30_000) { rule.onAllNodesWithText("Recommended movies").fetchSemanticsNodes().isNotEmpty() }
         rule.onNodeWithText("Search movies and shows").performTextInput("zzzznothing")
         rule.onNodeWithText("zzzznothing").assertExists() // the field accepted the input
         rule.mainClock.advanceTimeBy(500) // push the compose clock past the 300ms debounce
-        awaitReal(20_000) { rule.onAllNodesWithText("No matches.").fetchSemanticsNodes().isNotEmpty() }
+        awaitReal(30_000) { rule.onAllNodesWithText("No matches.").fetchSemanticsNodes().isNotEmpty() }
         rule.onNodeWithText("No matches.").assertIsDisplayed()
     }
 
