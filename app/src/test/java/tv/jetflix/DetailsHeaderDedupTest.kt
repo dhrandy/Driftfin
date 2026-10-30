@@ -2,6 +2,7 @@ package tv.jetflix
 
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.painter.BitmapPainter
@@ -40,7 +41,7 @@ import java.io.File
  */
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @RunWith(AndroidJUnit4::class)
-@Config(sdk = [34], qualifiers = "w1920dp-h1080dp-mdpi")
+@Config(sdk = [34], qualifiers = "w960dp-h540dp-xhdpi") // the user's TV: 1080p at xhdpi = 960x540dp logical, rendered 1920x1080px
 class DetailsHeaderDedupTest {
     @get:Rule val rule = createAndroidComposeRule<androidx.activity.ComponentActivity>()
 
@@ -65,11 +66,12 @@ class DetailsHeaderDedupTest {
     )
     private val resumeEp = ep(2, resume = true)
 
-    @Test fun seriesHeaderPutsTheAirDateUpTopAndThePremiereDateByTheGenres() {
+    private fun show(scrollPx: Int) {
         val art = Bitmap.createBitmap(128, 72, Bitmap.Config.ARGB_8888).also { it.eraseColor(0xFF30425E.toInt()) }
         // The real MARSHALS logo (extracted from the user's TV photo of this page, white ink on transparency).
         val logo = BitmapFactory.decodeStream(javaClass.classLoader!!.getResourceAsStream("art/marshals-logo.png"))
         val repo = JellyfinRepository().apply { apiFor("http://demo.test") }
+        val listState = LazyListState(0, scrollPx)
         rule.setContent {
             CompositionLocalProvider(LocalTestArtwork provides { url ->
                 when {
@@ -90,13 +92,19 @@ class DetailsHeaderDedupTest {
                             trailer = TrailerSource.YouTube("dQw4w9WgXcQ", "Marshals trailer")),
                         repo, {}, { _, _ -> }, {}, {}, {},
                         showWatchlist = true,
+                        listState = listState,
                     )
                 }
             }
         }
         rule.waitForIdle()
+    }
 
+    @Test fun restingPagePutsTheAirDateUpTopAndThePremiereByTheGenres() {
+        show(0)
         // The header's old combined line is gone; the episode is named once, in the button.
+        // (At 540dp height the lower sections compose only once scrolled into view, so the genre
+        // assertions run after the genre line is scrolled to.)
         rule.onAllNodes(hasText("S1:E2 · Aired Mar 8, 2026")).assertCountEquals(0)
         rule.onAllNodes(hasText("Resume S1:E2")).assertCountEquals(1)
         rule.onAllNodes(hasText("Play from start")).assertCountEquals(1)
@@ -114,11 +122,21 @@ class DetailsHeaderDedupTest {
         val f1 = File("build/outputs/qa/details-header-dedup.png"); f1.parentFile.mkdirs()
         f1.outputStream().use { resting.compress(Bitmap.CompressFormat.PNG, 100, it) }
         println("CAPTURE ${f1.absolutePath}")
+    }
 
-        // The scrolled page, as on the user's photo (focus below the header scrolls it up): how close
-        // does the logo ink get to the screen's top edge?
-        rule.onAllNodes(hasScrollToNodeAction())[0].performScrollToNode(hasText("Episode 8", substring = true))
-        rule.waitForIdle()
+    @Test fun scrolledPageKeepsTheLogoOffTheTopEdge() {
+        // The scrolled page, matching the user's photo: the screenshot's proportions put the list
+        // ~250dp down (focus below the header scrolls it up; the art holds, text scrolls). That is
+        // the state where the shipped spacing put the logo against the screen's top edge.
+        // 250dp at xhdpi = 500px.
+        show(500)
+
+        // ...and the premiere date leads the genre line, no longer its own meta segment.
+        rule.onAllNodes(hasText("Premiered Mar 1, 2026")).assertCountEquals(0)
+        rule.onAllNodes(hasText("Premiered Mar 1, 2026  ·  Drama · Western")).assertCountEquals(1)
+        // The standalone year still doesn't duplicate a shown date.
+        rule.onAllNodes(hasText("2026")).assertCountEquals(0)
+        val v = rule.activity.window.decorView
         val scrolled = Bitmap.createBitmap(v.width, v.height, Bitmap.Config.ARGB_8888)
         v.draw(android.graphics.Canvas(scrolled))
         val f2 = File("build/outputs/qa/details-header-dedup-scrolled.png")
