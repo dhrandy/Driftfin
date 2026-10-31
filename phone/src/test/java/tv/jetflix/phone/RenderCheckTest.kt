@@ -103,20 +103,31 @@ class RenderCheckTest {
         tv.jetflix.phone.Graph.rebuildImagesForTest()
         tv.jetflix.phone.Graph.signIn(tv.jetflix.phone.data.Session(server.url("/").toString().trimEnd('/'), "u1", "Tester", "tok", "dev"))
         rule.setContent { DriftfinTheme { tv.jetflix.phone.ui.DriftfinShell() } }
-        val end = System.currentTimeMillis() + 8000
-        while (System.currentTimeMillis() < end) { rule.waitForIdle(); org.robolectric.shadows.ShadowLooper.idleMainLooper(); Thread.sleep(100) }
         val decor = rule.activity.window.decorView
-        decor.measure(android.view.View.MeasureSpec.makeMeasureSpec(1080, android.view.View.MeasureSpec.EXACTLY), android.view.View.MeasureSpec.makeMeasureSpec(2400, android.view.View.MeasureSpec.EXACTLY))
-        decor.layout(0, 0, 1080, 2400)
         val bmp = Bitmap.createBitmap(1080, 2400, Bitmap.Config.ARGB_8888)
-        decor.draw(android.graphics.Canvas(bmp))
+        val colors = HashSet<Int>()
+        fun render(): Int {
+            rule.waitForIdle(); org.robolectric.shadows.ShadowLooper.idleMainLooper()
+            decor.measure(android.view.View.MeasureSpec.makeMeasureSpec(1080, android.view.View.MeasureSpec.EXACTLY), android.view.View.MeasureSpec.makeMeasureSpec(2400, android.view.View.MeasureSpec.EXACTLY))
+            decor.layout(0, 0, 1080, 2400)
+            decor.draw(android.graphics.Canvas(bmp))
+            colors.clear()
+            for (x in 0 until bmp.width step 6) for (y in 0 until bmp.height step 6) colors.add(bmp.getPixel(x, y))
+            return colors.size
+        }
+        // Adaptive settle: wait until the things the assertions below check are actually observable,
+        // instead of a fixed wall-clock window (slow shared runners need longer than 8s).
+        val end = System.currentTimeMillis() + 30_000
+        var colorCount = render()
+        while (System.currentTimeMillis() < end && (colorCount <= 200 || imagePaths.none { it.contains("/Items/s") && it.contains("Primary") })) {
+            Thread.sleep(250)
+            colorCount = render()
+        }
         val out = File("build/render-check"); out.mkdirs()
         File(out, "home-populated.png").outputStream().use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
         server.shutdown()
         assertTrue("Continue Watching and Next Up asked for series posters: $imagePaths", imagePaths.any { it.contains("/Items/s") && it.contains("Primary") })
         assertTrue("no episode still was requested at poster-card size (the wide hero may still use one): $imagePaths", imagePaths.none { it.contains("maxWidth=400") && it.contains("tag=still") })
-        val colors = HashSet<Int>()
-        for (x in 0 until bmp.width step 6) for (y in 0 until bmp.height step 6) colors.add(bmp.getPixel(x, y))
         assertTrue("populated home has art (${colors.size} colors)", colors.size > 200)
     }
 }
