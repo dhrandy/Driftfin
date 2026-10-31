@@ -402,13 +402,15 @@ fun PlayerScreen(
                         KeyEvent.KEYCODE_DPAD_UP -> panelIndex = (panelIndex - 1).coerceAtLeast(0)
                         KeyEvent.KEYCODE_DPAD_DOWN -> panelIndex = (panelIndex + 1).coerceAtMost((panelOptions.size - 1).coerceAtLeast(0))
                         KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER -> {
-                            panelOptions.getOrNull(panelIndex)?.let {
-                                TrackCycler.apply(player, it)
-                                val saved = TrackPrefs(tv.jetflix.app.data.AppSettings.audioLanguage, tv.jetflix.app.data.AppSettings.subtitleLanguage).after(it, TrackCycler::languageOf)
+                            panelOptions.getOrNull(panelIndex)?.let { chosen ->
+                                TrackCycler.apply(player, chosen)
+                                val saved = TrackPrefs(tv.jetflix.app.data.AppSettings.audioLanguage, tv.jetflix.app.data.AppSettings.subtitleLanguage).after(chosen, TrackCycler::languageOf)
                                 tv.jetflix.app.data.AppSettings.audioLanguage = saved.audioLanguage
                                 tv.jetflix.app.data.AppSettings.subtitleLanguage = saved.subtitleLanguage
+                                // The check lands on OK, not on reopening the panel: currentTracks refreshes
+                                // asynchronously after apply, so re-mark the chosen row optimistically.
+                                panelOptions = TrackCycler.markSelected(TrackCycler.options(player), chosen)
                             }
-                            panelOptions = TrackCycler.options(player)
                         }
                         KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_BACK -> panelOpen = false
                     }

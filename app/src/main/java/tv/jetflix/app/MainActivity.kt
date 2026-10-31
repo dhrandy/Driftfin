@@ -155,11 +155,15 @@ fun JetflixRoot() {
     }
 
     // Once per installed build: what changed in this update. OK dismisses and remembers the build.
+    // whatsNewReplay: the "What's new in this build" row in Settings > Updates replays the card
+    // for the INSTALLED build on demand ("that way if you forget from the popup").
     var showWhatsNew by remember { mutableStateOf(tv.jetflix.app.BuildConfig.VERSION_CODE > tv.jetflix.app.data.AppSettings.lastSeenBuild) }
-    if (showWhatsNew) {
+    var whatsNewReplay by remember { mutableStateOf(false) }
+    if (showWhatsNew || whatsNewReplay) {
         tv.jetflix.app.update.WhatsNewDialog(tv.jetflix.app.update.WhatsNew.notes(context)) {
             tv.jetflix.app.data.AppSettings.lastSeenBuild = tv.jetflix.app.BuildConfig.VERSION_CODE
             showWhatsNew = false
+            whatsNewReplay = false
         }
     }
 
@@ -335,6 +339,7 @@ fun JetflixRoot() {
                 onSignOut = { switchingProfile = true },
                 onForgetProfile = onForgetProfile,
                 onUserClick = onUserClick,
+                onWhatsNewClick = { whatsNewReplay = true },
             )
         }
         Screen.Search -> {

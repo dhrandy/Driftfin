@@ -46,6 +46,12 @@ object AppSettings {
     val pauseInfo: StateFlow<Boolean> = _pauseInfo
     fun setPauseInfo(v: Boolean) { _pauseInfo.value = v; prefs?.edit()?.putBoolean("pause_info", v)?.apply() }
 
+    /** Startup/periodic update checks may surface the popup + red dot. Off hides them; the startup check
+     *  still runs and the Settings row can always check manually (always-check-on-startup stands). */
+    private val _updateNotices = MutableStateFlow(true)
+    val updateNotices: StateFlow<Boolean> = _updateNotices
+    fun setUpdateNotices(v: Boolean) { _updateNotices.value = v; prefs?.edit()?.putBoolean("update_notices", v)?.apply() }
+
     /** Remembered player track choice: audio language (default English) and subtitle language (null = off). */
     var audioLanguage: String
         get() = prefs?.getString("audio_language", null) ?: "eng"
@@ -122,6 +128,7 @@ object AppSettings {
         _formatBadges.value = p.getBoolean("format_badges", true)
         _pauseCast.value = p.getBoolean("pause_cast", true)
         _pauseInfo.value = p.getBoolean("pause_info", true)
+        _updateNotices.value = p.getBoolean("update_notices", true)
         _startupWall.value = p.getBoolean("startup_wall", true)
         _excludeHomeAnimation.value = p.getBoolean("exclude_home_animation", false)
         _heroRatings.value = p.getBoolean("hero_ratings", true)

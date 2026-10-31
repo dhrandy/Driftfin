@@ -4,6 +4,17 @@ Each build lists its real changes here. The CI release workflow copies the secti
 matching the build tag onto the GitHub release page and appends the standard
 automated-build footer.
 
+## build-47
+
+Changes:
+- Settings scrolls when the categories don't fit, so Account and everything above it is reachable on every TV.
+- A show's status (Continuing or Ended) now actually appears on its page: the app reads the field the server really sends.
+- The subtitle and audio check mark moves the moment you press OK, instead of after closing and reopening the panel.
+- New "What's new in this build" row in Settings > Updates replays the change list shown after an update installed.
+- Update checks run on every startup and every 6 hours while the app is on screen, with a red dot left of your name while a newer build exists. A new "Update notifications" setting hides the popup and dot; checks still run and installing stays manual.
+- A show's Cast row now follows the season you have selected. If that season has no actor information on the server, the row stays hidden rather than showing another season's cast.
+- Focus fixes: pressing Down on the last row of a settings pane stays put, and sweeping right from Search to Home no longer drops the cursor on Play.
+
 ## build-46
 
 Changes:

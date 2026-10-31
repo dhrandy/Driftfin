@@ -2,6 +2,8 @@ package tv.jetflix
 
 import android.graphics.Bitmap
 import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.assertIsDisplayed
@@ -52,6 +54,26 @@ class SettingsCaptureTest {
         key(Key.DirectionDown)                 // Playback
         rule.onNodeWithText("Episode and movie info while paused").assertIsDisplayed()
         capture("settings-playback-pane")
+    }
+
+    @Test fun railBottomAccountFullyVisible() {
+        // TV46 report: Account at the rail's bottom was slightly cut off. Walk the rail to
+        // Account and capture it: the whole item must sit on screen, inside the rail card.
+        rule.setContent {
+            JetflixTheme { SettingsContent(true, true, true, "Demo", "http://demo.test", {}, {}, {}, {}, {}, buildLabel = "Driftfin TV build 45") }
+        }
+        rule.waitForIdle()
+        key(Key.DirectionLeft)                 // rail: Updates
+        repeat(7) { key(Key.DirectionDown) }   // Account
+        // Two "Account" texts exist (rail item + previewed pane header); both must sit fully on screen.
+        val accounts = rule.onAllNodesWithText("Account")
+        accounts.assertCountEquals(2)
+        val root = rule.onRoot().fetchSemanticsNode().boundsInRoot
+        accounts.fetchSemanticsNodes().forEach { n ->
+            val b = n.boundsInRoot
+            org.junit.Assert.assertTrue("Account fully on screen: $b within $root", b.top >= root.top && b.bottom <= root.bottom)
+        }
+        capture("settings-rail-account-bottom")
     }
 
     @Test fun railPanes() {

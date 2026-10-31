@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -177,12 +178,22 @@ fun TopNavBar(
         }
         Spacer(Modifier.weight(1f))
         if (userName != null) {
-            // OK on your name opens the profile picker: switch profile or sign out.
-            NavTab(
-                label = userName,
-                selected = false,
-                onClick = onUserClick,
-            )
+            // Red dot just left of your name while a newer build exists; OK still opens the picker.
+            val updateAvailable by tv.jetflix.app.update.UpdateNoticeState.available.collectAsState()
+            val updateNoticesOn by tv.jetflix.app.data.AppSettings.updateNotices.collectAsState()
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                if (updateAvailable != null && updateNoticesOn) {
+                    Box(
+                        Modifier.size(8.dp).background(JetflixColors.Red, androidx.compose.foundation.shape.CircleShape)
+                            .semantics { contentDescription = "Update available" },
+                    )
+                }
+                NavTab(
+                    label = userName,
+                    selected = false,
+                    onClick = onUserClick,
+                )
+            }
         }
         }
     }

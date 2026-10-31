@@ -2,13 +2,16 @@ package tv.jetflix
 
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.isFocused
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.requestFocus
 import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.pressKey
 import kotlinx.serialization.json.Json
@@ -92,6 +95,43 @@ class HomeBackNavTest {
         assertEquals("a late hero must not steal focus from the tab, was '${focusedText()}'", "Home", focusedText())
         press(Key.DirectionRight)
         assertEquals("Right from the Home tab stays in the top nav (Shows), was '${focusedText()}'", "Shows", focusedText())
+        NavSweep.active = false; NavSweep.tab = null
+    }
+
+    @Test fun tabSweepFromSearchToHomeKeepsFocusOnTheHomeTab() {
+        // TV46 report: "if on the search button and you go right, when it goes on home it puts the
+        // cursor on play. that shouldn't happen unless you select down or ok on the remote."
+        // The sweep disposes the focused Home tab of the outgoing page mid-switch; a stray focus entry
+        // into Home content must stay out of the hero until Down or OK.
+        var screen by androidx.compose.runtime.mutableStateOf("search")
+        val sections = listOf("Continue Watching", "Next Up").mapIndexed { i, t -> HomeSection(t, items.drop(i).take(8), wide = i < 2) }
+        rule.setContent {
+            JetflixTheme {
+                when (screen) {
+                    "search" -> androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.fillMaxSize()) {
+                        tv.jetflix.app.ui.components.TopNavBar(
+                            selected = JetflixTab.SEARCH,
+                            userName = "demo",
+                            onTabSelected = { if (it == JetflixTab.HOME) screen = "home" },
+                            onUserClick = {},
+                            modifier = androidx.compose.ui.Modifier.align(androidx.compose.ui.Alignment.TopCenter),
+                        )
+                    }
+                    else -> HomeContent(
+                        HomeUiState(loading = false, hero = items.first().copy(UserData = null), heroes = emptyList(), sections = sections),
+                        JellyfinRepository().apply { apiFor("http://demo.test") }, "demo", {}, {}, {}, {},
+                    )
+                }
+            }
+        }
+        rule.waitForIdle()
+        rule.onNodeWithContentDescription("Search").requestFocus()
+        rule.waitForIdle()
+        press(Key.DirectionRight)            // magnifier -> Home tab; the 150ms dwell opens Home
+        rule.mainClock.advanceTimeBy(1500); rule.waitForIdle()
+        assertEquals("sweeping onto Home must keep focus on the Home tab, was '${focusedText()}'", "Home", focusedText())
+        press(Key.DirectionDown)             // Down is the sanctioned way into content: the hero
+        assertEquals("Down from the Home tab enters content at the hero, was '${focusedText()}'", "Play", focusedText())
         NavSweep.active = false; NavSweep.tab = null
     }
 }

@@ -37,7 +37,7 @@ class UpdateDownloadTest {
 
     private val info = ReleaseInfo(26, GhAsset("jetflix-release.apk", "https://demo.test/jetflix-release.apk", 100), null)
 
-    @After fun reset() { UpdateNoticeState.available = null }
+    @After fun reset() { UpdateNoticeState.available.value = null }
 
     @Test fun downloadRowFiresOnASingleOk() {
         var clicks = 0
@@ -56,7 +56,7 @@ class UpdateDownloadTest {
     }
 
     @Test fun settingsOpensOnDownloadWhenTheStartupNoticeFoundTheBuild() {
-        UpdateNoticeState.available = info
+        UpdateNoticeState.available.value = info
         rule.setContent { JetflixTheme { SettingsScreen("demo", "http://demo.test", {}, {}) } }
         rule.waitForIdle()
         rule.onNodeWithText("Download").assertIsDisplayed()

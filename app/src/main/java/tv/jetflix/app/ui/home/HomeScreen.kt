@@ -518,7 +518,16 @@ fun HomeContent(
     // When nothing holds focus (a focused card was removed, the window just regained focus) the first D-pad press
     // enters Home here: the banner or first row, never the first control in the bar (the Search magnifier).
     Box(Modifier
-        .focusProperties { enter = { if (state.hero != null) heroPlayFocus else if (state.sections.isNotEmpty()) firstRowFocus else FocusRequester.Default } }
+        .focusProperties { enter = {
+            // A tab sweep heading for Home keeps focus on the bar until Down or OK: a stray entry (a key
+            // repeat while the switched-from page's focused tab is being disposed) lands on the Home tab,
+            // never on Play (TV46 report). focusHero has the same guard; this is the other path
+            // to the hero. (FocusRequester.Cancel here left the screen focusless - redirect instead.)
+            if (tv.jetflix.app.ui.components.NavSweep.active && tv.jetflix.app.ui.components.NavSweep.tab == tv.jetflix.app.ui.components.JetflixTab.HOME) navFocus
+            else if (state.hero != null) heroPlayFocus
+            else if (state.sections.isNotEmpty()) firstRowFocus
+            else FocusRequester.Default
+        } }
         .focusGroup()
         .fillMaxSize().background(JetflixColors.Background)) {
         androidx.compose.runtime.CompositionLocalProvider(androidx.compose.foundation.gestures.LocalBringIntoViewSpec provides spec) {

@@ -71,6 +71,8 @@ fun SettingsScreen(
     onUserClick: () -> Unit = {},
     /** Tests inject a flow pointed at a local server; the app builds the real one. */
     updateFlow: tv.jetflix.app.update.UpdateFlow? = null,
+    /** Updates pane: replays the installed build's What's new card. */
+    onWhatsNewClick: () -> Unit = {},
 ) {
     val autoplay by AppSettings.autoplayNext.collectAsState()
     val myList by AppSettings.showMyList.collectAsState()
@@ -82,7 +84,7 @@ fun SettingsScreen(
     // press; without a known update the row still checks first and downloads on the second press.
     var update by androidx.compose.runtime.remember {
         androidx.compose.runtime.mutableStateOf<tv.jetflix.app.update.UpdateUi>(
-            tv.jetflix.app.update.UpdateNoticeState.available?.let { tv.jetflix.app.update.UpdateUi.Available(it) }
+            tv.jetflix.app.update.UpdateNoticeState.available.value?.let { tv.jetflix.app.update.UpdateUi.Available(it) }
                 ?: tv.jetflix.app.update.UpdateUi.Idle,
         )
     }
@@ -127,6 +129,9 @@ fun SettingsScreen(
         skipIntro = AppSettings.skipIntro.collectAsState().value,
         onToggleSkipIntro = { AppSettings.setSkipIntro(!AppSettings.skipIntro.value) },
         update = update,
+        onWhatsNewClick = onWhatsNewClick,
+        updateNotices = AppSettings.updateNotices.collectAsState().value,
+        onToggleUpdateNotices = { AppSettings.setUpdateNotices(!AppSettings.updateNotices.value) },
         onUpdateClick = {
             val cur = update
             if (cur !is tv.jetflix.app.update.UpdateUi.Checking && cur !is tv.jetflix.app.update.UpdateUi.Downloading) {
@@ -214,6 +219,11 @@ fun SettingsContent(
     initialCategory: SettingsCategory = SettingsCategory.Updates,
     /** Shown at the bottom of the pane; empty hides it (tests pass nothing). */
     buildLabel: String = "",
+    /** Updates pane: replays the installed build's What's new card. */
+    onWhatsNewClick: () -> Unit = {},
+    /** Updates pane: hides/shows the update popup + red dot (checks still run on startup). */
+    updateNotices: Boolean = true,
+    onToggleUpdateNotices: () -> Unit = {},
 ) {
     val menuBack = tv.jetflix.app.ui.components.rememberMenuBack()
     // Rail and pane focus anchors: Left from any pane row returns to the rail, Right from the rail
@@ -234,7 +244,10 @@ fun SettingsContent(
                 // Category rail: moving onto a group swaps the pane, like the top menu switching tabs.
                 Column(
                     Modifier.width(252.dp).fillMaxHeight()
-                        .background(Color(0xFF191919), RoundedCornerShape(12.dp)).padding(8.dp),
+                        .background(Color(0xFF191919), RoundedCornerShape(12.dp)).padding(8.dp)
+                        // Some TVs overscan or render taller text; the rail scrolls so the last
+                        // group (Account) is never cut off, and focus auto-reveals it.
+                        .verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
                     SettingsCategory.values().forEachIndexed { index, cat ->
@@ -262,42 +275,51 @@ fun SettingsContent(
                         verticalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
                         // First control of each pane also carries Up-to-menu and the pane entry anchor.
-                        fun firstRow(): Modifier = Modifier
-                            .focusProperties { up = menuBack.focus; left = railFocus }
+                        fun firstRow(last: Boolean = false): Modifier = Modifier
+                            .focusProperties {
+                                up = menuBack.focus; left = railFocus
+                                if (last) down = androidx.compose.ui.focus.FocusRequester.Cancel
+                            }
                             .focusRequester(paneFirst)
-                        fun nextRow(): Modifier = Modifier.focusProperties { left = railFocus }
+                        fun nextRow(last: Boolean = false): Modifier = Modifier.focusProperties {
+                            left = railFocus
+                            // Down on the last row must stay put; only Left returns to the rail (TV46 report).
+                            if (last) down = androidx.compose.ui.focus.FocusRequester.Cancel
+                        }
                         when (category) {
                             SettingsCategory.Updates -> {
                                 SettingRow("Check for updates", uDetail, true, onUpdateClick, firstRow(), valueText = uValue)
+                                SettingRow("What's new in this build", "Replays the change list shown after this update installed.", false, onWhatsNewClick, nextRow(), valueText = "Replay")
+                                SettingRow("Update notifications", "Shows the startup popup and the red dot by your name when a newer build exists. The startup check always runs and you can check here any time.", updateNotices, onToggleUpdateNotices, nextRow(last = true))
                             }
                             SettingsCategory.Playback -> {
                                 SettingRow("Autoplay next episode", "Starts the next episode after a 5 second countdown.", autoplay, onToggleAutoplay, firstRow())
                                 SettingRow("Cast while paused", "Shows the cast along the bottom when you pause. Press Down to pick an actor and OK to see their movies on your server.", pauseCast, onTogglePauseCast, nextRow())
                                 SettingRow("Episode and movie info while paused", "Shows the story summary and the Up next line when you pause. The title and player controls always stay.", pauseInfo, onTogglePauseInfo, nextRow())
-                                SettingRow("Skip Intro button", "Shows a Skip Intro button in the player when your Jellyfin server has marked an intro. It only skips when you press OK.", skipIntro, onToggleSkipIntro, nextRow())
+                                SettingRow("Skip Intro button", "Shows a Skip Intro button in the player when your Jellyfin server has marked an intro. It only skips when you press OK.", skipIntro, onToggleSkipIntro, nextRow(last = true))
                             }
                             SettingsCategory.HomeDiscovery -> {
                                 SettingRow("Show My List on Home", "My List uses your Jellyfin favorites for this user.", showMyList, onToggleMyList, firstRow())
                                 SettingRow("Show Next Up on Home", "Jellyfin's next unwatched episode of series you follow.", showNextUp, onToggleNextUp, nextRow())
                                 SettingRow("Exclude animated movies from Home banner", "Hide movies tagged Animation in the Home banner only. Library rows are unchanged.", excludeHomeAnimation, onToggleExcludeHomeAnimation, nextRow())
                                 SettingRow("Age rating and score on Home", "Shows the age rating and community score under the title on the Home banner.", heroRatings, onToggleHeroRatings, nextRow())
-                                SettingRow("Recommended rows on Search", "Shows recommended movies and shows on the Search page before you type.", searchRecommendations, onToggleSearchRecommendations, nextRow())
+                                SettingRow("Recommended rows on Search", "Shows recommended movies and shows on the Search page before you type.", searchRecommendations, onToggleSearchRecommendations, nextRow(last = true))
                             }
                             SettingsCategory.Appearance -> {
                                 SettingRow("Poster size", "Small, Medium or Large cards on Home and in libraries. Press OK to change.", true, onCyclePosterSize, firstRow(), valueText = posterSize.label)
                                 SettingRow("Continue Watching art", "Scene images (the wide look) or posters for the Continue Watching row. Press OK to change.", true, onToggleContinueWatchingPosters, nextRow(), valueText = if (continueWatchingPosters) "Posters" else "Scene images")
                                 SettingRow("Title logos", "Shows a show's own title lettering on Home and Details when Jellyfin has it. Falls back to plain text.", titleLogos, onToggleTitleLogos, nextRow())
                                 SettingRow("HDR and Dolby Vision tags", "Shows HDR, HDR10, HDR10+ or Dolby Vision on a movie's Details page when the file says it has them. It shows what the file contains, not what your TV is outputting.", formatBadges, onToggleFormatBadges, nextRow())
-                                SettingRow("Startup strip on launch", "Shows the logo and poster strip while Home loads the first time. Off goes straight to the ordinary empty Home.", startupWall, onToggleStartupWall, nextRow())
+                                SettingRow("Startup strip on launch", "Shows the logo and poster strip while Home loads the first time. Off goes straight to the ordinary empty Home.", startupWall, onToggleStartupWall, nextRow(last = true))
                             }
                             SettingsCategory.MyStuff -> {
-                                SettingRow("Watchlist", "Star movies and shows to watch later. Adds the star button on their pages and the Watchlist section under My Stuff.", showWatchlist, onToggleWatchlist, firstRow())
+                                SettingRow("Watchlist", "Star movies and shows to watch later. Adds the star button on their pages and the Watchlist section under My Stuff.", showWatchlist, onToggleWatchlist, firstRow(last = true))
                             }
                             SettingsCategory.Sound -> {
-                                SettingRow("Button sound", "A quiet sound when you move and when you select. Press OK to try the next one.", true, onCycleButtonSound, firstRow(), valueText = buttonSound.label)
+                                SettingRow("Button sound", "A quiet sound when you move and when you select. Press OK to try the next one.", true, onCycleButtonSound, firstRow(last = true), valueText = buttonSound.label)
                             }
                             SettingsCategory.Performance -> {
-                                SettingRow("Live blur", "On is the normal look. Off swaps the live blur for a pre-softened picture, to see whether blur is what slows scrolling. Takes effect when you open the next screen.", liveBlur, onToggleLiveBlur, firstRow())
+                                SettingRow("Live blur", "On is the normal look. Off swaps the live blur for a pre-softened picture, to see whether blur is what slows scrolling. Takes effect when you open the next screen.", liveBlur, onToggleLiveBlur, firstRow(last = true))
                             }
                             SettingsCategory.Account -> {
                                 Row(
@@ -315,7 +337,7 @@ fun SettingsContent(
                                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                                     Button(
                                         onClick = onSignOut,
-                                        modifier = firstRow(),
+                                        modifier = firstRow(last = true),
                                         shape = ButtonDefaults.shape(shape = RoundedCornerShape(6.dp)),
                                         colors = ButtonDefaults.colors(
                                             containerColor = JetflixColors.SurfaceLight.copy(alpha = 0.7f),
@@ -326,6 +348,7 @@ fun SettingsContent(
                                     ) { Text("Switch profile") }
                                     Button(
                                         onClick = onForgetProfile,
+                                        modifier = Modifier.focusProperties { down = androidx.compose.ui.focus.FocusRequester.Cancel },
                                         shape = ButtonDefaults.shape(shape = RoundedCornerShape(6.dp)),
                                         colors = ButtonDefaults.colors(
                                             containerColor = JetflixColors.SurfaceLight.copy(alpha = 0.7f),

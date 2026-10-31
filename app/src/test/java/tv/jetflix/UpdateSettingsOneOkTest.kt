@@ -48,7 +48,7 @@ class UpdateSettingsOneOkTest {
     private lateinit var server: MockWebServer
     private val tmp = java.nio.file.Files.createTempDirectory("upd").toFile()
 
-    @After fun down() { server.shutdown(); UpdateNoticeState.available = null }
+    @After fun down() { server.shutdown(); UpdateNoticeState.available.value = null }
 
     private fun start(tag: String, latestCode: Int = 200, apkCode: Int = 200) {
         val base = { server.url("/dl/").toString() }

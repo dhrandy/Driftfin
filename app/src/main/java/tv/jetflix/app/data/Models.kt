@@ -1,5 +1,6 @@
 package tv.jetflix.app.data
 
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 @Serializable
@@ -146,7 +147,10 @@ data class BaseItemDto(
     val ParentBackdropImageTags: List<String> = emptyList(),
     val ParentThumbItemId: String? = null,
     val ParentThumbImageTag: String? = null,
-    val SeriesStatus: String? = null,
+    // Jellyfin sends a show's run status as "Status": DtoService sets dto.Status for every series
+    // unconditionally (no fields request, all of 10.8/10.9/10.10/master). The wire has no
+    // "SeriesStatus" key, so without this mapping the status was silently always null.
+    @SerialName("Status") val SeriesStatus: String? = null,
     val UserData: UserItemDataDto? = null,
     val RemoteTrailers: List<MediaUrl> = emptyList(),
     val LocalTrailerCount: Int? = null,

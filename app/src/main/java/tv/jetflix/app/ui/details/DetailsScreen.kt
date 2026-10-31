@@ -299,6 +299,25 @@ internal fun mergedCast(
     return (seriesActors + episodeActors.filter { seen.add(it.Id ?: "name:" + it.Name.orEmpty()) }).take(15)
 }
 
+/** Cast row on a series page when a season is selected: the actors of that season's own episodes,
+ *  unioned in episode order and deduped by person Id (name as fallback). Selecting season 2 shows
+ *  season 2's cast, not the series-wide list. Series-level People are series-wide credits, not
+ *  season-specific evidence (a series regular may not appear in the selected season), and the
+ *  play target can be another season's episode - neither is substituted. When the season's
+ *  episodes carry no actor metadata, an empty result hides the row rather than showing
+ *  unrelated cast under the generic "Cast" header. */
+internal fun seasonCast(seasonEpisodes: List<BaseItemDto>): List<BaseItemPerson> {
+    val seen = LinkedHashSet<String>()
+    val actors = mutableListOf<BaseItemPerson>()
+    for (ep in seasonEpisodes) {
+        for (p in ep.People) {
+            if (p.Type != "Actor") continue
+            if (seen.add(p.Id ?: "name:" + p.Name.orEmpty())) actors += p
+        }
+    }
+    return actors.take(15)
+}
+
 /** Meta-row date on a series page: the play-target episode's air date with its runtime beside it
  *  ("Aired Mar 8, 2026 · 42m"). The series premiere date holds this slot only when the episode has
  *  no date of its own, and the runtime is omitted when the episode carries none. */
@@ -629,7 +648,11 @@ fun DetailsContent(
             }
         }
 
-        val cast = mergedCast(item?.People, state.playTarget?.People)
+        val cast = if (item?.isSeries == true) {
+            seasonCast(state.episodes)
+        } else {
+            mergedCast(item?.People, state.playTarget?.People)
+        }
         if (cast.isNotEmpty()) {
             item(key = "cast-title") {
                 Text(

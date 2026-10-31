@@ -81,6 +81,22 @@ object TrackCycler {
         return out
     }
 
+    /**
+     * Re-marks [options] with [chosen] selected and its siblings of the same type cleared.
+     * apply() sets trackSelectionParameters, but currentTracks (which options() reads for the
+     * checkmark) refreshes asynchronously, so a synchronous re-read after OK kept the old check
+     * until the panel was reopened (TV46 report). Speed rows are untouched: setPlaybackSpeed
+     * is synchronous and options() already reflects it.
+     */
+    fun markSelected(options: List<Option>, chosen: Option): List<Option> =
+        options.map { o ->
+            if (o.type != chosen.type || o.type == TYPE_SPEED) o
+            else o.copy(
+                selected = o.index == chosen.index &&
+                    (o.group == null || chosen.group == null || o.group.mediaTrackGroup == chosen.group.mediaTrackGroup),
+            )
+        }
+
     /** Language of the track behind [option], or null for Off/speed rows or an unlabeled track. */
     fun languageOf(option: Option): String? =
         option.group?.takeIf { option.index in 0 until it.length }?.getTrackFormat(option.index)?.language
