@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -596,6 +597,8 @@ fun DetailsContent(
                 LazyRow(
                     contentPadding = PaddingValues(horizontal = 48.dp, vertical = 12.dp),
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    // Center on the cross axis so the quiet status text rides on the chips' own center line.
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
                     items(state.seasons, key = { it.Id }) { season ->
                         SeasonChip(
@@ -603,6 +606,12 @@ fun DetailsContent(
                             selected = season.Id == state.selectedSeasonId,
                             onClick = { onSelectSeason(item.Id, season.Id) },
                         )
+                    }
+                    // The server's own series status sits quietly at the end of the season row.
+                    seriesStatusLabel(item.SeriesStatus)?.let { status ->
+                        item(key = "series-status") {
+                            Text(status, style = JetflixType.caption, color = JetflixColors.TextMuted, modifier = Modifier.padding(start = 6.dp))
+                        }
                     }
                 }
             }
@@ -849,10 +858,10 @@ fun CastChip(person: BaseItemPerson, imageUrl: String?, onClick: () -> Unit = {}
         ),
         scale = androidx.tv.material3.ClickableSurfaceDefaults.scale(focusedScale = 1.08f),
     ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(5.dp)) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth().padding(5.dp)) {
             tv.jetflix.app.ui.actor.PersonPhoto(url = imageUrl, name = person.Name.orEmpty(), size = 72.dp)
             Spacer(Modifier.height(6.dp))
-            Text(person.Name ?: "", style = JetflixType.caption, color = JetflixColors.TextPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(person.Name ?: "", style = JetflixType.caption, color = JetflixColors.TextPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
             person.Role?.takeIf { it.isNotBlank() }?.let {
                 Text(it, style = JetflixType.caption, color = JetflixColors.TextMuted, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
@@ -871,6 +880,14 @@ fun genreLine(item: BaseItemDto, playTarget: BaseItemDto?): String {
     val epAired = playTarget?.takeIf { item.isSeries && it.Type == "Episode" }?.airDateLabel()
     val premiered = if (item.isSeries && epAired != null) item.airDateLabel() else null
     return listOfNotNull(premiered?.let { "Premiered $it" }, genres.takeIf { it.isNotBlank() }).joinToString("  ·  ")
+}
+
+/** "Returning Series" / "Ended" from the server's SeriesStatus; anything unknown shows nothing. */
+fun seriesStatusLabel(status: String?): String? = when (status?.trim()?.lowercase()) {
+    "continuing" -> "Returning Series"
+    "ended" -> "Ended"
+    "canceled", "cancelled" -> "Canceled"
+    else -> null
 }
 
 /** The meta row's standalone year; dropped when a series already shows "Premiered <date>" (settled in build 40). */

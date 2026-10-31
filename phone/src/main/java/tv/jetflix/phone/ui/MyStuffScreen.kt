@@ -133,7 +133,12 @@ fun ActorScreen(personId: String, name: String, onBack: () -> Unit, onOpen: (Bas
         item(span = { GridItemSpan(maxLineSpan) }) {
             Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
                 BackIconButton(onBack)
-                Text(name, fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 12.dp))
+                Column(Modifier.padding(start = 12.dp)) {
+                    Text(name, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                    person?.let { tv.jetflix.phone.data.lifeDatesLabel(it.PremiereDate, it.EndDate) }?.let {
+                        Text(it, color = DriftfinColors.TextMuted, fontSize = 13.sp)
+                    }
+                }
             }
         }
         // Bio: first paragraph only, with More for the rest, so the filmography stays near the top (reported 10/29).

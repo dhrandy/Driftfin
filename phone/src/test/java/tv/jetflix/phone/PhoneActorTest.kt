@@ -30,6 +30,7 @@ class PhoneActorTest {
     private lateinit var server: MockWebServer
     @Volatile private var withBio = true
     @Volatile private var multiBio = false
+    @Volatile private var withDates = false
 
     @Before fun setup() {
         val ctx = androidx.test.core.app.ApplicationProvider.getApplicationContext<android.content.Context>()
@@ -39,6 +40,7 @@ class PhoneActorTest {
         Graph.signOut()
         withBio = true
         multiBio = false
+        withDates = false
         server = MockWebServer()
         server.dispatcher = object : Dispatcher() {
             override fun dispatch(request: RecordedRequest): MockResponse {
@@ -48,6 +50,7 @@ class PhoneActorTest {
                 return when {
                     p.contains("/Items/p1") -> json.setBody(if (!withBio) """{"Id":"p1","Name":"Synthetic Actor","Type":"Person"}"""
                         else if (multiBio) """{"Id":"p1","Name":"Synthetic Actor","Type":"Person","Overview":"First paragraph of the bio.\n\nSecond paragraph with the rest of the story."}"""
+                        else if (withDates) """{"Id":"p1","Name":"Synthetic Actor","Type":"Person","PremiereDate":"1926-06-01T00:00:00.0000000Z","EndDate":"1962-08-04T00:00:00.0000000Z","Overview":"A made-up bio for the synthetic actor."}"""
                         else """{"Id":"p1","Name":"Synthetic Actor","Type":"Person","Overview":"A made-up bio for the synthetic actor."}""")
                     p.contains("personIds=p1") -> json.setBody("""{"Items":[{"Id":"m1","Name":"Actor Movie","Type":"Movie","ImageTags":{"Primary":"a"}},{"Id":"s1","Name":"Actor Show","Type":"Series","ImageTags":{"Primary":"b"}}],"TotalRecordCount":2}""")
                     p.contains("/Items") -> json.setBody("""{"Items":[],"TotalRecordCount":0}""")
@@ -119,6 +122,26 @@ class PhoneActorTest {
         rule.waitForIdle(); org.robolectric.shadows.ShadowLooper.idleMainLooper()
         rule.onNodeWithText("Second paragraph with the rest of the story.", substring = true).assertIsDisplayed()
         rule.onNodeWithText("Show less").assertIsDisplayed()
+    }
+
+    @Test fun lifeDatesUnderName() {
+        withDates = true
+        rule.setContent { DriftfinTheme { ActorScreen("p1", "Synthetic Actor", onBack = {}, onOpen = {}) } }
+        val end = System.currentTimeMillis() + 10_000
+        while (System.currentTimeMillis() < end) {
+            rule.waitForIdle(); org.robolectric.shadows.ShadowLooper.idleMainLooper()
+            if (rule.onAllNodes(androidx.compose.ui.test.hasText("Born Jun 1, 1926", substring = true)).fetchSemanticsNodes().isNotEmpty()) break
+            Thread.sleep(80)
+        }
+        rule.onNodeWithText("Born Jun 1, 1926 · Died Aug 4, 1962").assertIsDisplayed()
+        val decor = rule.activity.window.decorView
+        val dm = rule.activity.resources.displayMetrics
+        decor.measure(android.view.View.MeasureSpec.makeMeasureSpec(dm.widthPixels, android.view.View.MeasureSpec.EXACTLY), android.view.View.MeasureSpec.makeMeasureSpec(dm.heightPixels, android.view.View.MeasureSpec.EXACTLY))
+        decor.layout(0, 0, dm.widthPixels, dm.heightPixels)
+        val bmp = android.graphics.Bitmap.createBitmap(dm.widthPixels, dm.heightPixels, android.graphics.Bitmap.Config.ARGB_8888)
+        decor.draw(android.graphics.Canvas(bmp))
+        java.io.File("build/render-check").mkdirs()
+        java.io.File("build/render-check", "actor-life-dates.png").outputStream().use { bmp.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
     }
 
     @org.junit.After fun tearDown() { server.shutdown(); Graph.signOut() }

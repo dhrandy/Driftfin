@@ -299,3 +299,16 @@ fun formatAirDate(raw: String?): String? {
     if (y.toInt() < 1850 || month !in 1..12 || day !in 1..31) return null
     return "${AIR_MONTHS[month - 1]} $day, $y"
 }
+
+/** A person's life dates for the actor page: Jellyfin carries birth in PremiereDate and death in
+ *  EndDate. Null when the server has neither - nothing is invented. */
+fun lifeDatesLabel(birthRaw: String?, deathRaw: String?): String? {
+    val birth = formatAirDate(birthRaw)
+    val death = formatAirDate(deathRaw)
+    return when {
+        birth != null && death != null -> "Born $birth · Died $death"
+        birth != null -> "Born $birth"
+        death != null -> "Died $death"
+        else -> null
+    }
+}

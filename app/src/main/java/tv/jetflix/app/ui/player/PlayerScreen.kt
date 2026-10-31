@@ -164,24 +164,31 @@ fun PlayerScreen(
         if (!shouldAutoFinish(ended, interactive)) return@LaunchedEffect
         val seriesId = item.SeriesId
         if (!item.isEpisode || seriesId == null) {
-            onFinished(); return@LaunchedEffect
+            // A movie that reaches its natural end is watched: the stop report and the played mark land
+            // before the page behind reloads, so it shows Play and the red check, never Resume.
+            reportFinishThenNavigate(api, item, session.userId, mediaSourceId, playSessionId, player.currentPosition.coerceAtLeast(0L) * 10_000) { onFinished() }
+            return@LaunchedEffect
         }
         // Autoplay off: when an episode ends and there is a next one, open the next episode's
         // page instead of dropping back to where playback started. Navigation only - nothing plays.
         // Back-cancel of the countdown below is untouched: canceling stays canceling.
         if (!tv.jetflix.app.data.AppSettings.autoplayNext.value) {
             when (val outcome = lookupUpNext(api, seriesId, session.userId, item.Id)) {
-                is UpNextLookup.Found -> reportStopThenOpenNext(api, item, mediaSourceId, playSessionId, player.currentPosition.coerceAtLeast(0L) * 10_000) { onOpenNext(outcome.next) }
-                else -> onFinished()
+                is UpNextLookup.Found -> reportStopThenOpenNext(api, item, session.userId, mediaSourceId, playSessionId, player.currentPosition.coerceAtLeast(0L) * 10_000) { onOpenNext(outcome.next) }
+                else -> reportFinishThenNavigate(api, item, session.userId, mediaSourceId, playSessionId, player.currentPosition.coerceAtLeast(0L) * 10_000) { onFinished() }
             }
             return@LaunchedEffect
         }
         when (val outcome = lookupUpNext(api, seriesId, session.userId, item.Id)) {
             // The server answered and there is no next episode: leave the player as before.
-            UpNextLookup.None -> { onFinished(); return@LaunchedEffect }
+            UpNextLookup.None -> { reportFinishThenNavigate(api, item, session.userId, mediaSourceId, playSessionId, player.currentPosition.coerceAtLeast(0L) * 10_000) { onFinished() }; return@LaunchedEffect }
             // The lookup itself failed: say so instead of ending playback silently (Todd row 86). Back returns.
-            UpNextLookup.Failed -> { playbackError = "Couldn't load the next episode."; return@LaunchedEffect }
+            // The watched mark still goes out, so Back leaves a checked episode, not a resumable one.
+            UpNextLookup.Failed -> { apiMarkPlayed(api, item, session.userId); playbackError = "Couldn't load the next episode."; return@LaunchedEffect }
             is UpNextLookup.Found -> {
+                // The 5s countdown gives this fire-and-forget watched mark time to land before the next
+                // episode's player replaces this one.
+                apiMarkPlayed(api, item, session.userId)
                 upNext = outcome.next
                 val startedAt = System.nanoTime()
                 countdownMs = UP_NEXT_COUNTDOWN_MS
@@ -741,18 +748,19 @@ internal suspend fun lookupUpNext(api: tv.jetflix.app.data.JellyfinApi, seriesId
     return if (next != null) UpNextLookup.Found(next) else UpNextLookup.None
 }
 
-/** Autoplay-off completion path: report playback stopped and WAIT for the server before opening the
- *  next episode's page, so the fresh page's fetch already carries the finished episode's red check
- *  (the fire-and-forget dispose report alone races that fetch). A failed report still navigates -
- *  nothing is marked locally, the page simply shows the server as it is. The dispose report fires
- *  again afterwards with the same final position, which is harmless. */
-internal suspend fun reportStopThenOpenNext(
+/** Only movies and episodes earn the watched check at their natural end; local trailers and other
+ *  playable types never show one, so they are never marked. */
+internal fun earnsWatchedAtEnd(item: BaseItemDto): Boolean = item.isMovie || item.isEpisode
+
+/** The two writes a natural finish needs: the stop report (clears the resume point) and the watched
+ *  mark (the red check). Both are best-effort; a failure leaves the server as it is. */
+internal suspend fun reportStopAndMarkPlayed(
     api: tv.jetflix.app.data.JellyfinApi,
     item: BaseItemDto,
+    userId: String,
     mediaSourceId: String?,
     playSessionId: String?,
     positionTicks: Long,
-    onOpenNext: () -> Unit,
 ) {
     try {
         api.reportPlaybackStopped(
@@ -764,6 +772,57 @@ internal suspend fun reportStopThenOpenNext(
             ),
         )
     } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (_: Exception) { }
+    if (earnsWatchedAtEnd(item)) {
+        try {
+            api.markPlayed(item.Id, userId)
+        } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (_: Exception) { }
+    }
+}
+
+/** Natural-end completion that leaves the player: WAIT for the stop report and the watched mark before
+ *  navigating, so the page it lands on (details, Home's Continue Watching) already shows Play and the
+ *  red check - the fire-and-forget dispose report alone races that fetch. A failed report or mark still
+ *  navigates; the page simply shows the server as it is. The dispose report fires again afterwards with
+ *  the same final position, which is harmless. */
+internal suspend fun reportFinishThenNavigate(
+    api: tv.jetflix.app.data.JellyfinApi,
+    item: BaseItemDto,
+    userId: String,
+    mediaSourceId: String?,
+    playSessionId: String?,
+    positionTicks: Long,
+    navigate: () -> Unit,
+) {
+    reportStopAndMarkPlayed(api, item, userId, mediaSourceId, playSessionId, positionTicks)
+    navigate()
+}
+
+/** Watched mark for the finish paths that keep playing (the autoplay countdown) or surface an error:
+ *  fire-and-forget on a daemon thread, like apiReportStopped. */
+internal fun apiMarkPlayed(api: tv.jetflix.app.data.JellyfinApi, item: BaseItemDto, userId: String) {
+    if (!earnsWatchedAtEnd(item)) return
+    Thread {
+        try {
+            kotlinx.coroutines.runBlocking { api.markPlayed(item.Id, userId) }
+        } catch (_: Exception) { }
+    }.start()
+}
+
+/** Autoplay-off completion path: report playback stopped and mark the episode watched, WAITing for the
+ *  server before opening the next episode's page, so the fresh page's fetch already carries the
+ *  finished episode's red check (the fire-and-forget dispose report alone races that fetch). A failed
+ *  report still navigates - nothing is marked locally, the page simply shows the server as it is. The
+ *  dispose report fires again afterwards with the same final position, which is harmless. */
+internal suspend fun reportStopThenOpenNext(
+    api: tv.jetflix.app.data.JellyfinApi,
+    item: BaseItemDto,
+    userId: String,
+    mediaSourceId: String?,
+    playSessionId: String?,
+    positionTicks: Long,
+    onOpenNext: () -> Unit,
+) {
+    reportStopAndMarkPlayed(api, item, userId, mediaSourceId, playSessionId, positionTicks)
     onOpenNext()
 }
 

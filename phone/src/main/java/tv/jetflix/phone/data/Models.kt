@@ -187,6 +187,26 @@ data class BaseItemDto(
     }
 }
 
+private fun personDate(raw: String?): String? {
+    val day = raw?.substringBefore('T') ?: return null
+    val date = try { java.time.LocalDate.parse(day) } catch (e: Exception) { return null }
+    if (date.year < 1850) return null
+    return date.format(java.time.format.DateTimeFormatter.ofPattern("MMM d, yyyy", java.util.Locale.US))
+}
+
+/** A person's life dates for the actor page: Jellyfin carries birth in PremiereDate and death in
+ *  EndDate. Null when the server has neither - nothing is invented. */
+fun lifeDatesLabel(birthRaw: String?, deathRaw: String?): String? {
+    val birth = personDate(birthRaw)
+    val death = personDate(deathRaw)
+    return when {
+        birth != null && death != null -> "Born $birth · Died $death"
+        birth != null -> "Born $birth"
+        death != null -> "Died $death"
+        else -> null
+    }
+}
+
 /** Same item, but playback starts at 0:00 instead of the saved position. */
 fun BaseItemDto.fromStart(): BaseItemDto = copy(UserData = UserData?.copy(PlaybackPositionTicks = 0))
 

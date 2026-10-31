@@ -3,6 +3,11 @@
 The phone app has its own release line: `phone-build-N` prereleases, separate from the TV app's
 `build-N` releases. The phone's Check for updates reads these; the TV app never sees them.
 
+## phone-build-3
+
+Changes:
+- Actor pages show the person's birth date under their name, with the death date when the server has one ("Born Jun 1, 1926 · Died Aug 4, 1962"). Dates come from the server; when it has none, nothing is invented.
+
 ## phone-build-2
 
 - Fix: the Home banner's Trailer button appears now. The banner's movie fetch asks Jellyfin for each title's trailer links; a list response only includes them when asked, so the button never showed.

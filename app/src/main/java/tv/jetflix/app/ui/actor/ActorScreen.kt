@@ -49,6 +49,8 @@ data class ActorUiState(
     val name: String = "",
     /** The person's own Jellyfin biography; null when the server has none. */
     val bio: String? = null,
+    /** "Born Jun 1, 1926 · Died Aug 4, 1962" from the server's own dates; null when it has neither. */
+    val dates: String? = null,
     val photoUrl: String? = null,
     /** Movies and series on this server that list the person, as the signed-in user sees them. */
     val titles: List<BaseItemDto> = emptyList(),
@@ -88,6 +90,7 @@ class ActorViewModel(val repo: JellyfinRepository) : ViewModel() {
                     loading = false,
                     name = person?.Name?.takeIf { it.isNotBlank() } ?: fallbackName,
                     bio = cleanBio(person?.Overview),
+                    dates = tv.jetflix.app.data.lifeDatesLabel(person?.PremiereDate, person?.EndDate),
                     photoUrl = person?.ImageTags?.get("Primary")?.let { repo.imageUrl(personId, "Primary", 400, it) },
                     // Top-level titles only: episodes of a matching series would duplicate the series itself.
                     titles = resp.body()?.Items.orEmpty().filter { it.Type == "Movie" || it.Type == "Series" },
@@ -122,6 +125,7 @@ fun ActorContent(state: ActorUiState, imageUrlFor: (BaseItemDto) -> String?, onO
         Column(Modifier.width(380.dp).padding(end = 32.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             PersonPhoto(url = state.photoUrl, name = state.name, size = 150.dp, modifier = Modifier.align(Alignment.CenterHorizontally))
             Text(state.name, style = JetflixType.sectionTitle, color = JetflixColors.TextPrimary, maxLines = 3, overflow = TextOverflow.Ellipsis)
+            state.dates?.let { Text(it, style = JetflixType.caption, color = JetflixColors.TextMuted) }
             state.bio?.let { bio ->
                 // Left from the filmography lands here; OK opens the full biography, Back returns to this spot.
                 Column(

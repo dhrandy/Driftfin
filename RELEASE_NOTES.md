@@ -4,6 +4,14 @@ Each build lists its real changes here. The CI release workflow copies the secti
 matching the build tag onto the GitHub release page and appends the standard
 automated-build footer.
 
+## build-44
+
+Changes:
+- A movie that plays to the end now counts as watched: the app waits for the server to record it before leaving the player, so the page behind shows Play (never Resume) and the red watched check. The same finish handling now also covers an episode that ends with no next episode, and the autoplay and next-page paths mark the finished episode watched too.
+- Actor pages show the person's birth date under their name, with the death date when the server has one ("Born Jun 1, 1926 · Died Aug 4, 1962"). Dates come from the server; when it has none, nothing is invented.
+- In Search, a selected actor's card no longer clips its outline at the row's edges, and the actor's photo and name sit centered in the card.
+- On a show's page, the season buttons now end with the show's status from the server: "Returning Series" or "Ended".
+
 ## build-43
 
 Changes:

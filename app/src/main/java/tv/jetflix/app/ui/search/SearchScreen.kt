@@ -239,8 +239,11 @@ fun SearchContent(
                         if (state.people.isNotEmpty()) {
                             item(key = "actors", span = { androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan) }) {
                                 Column {
-                                    Text("Actors", style = JetflixType.sectionTitle, color = JetflixColors.TextPrimary, modifier = Modifier.padding(bottom = 10.dp))
-                                    androidx.compose.foundation.lazy.LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(vertical = 6.dp)) {
+                                    Text("Actors", style = JetflixType.sectionTitle, color = JetflixColors.TextPrimary, modifier = Modifier.padding(start = 8.dp, bottom = 10.dp))
+                                    // The focused chip grows (1.08x) past its slot; the horizontal padding keeps its
+                                    // outline from clipping at the row's left and right edges (the posters below get
+                                    // the same room from the grid's own content padding).
+                                    androidx.compose.foundation.lazy.LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp)) {
                                         state.people.forEachIndexed { idx, p -> item(key = p.Id) {
                                           Box(if (idx == 0) Modifier.focusRequester(firstActorFocus) else Modifier) {
                                             tv.jetflix.app.ui.details.CastChip(
