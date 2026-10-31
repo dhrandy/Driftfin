@@ -85,6 +85,7 @@ class PhoneEpisodeActionsTest {
         rule.onNodeWithContentDescription("Add to favorites").performClick()
         awaitReal(10_000) { requested.any { it.contains("POST") && it.contains("UserFavoriteItems/s1") } }
         assertTrue("the episode itself was never favorited", requested.none { it.contains("UserFavoriteItems/ep1") })
+        awaitReal(10_000) { rule.onAllNodesWithContentDescription("In favorites. Tap to remove").fetchSemanticsNodes().isNotEmpty() }
         rule.onNodeWithContentDescription("In favorites. Tap to remove").assertIsDisplayed()
     }
 
@@ -156,6 +157,7 @@ class PhoneEpisodeActionsTest {
         awaitReal(15_000) { rule.onAllNodesWithContentDescription("Add to favorites").fetchSemanticsNodes().isNotEmpty() }
         rule.onNodeWithContentDescription("Add to favorites").performClick()
         awaitReal(10_000) { requested.any { it.contains("POST") && it.contains("UserFavoriteItems/m1") } }
+        awaitReal(10_000) { rule.onAllNodesWithContentDescription("In favorites. Tap to remove").fetchSemanticsNodes().isNotEmpty() }
         rule.onNodeWithContentDescription("In favorites. Tap to remove").assertIsDisplayed()
     }
 

@@ -4,6 +4,8 @@ import android.graphics.Bitmap
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.pressKey
@@ -39,6 +41,18 @@ class SettingsCaptureTest {
     }
 
     private fun key(k: Key) { rule.onRoot().performKeyInput { pressKey(k) }; rule.waitForIdle() }
+
+    @Test fun playbackPaneShowsPauseInfoToggle() {
+        // Randy's toggle row: "Episode and movie info while paused" lives in the Playback pane, on by default.
+        rule.setContent {
+            JetflixTheme { SettingsContent(true, true, true, "Demo", "http://demo.test", {}, {}, {}, {}, {}, buildLabel = "Driftfin TV build 45") }
+        }
+        rule.waitForIdle()
+        key(Key.DirectionLeft)                 // rail: Updates
+        key(Key.DirectionDown)                 // Playback
+        rule.onNodeWithText("Episode and movie info while paused").assertIsDisplayed()
+        capture("settings-playback-pane")
+    }
 
     @Test fun railPanes() {
         rule.setContent {

@@ -101,6 +101,7 @@ class PauseOverlayCaptureTest {
         rule.onNodeWithText("A marshal tracks a fugitive", substring = true).assertDoesNotExist()
         rule.onNodeWithText("Up next: S2:E6 · Back to Town").assertDoesNotExist()
         rule.onNodeWithText("Pat Example", substring = true).assertIsDisplayed()
+        capture("pause-info-off")
     }
 
     @Test fun playingOverlayHidesSummaryAndUpNext() {
