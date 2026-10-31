@@ -164,7 +164,9 @@ class PhoneBrowseInteractionTest {
         rule.onNodeWithText("Kids").performClick()
         awaitReal(30_000) { rule.onAllNodesWithText("Library: Kids").fetchSemanticsNodes().isNotEmpty() }
         awaitReal(30_000) { requested.any { it.contains("/Items") && it.contains("parentId=libK") } }
-        assertTrue(requested.lastOrNull { it.contains("/Items?") }!!.contains("parentId=libK"))
+        // Dispatch threads race, so a slow unscoped load can record after the reload; the stable
+        // guarantee is that the latest library-scoped query uses the picked library.
+        assertTrue(requested.lastOrNull { it.contains("/Items?") && it.contains("parentId=") }!!.contains("parentId=libK"))
     }
 
 

@@ -50,7 +50,10 @@ class PhoneHomeTrailerRenderTest {
                 val epath = url.encodedPath
                 seen.add(epath)
                 if (epath.endsWith("/Items") && url.queryParameter("includeItemTypes") == "Movie" && url.queryParameter("filters") == "IsUnplayed") {
-                    heroFields.set(url.queryParameter("fields"))
+                    // The Recommended row's unwatched-movies fallback has the same shape but asks for no
+                    // fields; only the banner's hero fetch carries the field list this test guards.
+                    val f = url.queryParameter("fields") ?: return json.setBody("""{"Items":[],"TotalRecordCount":0}""")
+                    heroFields.set(f)
                     return json.setBody("""{"Items":[{"Id":"m1","Name":"Synthetic Hero","Type":"Movie","ProductionYear":2024,"OfficialRating":"PG-13","Genres":["Drama"],"Overview":"A made-up hero for the banner check.","ImageTags":{"Primary":"p"},"BackdropImageTags":["b"],"RemoteTrailers":[{"Name":"Trailer","Url":"https://youtu.be/dQw4w9WgXcQ"}]}],"TotalRecordCount":1}""")
                 }
                 if (epath.contains("/Items/Latest")) return json.setBody("[]")

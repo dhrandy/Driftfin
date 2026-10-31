@@ -1,6 +1,7 @@
 package tv.jetflix.phone.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -9,6 +10,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
@@ -41,6 +43,8 @@ val TopBarSpace = 104.dp
 
 private data class HomeData(
     val heroes: List<BaseItemDto> = emptyList(),
+    val libraries: List<BaseItemDto> = emptyList(),
+    val recommended: List<BaseItemDto> = emptyList(),
     val resume: List<BaseItemDto> = emptyList(),
     val nextUp: List<BaseItemDto> = emptyList(),
     val favorites: List<BaseItemDto> = emptyList(),
@@ -50,7 +54,7 @@ private data class HomeData(
 )
 
 @Composable
-fun HomeScreen(onOpen: (BaseItemDto) -> Unit, onTrailer: (tv.jetflix.phone.data.TrailerSource) -> Unit = {}) {
+fun HomeScreen(onOpen: (BaseItemDto) -> Unit, onTrailer: (tv.jetflix.phone.data.TrailerSource) -> Unit = {}, onOpenLibrary: (BaseItemDto) -> Unit = {}) {
     var data by remember { mutableStateOf(HomeData()) }
     var heroIndex by remember { mutableStateOf(0) }
     var heroTrailer by remember { mutableStateOf<tv.jetflix.phone.data.TrailerSource?>(null) }
@@ -59,6 +63,8 @@ fun HomeScreen(onOpen: (BaseItemDto) -> Unit, onTrailer: (tv.jetflix.phone.data.
         val heroes = Content.heroCandidates()
         data = HomeData(
             heroes = heroes.shuffled().take(10),
+            libraries = Content.libraries(),
+            recommended = Content.recommendedAll(),
             resume = Content.resume(), nextUp = Content.nextUp(), favorites = Content.favorites().take(20),
             movies = Content.latest("Movie"), episodes = Content.latest("Episode"), loaded = true,
         )
@@ -76,6 +82,10 @@ fun HomeScreen(onOpen: (BaseItemDto) -> Unit, onTrailer: (tv.jetflix.phone.data.
     val showFavorites by tv.jetflix.phone.data.PhoneSettings.showFavorites.collectAsState()
     LazyColumn(Modifier.fillMaxSize().statusBarsPadding().padding(top = TopBarSpace)) {
         hero?.let { h -> item { Hero(h, data.heroes.size, trailer = heroTrailer, onCycle = { d -> heroIndex = (heroIndex + d).floorMod(data.heroes.size.coerceAtLeast(1)) }, onOpen = onOpen, onTrailer = onTrailer) } }
+        // Every video library this account can see, with its own name, exactly as the server reports
+        // it - a "Kids Movies" library, renamed "Films", or several of the same kind all appear as-is.
+        if (data.libraries.isNotEmpty()) item { LibraryRow(data.libraries, onOpenLibrary) }
+        item { SectionRow("Recommended", data.recommended, onOpen = onOpen) }
         item { SectionRow("Continue Watching", data.resume, titlePoster = true, onOpen = onOpen) }
         if (showNextUp) item { SectionRow("Next Up", data.nextUp, titlePoster = true, onOpen = onOpen) }
         if (showFavorites) item { SectionRow("Favorites", data.favorites, onOpen = onOpen) }
@@ -88,6 +98,27 @@ fun HomeScreen(onOpen: (BaseItemDto) -> Unit, onTrailer: (tv.jetflix.phone.data.
 }
 
 private fun Int.floorMod(m: Int): Int = ((this % m) + m) % m
+
+/** Home's library shortcuts: one labeled tile per library, opening that library's own browse page. */
+@Composable
+private fun LibraryRow(libraries: List<BaseItemDto>, onOpenLibrary: (BaseItemDto) -> Unit) {
+    Column(Modifier.padding(top = 20.dp)) {
+        Text("Libraries", fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 16.dp, bottom = 10.dp))
+        androidx.compose.foundation.lazy.LazyRow(
+            horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(10.dp),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp),
+        ) {
+            items(libraries.size) { i ->
+                val lib = libraries[i]
+                Box(
+                    Modifier.width(150.dp).heightIn(min = 72.dp).clip(RoundedCornerShape(8.dp)).background(DriftfinColors.SurfaceLight)
+                        .clickable { onOpenLibrary(lib) }.padding(12.dp),
+                    contentAlignment = Alignment.Center,
+                ) { Text(lib.Name ?: "Library", color = DriftfinColors.TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, textAlign = androidx.compose.ui.text.style.TextAlign.Center) }
+            }
+        }
+    }
+}
 
 @Composable
 private fun Hero(item: BaseItemDto, count: Int = 1, trailer: tv.jetflix.phone.data.TrailerSource? = null, onCycle: (Int) -> Unit = {}, onOpen: (BaseItemDto) -> Unit, onTrailer: (tv.jetflix.phone.data.TrailerSource) -> Unit = {}) {

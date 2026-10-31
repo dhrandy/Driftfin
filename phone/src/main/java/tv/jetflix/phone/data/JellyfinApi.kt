@@ -93,6 +93,13 @@ interface JellyfinApi {
         @Query("ids") ids: String? = null,
     ): Response<BaseItemDtoQueryResult>
 
+    @GET("Persons")
+    suspend fun getPersons(
+        @Query("userId") userId: String,
+        @Query("searchTerm") searchTerm: String? = null,
+        @Query("limit") limit: Int? = null,
+    ): Response<BaseItemDtoQueryResult>
+
     @GET("Items/{itemId}")
     suspend fun getItem(
         @Path("itemId") itemId: String,

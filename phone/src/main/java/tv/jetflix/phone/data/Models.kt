@@ -210,6 +210,14 @@ fun lifeDatesLabel(birthRaw: String?, deathRaw: String?): String? {
 /** Same item, but playback starts at 0:00 instead of the saved position. */
 fun BaseItemDto.fromStart(): BaseItemDto = copy(UserData = UserData?.copy(PlaybackPositionTicks = 0))
 
+/** Quiet status text for a series page, same words as the TV app: "Continuing" / "Ended" / "Canceled". */
+fun BaseItemDto.seriesStatusLabel(): String? = when (SeriesStatus) {
+    "Continuing" -> "Continuing"
+    "Ended" -> "Ended"
+    "Canceled" -> "Canceled"
+    else -> null
+}
+
 fun Long.ticksToHms(): String {
     var total = this / 10_000_000
     val h = total / 3600

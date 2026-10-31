@@ -76,8 +76,18 @@ class PhoneSearchInteractionTest {
                 val path = request.path ?: ""
                 requested += path
                 if (path.contains("/Images/")) {
-                    val art = if (path.contains("/Items/s1/")) TestArt.poster(7, "Silent Meridian", "2007") else TestArt.poster(1, "Copper Skies", "2005")
+                    val art = when {
+                        path.contains("/Items/s1/") -> TestArt.poster(7, "Silent Meridian", "2007")
+                        path.contains("/Items/p1/") -> TestArt.poster(3, "", "")
+                        else -> TestArt.poster(1, "Copper Skies", "2005")
+                    }
                     return MockResponse().setHeader("Content-Type", "image/png").setBody(okio.Buffer().write(art))
+                }
+                if (path.startsWith("/Persons")) {
+                    if (path.contains("searchTerm=margot")) {
+                        return MockResponse().setHeader("Content-Type", "application/json").setBody("""{"Items":[{"Id":"p1","Name":"Margot Robbie","Type":"Person","ImageTags":{"Primary":"pt1"}}],"TotalRecordCount":1}""")
+                    }
+                    return MockResponse().setHeader("Content-Type", "application/json").setBody("""{"Items":[],"TotalRecordCount":0}""")
                 }
                 if (path.contains("searchTerm=")) {
                     val delay = searchDelayMs
@@ -115,7 +125,7 @@ class PhoneSearchInteractionTest {
         searchDelayMs = 3_000 // server answers 3s after the request
         rule.setContent { DriftfinTheme { SearchScreen(onOpen = {}) } }
         awaitReal(30_000) { rule.onAllNodesWithText("Recommended movies").fetchSemanticsNodes().isNotEmpty() }
-        rule.onNodeWithText("Search movies and shows").performTextInput("copper")
+        rule.onNodeWithText("Search movies, shows and actors").performTextInput("copper")
         rule.mainClock.advanceTimeBy(500)
         // While the request is in flight, "No matches." must not appear.
         val end = System.currentTimeMillis() + 1_800
@@ -136,13 +146,13 @@ class PhoneSearchInteractionTest {
         awaitReal(30_000) { rule.onAllNodesWithText("Recommended movies").fetchSemanticsNodes().isNotEmpty() }
         // No X while the box is empty.
         assertTrue(rule.onAllNodesWithContentDescription("Clear search").fetchSemanticsNodes().isEmpty())
-        rule.onNodeWithText("Search movies and shows").performTextInput("copper")
+        rule.onNodeWithText("Search movies, shows and actors").performTextInput("copper")
         rule.onNodeWithContentDescription("Clear search").assertIsDisplayed()
         capture("search-clear.png")
         rule.onNodeWithContentDescription("Clear search").performClick()
         rule.waitForIdle()
         // The box is empty (placeholder back), the X is gone, and the recommended rows return.
-        rule.onNodeWithText("Search movies and shows").assertIsDisplayed()
+        rule.onNodeWithText("Search movies, shows and actors").assertIsDisplayed()
         awaitReal(30_000) { rule.onAllNodesWithText("Recommended movies").fetchSemanticsNodes().isNotEmpty() }
         assertTrue(rule.onAllNodesWithContentDescription("Clear search").fetchSemanticsNodes().isEmpty())
     }
@@ -150,11 +160,33 @@ class PhoneSearchInteractionTest {
     @Test fun noMatchesShowsAfterEmptyResult() {
         rule.setContent { DriftfinTheme { SearchScreen(onOpen = {}) } }
         awaitReal(30_000) { rule.onAllNodesWithText("Recommended movies").fetchSemanticsNodes().isNotEmpty() }
-        rule.onNodeWithText("Search movies and shows").performTextInput("zzzznothing")
+        rule.onNodeWithText("Search movies, shows and actors").performTextInput("zzzznothing")
         rule.onNodeWithText("zzzznothing").assertExists() // the field accepted the input
         rule.mainClock.advanceTimeBy(500) // push the compose clock past the 300ms debounce
         awaitReal(30_000) { rule.onAllNodesWithText("No matches.").fetchSemanticsNodes().isNotEmpty() }
         rule.onNodeWithText("No matches.").assertIsDisplayed()
+    }
+
+    @Test fun actorMatchesAppearAndOpenTheActorPage() {
+        var openedId: String? = null
+        rule.setContent { DriftfinTheme { SearchScreen(onOpen = {}, onOpenPerson = { openedId = it.Id }) } }
+        awaitReal(30_000) { rule.onAllNodesWithText("Recommended movies").fetchSemanticsNodes().isNotEmpty() }
+        rule.onNodeWithText("Search movies, shows and actors").performTextInput("margot")
+        rule.mainClock.advanceTimeBy(500)
+        // The same box asks the people endpoint, not a filter or a second search.
+        awaitReal(30_000) { requested.any { it.startsWith("/Persons") && it.contains("searchTerm=margot") } }
+        awaitReal(30_000) { rule.onAllNodesWithText("Actors").fetchSemanticsNodes().isNotEmpty() }
+        rule.onNodeWithText("Margot Robbie").assertIsDisplayed()
+        // An actor-only match is still a match: "No matches." must not show.
+        assertTrue(rule.onAllNodesWithText("No matches.").fetchSemanticsNodes().isEmpty())
+        // The headshot arrives after the row text: wait for the fetch and the decode, so the
+        // capture shows the final pixels rather than the loading gap.
+        awaitReal(30_000) { requested.any { it.contains("/Items/p1/Images/") } }
+        val settleEnd = System.currentTimeMillis() + 3000
+        while (System.currentTimeMillis() < settleEnd) { rule.waitForIdle(); org.robolectric.shadows.ShadowLooper.idleMainLooper(); Thread.sleep(100) }
+        capture("search-actors.png")
+        rule.onNodeWithText("Margot Robbie").performClick()
+        awaitReal(10_000) { openedId == "p1" }
     }
 
     @org.junit.After fun tearDown() { server.shutdown(); Graph.signOut() }

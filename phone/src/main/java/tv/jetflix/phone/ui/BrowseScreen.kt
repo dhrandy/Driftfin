@@ -63,12 +63,12 @@ private class BrowsePrefs(context: Context, private val kind: String) {
 
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
-fun BrowseScreen(type: String, title: String, onOpen: (BaseItemDto) -> Unit) {
+fun BrowseScreen(type: String, title: String, onOpen: (BaseItemDto) -> Unit, initialLibraryId: String? = null) {
     val prefs = remember { BrowsePrefs(Graph.appContext(), type) }
     var sort by remember { mutableStateOf(prefs.sort) }
     var unwatched by remember { mutableStateOf(prefs.unwatched) }
     var pickedGenres by remember { mutableStateOf(prefs.genres) }
-    var libraryId by remember { mutableStateOf(prefs.library) }
+    var libraryId by remember { mutableStateOf(initialLibraryId ?: prefs.library) }
     var libraries by remember { mutableStateOf<List<BaseItemDto>>(emptyList()) }
     var libraryMenu by remember { mutableStateOf(false) }
     var genres by remember { mutableStateOf<List<String>>(emptyList()) }
@@ -76,7 +76,8 @@ fun BrowseScreen(type: String, title: String, onOpen: (BaseItemDto) -> Unit) {
     // The Library picker only offers libraries that fit this tab: shows never appear under Movies (reported 10/29).
     var librariesLoaded by remember { mutableStateOf(false) }
     LaunchedEffect(type) {
-        libraries = Content.libraries().filter { tv.jetflix.phone.data.matchesKind(it, type) }
+        // type can be "Movie,Series" (a library page that holds both): match on either kind.
+        libraries = Content.libraries().filter { lib -> type.split(",").any { t -> tv.jetflix.phone.data.matchesKind(lib, t) } }
         // A stored pick from before this split (say Shows under Movies) is dropped, never queried.
         if (libraryId != null && libraries.none { it.Id == libraryId }) { libraryId = null; prefs.library = null }
         librariesLoaded = true

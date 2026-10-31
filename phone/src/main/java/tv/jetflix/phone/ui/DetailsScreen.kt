@@ -49,6 +49,7 @@ import tv.jetflix.phone.Graph
 import tv.jetflix.phone.data.BaseItemDto
 import tv.jetflix.phone.data.Content
 import tv.jetflix.phone.data.fromStart
+import tv.jetflix.phone.data.seriesStatusLabel
 import tv.jetflix.phone.data.ticksToHms
 
 /** One title. A series lists its seasons and episodes; an episode also shows its show and season;
@@ -121,7 +122,7 @@ fun DetailsScreen(id: String, onBack: () -> Unit, onPlay: (String) -> Unit, onOp
                 val airDate = it.airDateLabel()
                 val meta = when {
                     it.isMovie -> listOfNotNull(it.ProductionYear?.toString(), it.OfficialRating, duration, it.Genres.take(3).joinToString(" \u00b7 ").ifBlank { null })
-                    it.isSeries -> listOfNotNull(it.ProductionYear?.toString(), airDate?.let { d -> "Premiered $d" }, it.OfficialRating, duration, it.Genres.take(3).joinToString(" \u00b7 ").ifBlank { null })
+                    it.isSeries -> listOfNotNull(it.ProductionYear?.toString(), airDate?.let { d -> "Premiered $d" }, it.OfficialRating, duration, it.seriesStatusLabel(), it.Genres.take(3).joinToString(" \u00b7 ").ifBlank { null })
                     else -> listOfNotNull(if (airDate == null) it.ProductionYear?.toString() else null, it.OfficialRating, duration, airDate, it.Genres.take(3).joinToString(" \u00b7 ").ifBlank { null })
                 }
                 val formats = listOfNotNull(if (tv.jetflix.phone.data.Resolution4K.badge(it)) "4K" else null) + tv.jetflix.phone.data.HdrFormats.of(it).toList()
@@ -168,7 +169,12 @@ fun DetailsScreen(id: String, onBack: () -> Unit, onPlay: (String) -> Unit, onOp
                         ) { scope.launch { if (Content.setFavorite(favTarget.Id, !favorite)) favorite = !favorite } }
                     }
                     shownTrailer?.let { t ->
-                        IconToggle(icon = TrailerIcon, tint = Color.White, label = "Watch trailer") { onTrailer(t) }
+                        // Wider than tall, like the TV app's trailer button; the star and heart stay square.
+                        androidx.compose.material3.Button(
+                            onClick = { onTrailer(t) },
+                            modifier = Modifier.align(androidx.compose.ui.Alignment.CenterVertically),
+                            colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = DriftfinColors.SurfaceLight.copy(alpha = 0.7f), contentColor = Color.White),
+                        ) { androidx.compose.material3.Icon(TrailerIcon, contentDescription = "Watch trailer", tint = Color.White, modifier = Modifier.size(24.dp)) }
                     }
                 }
                 it.Overview?.let { text -> Text(text, fontSize = 15.sp, color = DriftfinColors.TextSecondary, modifier = Modifier.padding(top = 4.dp)) }
@@ -197,7 +203,7 @@ fun DetailsScreen(id: String, onBack: () -> Unit, onPlay: (String) -> Unit, onOp
                 androidx.compose.foundation.lazy.LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp), contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp)) {
                     items(cast, key = { p -> p.Id.orEmpty() }) { p ->
                         Column(Modifier.width(84.dp).clickable { onOpenPerson(p) }, horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally) {
-                            Art(Graph.repo.personImageUrl(p), Modifier.size(72.dp).clip(androidx.compose.foundation.shape.CircleShape))
+                            ActorAvatar(Graph.repo.personImageUrl(p), p.Name.orEmpty(), Modifier.size(72.dp).clip(androidx.compose.foundation.shape.CircleShape))
                             Text(p.Name.orEmpty(), fontSize = 12.sp, maxLines = 2, textAlign = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.padding(top = 4.dp))
                             p.Role?.takeIf { r -> r.isNotBlank() }?.let { r -> Text(r, fontSize = 11.sp, maxLines = 1, color = DriftfinColors.TextSecondary) }
                         }

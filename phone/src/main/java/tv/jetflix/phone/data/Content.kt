@@ -41,9 +41,17 @@ object Content {
         api.getUserViews(userId).body()?.Items.orEmpty().filter { isVideoLibrary(it) }
     }
 
+    /** One Recommended row mixing movies and shows, best rated first, capped at 15. */
+    suspend fun recommendedAll(): List<BaseItemDto> = safe(emptyList()) {
+        (recommended("Movie") + recommended("Series")).sortedByDescending { it.CommunityRating ?: Float.MIN_VALUE }.take(15)
+    }
+
     suspend fun search(term: String): List<BaseItemDto> = safe(emptyList()) {
         api.getItems(userId, includeItemTypes = "Movie,Series", recursive = true, searchTerm = term, limit = 60).body()?.Items.orEmpty()
     }
+
+    /** People matching the same search box. An actor match opens the actor's page, not a details page. */
+    suspend fun searchPeople(term: String): List<BaseItemDto> = safe(emptyList()) { api.getPersons(userId, searchTerm = term, limit = 20).body()?.Items.orEmpty() }
 
     /** Genres for the Categories filter, scoped to the picked library (a Kids library only offers kids genres). */
     suspend fun genres(type: String, libraryId: String? = null): List<String> = safe(emptyList()) { api.getItemFilters(userId, parentId = libraryId, includeItemTypes = type).body()?.Genres.orEmpty().sorted() }
@@ -62,7 +70,9 @@ object Content {
         val suggested = try { api.getSuggestions(userId, type, limit = 24).body()?.Items } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (_: Exception) { null }
         val list = if (!suggested.isNullOrEmpty()) suggested else
             api.getItems(userId, includeItemTypes = type, recursive = true, sortBy = "CommunityRating", sortOrder = "Descending", limit = 40, filters = "IsUnplayed").body()?.Items.orEmpty()
-        list.filter { Graph.repo.posterUrl(it) != null }.take(20)
+        // A misbehaving server can answer a scoped query with other item types; never render those
+        // in a movies/shows row (an episode would pull its wide still into a poster slot).
+        list.filter { it.Type.equals(type, ignoreCase = true) && Graph.repo.posterUrl(it) != null }.take(20)
     }
 
     suspend fun collections(): List<BaseItemDto> = safe(emptyList()) {

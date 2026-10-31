@@ -60,6 +60,9 @@ class DetailsRenderTest {
         rule.onNodeWithContentDescription("In watchlist. Tap to remove").assertIsDisplayed()
         rule.onNodeWithContentDescription("Back").assertIsDisplayed()
         rule.onNodeWithContentDescription("Watch trailer").assertIsDisplayed()
+        // Trailer button matches the TV proportions: wider than tall (measured on the real screen).
+        val trailerBounds = rule.onNodeWithContentDescription("Watch trailer").fetchSemanticsNode().boundsInRoot
+        org.junit.Assert.assertTrue("trailer button should be wider than tall: $trailerBounds", trailerBounds.width > trailerBounds.height)
         rule.onNodeWithContentDescription("Watch trailer").performClick()
         rule.waitForIdle()
         org.junit.Assert.assertEquals("dQw4w9WgXcQ", (trailered as? tv.jetflix.phone.data.TrailerSource.YouTube)?.videoId)

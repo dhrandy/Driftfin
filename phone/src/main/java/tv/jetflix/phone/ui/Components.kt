@@ -38,6 +38,34 @@ fun Art(url: String?, modifier: Modifier = Modifier, scale: ContentScale = Conte
     else AsyncImage(model = url, contentDescription = null, imageLoader = Graph.images, modifier = modifier, contentScale = scale)
 }
 
+
+/** Initials for an actor with no photo: first letter of the first word plus first letter of the last
+ *  word, uppercased; a single-word name gets one letter. Non-ASCII letters are kept as-is. */
+internal fun actorInitials(name: String): String {
+    val words = name.trim().split(Regex("\\s+")).filter { it.isNotEmpty() }
+    if (words.isEmpty()) return ""
+    val first = words.first().first()
+    val last = words.last().first()
+    return (if (words.size == 1) "$first" else "$first$last").uppercase()
+}
+
+/** An actor photo, or - when the person has no Primary image - a dark gradient disc with their
+ *  initials (no network fetch, no ring or shadow). Sizes are tuned for the 72.dp cast-row disc the
+ *  modifier supplies: the initials sit near 60% of the disc's height. */
+@Composable
+fun ActorAvatar(url: String?, name: String, modifier: Modifier = Modifier) {
+    if (url != null) { Art(url, modifier); return }
+    val initials = actorInitials(name)
+    Box(
+        modifier.background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(androidx.compose.ui.graphics.Color(0xFF4A5468), androidx.compose.ui.graphics.Color(0xFF1E2129)))),
+        contentAlignment = Alignment.Center,
+    ) {
+        if (initials.isNotEmpty()) {
+            Text(initials, color = androidx.compose.ui.graphics.Color(0xFFF0F0F0), fontWeight = FontWeight.Bold, fontSize = if (initials.length == 1) 43.sp else 32.sp)
+        }
+    }
+}
+
 /** A 2:3 cover with a watched check and a resume bar. 4K shows on movies and single episodes only, never a whole series. */
 @Composable
 fun PosterCard(item: BaseItemDto, modifier: Modifier = Modifier, titlePoster: Boolean = false, onClick: () -> Unit) {

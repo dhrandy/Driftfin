@@ -42,6 +42,11 @@ import androidx.compose.ui.unit.sp
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import tv.jetflix.phone.data.Content
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
@@ -59,6 +64,8 @@ object Routes {
     const val Actor = "actor/{id}/{name}"
     fun actor(id: String, name: String) = "actor/$id/${android.net.Uri.encode(name)}"
     const val Collection = "collection/{id}/{title}"
+    const val Library = "library/{id}/{name}"
+    fun library(id: String, name: String) = "library/$id/${android.net.Uri.encode(name)}"
     fun collection(id: String, title: String) = "collection/$id/${android.net.Uri.encode(title)}"
     fun details(id: String) = "details/$id"
     fun player(id: String) = "player/$id"
@@ -99,7 +106,7 @@ fun DriftfinShell() {
     ) { inner ->
         Box(Modifier.fillMaxSize().padding(bottom = inner.calculateBottomPadding())) {
             NavHost(nav, startDestination = Routes.Home) {
-                composable(Routes.Home) { HomeScreen(onOpen = { nav.navigate(Routes.details(it.Id)) }, onTrailer = { t ->
+                composable(Routes.Home) { HomeScreen(onOpen = { nav.navigate(Routes.details(it.Id)) }, onOpenLibrary = { lib -> nav.navigate(Routes.library(lib.Id, lib.Name.orEmpty())) }, onTrailer = { t ->
                     when (t) {
                         is tv.jetflix.phone.data.TrailerSource.Local -> nav.navigate(Routes.player(t.item.Id))
                         is tv.jetflix.phone.data.TrailerSource.YouTube -> nav.navigate(Routes.trailer(t.videoId, t.title))
@@ -107,7 +114,7 @@ fun DriftfinShell() {
                 }) }
                 composable(Routes.Shows) { BrowseScreen("Series", "All shows", onOpen = { nav.navigate(Routes.details(it.Id)) }) }
                 composable(Routes.Movies) { BrowseScreen("Movie", "All movies", onOpen = { nav.navigate(Routes.details(it.Id)) }) }
-                composable(Routes.Search) { SearchScreen(onOpen = { nav.navigate(Routes.details(it.Id)) }) }
+                composable(Routes.Search) { SearchScreen(onOpen = { nav.navigate(Routes.details(it.Id)) }, onOpenPerson = { p -> nav.navigate(Routes.actor(p.Id, p.Name.orEmpty())) }) }
                 composable(Routes.MyStuff) { MyStuffScreen(onOpen = { nav.navigate(Routes.details(it.Id)) }, onOpenCollection = { nav.navigate(Routes.collection(it.Id, it.Name.orEmpty())) }) }
                 composable(Routes.Collection) {
                     CollectionScreen(it.arguments?.getString("id").orEmpty(), it.arguments?.getString("title").orEmpty(), onBack = { nav.popBackStack() }, onOpen = { item -> nav.navigate(Routes.details(item.Id)) })
@@ -121,6 +128,22 @@ fun DriftfinShell() {
                         }
                     })
                 }
+                composable(Routes.Library) { back ->
+                    val libId = back.arguments?.getString("id").orEmpty()
+                    val libName = back.arguments?.getString("name").orEmpty()
+                    var libType by remember { mutableStateOf("Movie,Series") }
+                    LaunchedEffect(libId) {
+                        val view = Content.libraries().firstOrNull { it.Id == libId }
+                        if (view != null) {
+                            libType = when {
+                                tv.jetflix.phone.data.matchesKind(view, "Movie") && !tv.jetflix.phone.data.matchesKind(view, "Series") -> "Movie"
+                                tv.jetflix.phone.data.matchesKind(view, "Series") && !tv.jetflix.phone.data.matchesKind(view, "Movie") -> "Series"
+                                else -> "Movie,Series"
+                            }
+                        }
+                    }
+                    BrowseScreen(libType, libName, onOpen = { nav.navigate(Routes.details(it.Id)) }, initialLibraryId = libId)
+                }
                 composable(Routes.Actor) {
                     ActorScreen(it.arguments?.getString("id").orEmpty(), it.arguments?.getString("name").orEmpty(), onBack = { nav.popBackStack() }, onOpen = { item -> nav.navigate(Routes.details(item.Id)) })
                 }
@@ -128,7 +151,7 @@ fun DriftfinShell() {
                     YouTubeTrailerScreen(it.arguments?.getString("videoId").orEmpty(), it.arguments?.getString("title").orEmpty(), onClose = { nav.popBackStack() })
                 }
                 composable(Routes.Player) { val pid = it.arguments?.getString("id").orEmpty()
-                    PlayerScreen(pid, onExit = { nav.popBackStack() }, onPlayNext = { next -> nav.navigate(Routes.player(next)) { popUpTo(Routes.Player) { inclusive = true } } }) }
+                    PlayerScreen(pid, onExit = { nav.popBackStack() }, onPlayNext = { next -> nav.navigate(Routes.player(next)) { popUpTo(Routes.Player) { inclusive = true } } }, onOpenNext = { next -> nav.navigate(Routes.details(next)) { popUpTo(Routes.Player) { inclusive = true } } }) }
             }
             if (route in topPageRoutes) TopBar(route, nav, Modifier.align(Alignment.TopCenter))
         }
@@ -136,6 +159,12 @@ fun DriftfinShell() {
 }
 
 private fun goTo(nav: NavHostController, route: String) {
+    // Search starts empty on every visit: the last term and its results don't come back with the tab.
+    if (route == Routes.Search) {
+        nav.popBackStack(Routes.Search, inclusive = true)
+        nav.navigate(Routes.Search) { launchSingleTop = true }
+        return
+    }
     nav.navigate(route) {
         popUpTo(nav.graph.findStartDestination().id) { saveState = true }
         launchSingleTop = true

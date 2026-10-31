@@ -1,11 +1,13 @@
 package tv.jetflix.phone.ui
 
 import android.app.Activity
-import android.view.View
 import androidx.activity.compose.BackHandler
 import androidx.annotation.OptIn
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,7 +15,17 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material3.Icon
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -31,7 +43,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChanged
@@ -69,6 +84,7 @@ import tv.jetflix.phone.data.PlaybackStartInfo
 import tv.jetflix.phone.data.PlaybackStopInfo
 import tv.jetflix.phone.data.SessionManager
 import tv.jetflix.phone.data.SkipIntro
+import tv.jetflix.phone.data.ticksToHms
 import tv.jetflix.phone.data.ticksToMs
 
 /**
@@ -78,7 +94,7 @@ import tv.jetflix.phone.data.ticksToMs
  */
 @OptIn(UnstableApi::class)
 @Composable
-fun PlayerScreen(id: String, onExit: () -> Unit, onPlayNext: (String) -> Unit = {}) {
+fun PlayerScreen(id: String, onExit: () -> Unit, onPlayNext: (String) -> Unit = {}, onOpenNext: (String) -> Unit = {}) {
     LandscapeWhilePlaying()
     val context = LocalContext.current
     val activity = context as? Activity
@@ -93,6 +109,8 @@ fun PlayerScreen(id: String, onExit: () -> Unit, onPlayNext: (String) -> Unit = 
     var attempt by remember { mutableIntStateOf(0) }
     var segments by remember { mutableStateOf<List<MediaSegmentDto>>(emptyList()) }
     var positionMs by remember { mutableStateOf(0L) }
+    var bufferedMs by remember { mutableStateOf(0L) }
+    var durationMs by remember { mutableStateOf(0L) }
     var ended by remember { mutableStateOf(false) }
     var upNext by remember { mutableStateOf<BaseItemDto?>(null) }
     var countdown by remember { mutableIntStateOf(5) }
@@ -109,7 +127,8 @@ fun PlayerScreen(id: String, onExit: () -> Unit, onPlayNext: (String) -> Unit = 
     val leave: () -> Unit = { if (!leaving) leaving = true }
     val player = remember {
         val http = OkHttpDataSource.Factory(SessionManager.authenticatedClientBuilder().build())
-        ExoPlayer.Builder(context).setMediaSourceFactory(DefaultMediaSourceFactory(DefaultDataSource.Factory(context, http))).build().also {
+        ExoPlayer.Builder(context).setSeekBackIncrementMs(10_000).setSeekForwardIncrementMs(10_000)
+            .setMediaSourceFactory(DefaultMediaSourceFactory(DefaultDataSource.Factory(context, http))).build().also {
             tv.jetflix.phone.data.TrackPrefs.init(context)
             it.trackSelectionParameters = tv.jetflix.phone.data.TrackPrefs.applyTo(it.trackSelectionParameters)
         }
@@ -149,23 +168,48 @@ fun PlayerScreen(id: String, onExit: () -> Unit, onPlayNext: (String) -> Unit = 
         player.prepare(); player.playWhenReady = true
         try { api.reportPlaybackStart(PlaybackStartInfo(ItemId = id, MediaSourceId = sourceId, PlaySessionId = playSession, PositionTicks = start, PlayMethod = method)) } catch (_: Exception) {}
     }
-    // After an episode ends: look up the next one in server order and count down 5 seconds. Otherwise leave the player.
+    // Natural end = watched. A movie, an episode with no next, and any autoplay-off path leave the
+    // player only after the server has both writes (stop report + watched mark), so the page it lands
+    // on already shows the title as played. Autoplay-off with a next episode opens the next episode's
+    // page after the same awaited writes. The countdown path keeps a fire-and-forget mark: the 5
+    // seconds cover the write. Same finish semantics as the TV player.
     LaunchedEffect(ended) {
         if (!ended) return@LaunchedEffect
         val cur = item
-        val seriesId = cur?.SeriesId
-        if (cur == null || !cur.isEpisode || seriesId == null || session == null || !tv.jetflix.phone.data.PhoneSettings.autoplayNext.value) { leave(); return@LaunchedEffect }
-        val next = try { tv.jetflix.phone.data.NextEpisode.pick(api.getEpisodes(seriesId, session.userId).body()?.Items.orEmpty(), cur.Id) } catch (_: Exception) { null }
-        if (next == null) { leave(); return@LaunchedEffect }
-        upNext = next; countdown = 5
-        while (countdown > 0) { delay(1000); countdown-- }
-        onPlayNext(next.Id)
+        if (cur == null || session == null) { leave(); return@LaunchedEffect }
+        val userId = session.userId
+        val positionTicks = player.currentPosition.coerceAtLeast(0L) * 10_000
+        val seriesId = cur.SeriesId
+        if (!cur.isEpisode || seriesId == null) {
+            reportFinishThenNavigate(api, cur, userId, sourceId, playSession, positionTicks) { leave() }
+            return@LaunchedEffect
+        }
+        val outcome = lookupUpNext(api, seriesId, userId, cur.Id)
+        if (!tv.jetflix.phone.data.PhoneSettings.autoplayNext.value) {
+            when (outcome) {
+                is UpNextLookup.Found -> reportStopThenOpenNext(api, cur, userId, sourceId, playSession, positionTicks) { onOpenNext(outcome.next.Id) }
+                else -> reportFinishThenNavigate(api, cur, userId, sourceId, playSession, positionTicks) { leave() }
+            }
+            return@LaunchedEffect
+        }
+        when (outcome) {
+            is UpNextLookup.None -> reportFinishThenNavigate(api, cur, userId, sourceId, playSession, positionTicks) { leave() }
+            is UpNextLookup.Failed -> { apiMarkPlayed(api, cur, userId); error = "Finished. Couldn't load the next episode." }
+            is UpNextLookup.Found -> {
+                apiMarkPlayed(api, cur, userId)
+                upNext = outcome.next; countdown = 5
+                while (countdown > 0) { delay(1000); countdown-- }
+                onPlayNext(outcome.next.Id)
+            }
+        }
     }
     LaunchedEffect(id) { segments = try { api.getMediaSegments(id).body()?.Items.orEmpty() } catch (_: Exception) { emptyList() } }
     LaunchedEffect(Unit) {
         var sinceReport = 0
         while (isActive) {
             positionMs = player.currentPosition
+            durationMs = player.duration.coerceAtLeast(0L)
+            bufferedMs = player.bufferedPosition.coerceAtLeast(0L)
             delay(250)
             sinceReport++
             if (sinceReport >= 10) {
@@ -215,11 +259,18 @@ fun PlayerScreen(id: String, onExit: () -> Unit, onPlayNext: (String) -> Unit = 
         withFrameNanos { }
         onExit()
     }
+    // Our controls hide themselves a few seconds into playback, like the old controller did.
+    // Paused or finished keeps them up so there is always a way out.
+    LaunchedEffect(controlsVisible, playing) {
+        if (controlsVisible && playing) { delay(3_500); controlsVisible = false }
+    }
     BackHandler(onBack = leave)
     val skip = SkipIntro.active(segments, positionMs)
     // The pinch handler lives on the container so single-finger taps still reach the player controls:
     // two fingers spread fills the screen (cropping the edges), pinch back in fits the picture again.
     Box(Modifier.fillMaxSize().background(Color.Black).pointerInput(Unit) {
+        detectTapGestures { controlsVisible = !controlsVisible }
+    }.pointerInput(Unit) {
         awaitEachGesture {
             awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
             var startDistance = -1f
@@ -255,8 +306,9 @@ fun PlayerScreen(id: String, onExit: () -> Unit, onPlayNext: (String) -> Unit = 
                 factory = {
                     PlayerView(it).apply {
                         this.player = player
-                        useController = true
-                        setControllerVisibilityListener(PlayerView.ControllerVisibilityListener { v -> controlsVisible = v == View.VISIBLE })
+                        // The compose overlay below replaces the default controller: its progress bar
+                        // matches the TV app (track, buffered gray, red played) and stays touch-sized.
+                        useController = false
                         playerView = this
                     }
                 },
@@ -274,11 +326,27 @@ fun PlayerScreen(id: String, onExit: () -> Unit, onPlayNext: (String) -> Unit = 
             },
             modifier = Modifier.fillMaxSize(),
         )
+        PlayerCenterControls(
+            visible = controlsVisible || !playing || ended,
+            playing = playing,
+            onTogglePlay = { if (player.isPlaying) player.pause() else player.play() },
+            onSkipBack = { player.seekBack() },
+            onSkipForward = { player.seekForward() },
+            modifier = Modifier.align(Alignment.Center),
+        )
+        PlayerProgressBar(
+            visible = controlsVisible || !playing || ended,
+            positionMs = positionMs,
+            bufferedMs = bufferedMs,
+            durationMs = durationMs,
+            onSeekToFraction = { f -> val d = player.duration; if (d > 0) player.seekTo((d * f).toLong()) },
+            modifier = Modifier.align(Alignment.BottomCenter),
+        )
         if (skip != null) {
             // The press decides from the live position, not the polled state.
             SkipIntroButton(
                 onSkip = { SkipIntro.active(segments, player.currentPosition)?.let { player.seekTo(SkipIntro.endMs(it)) } },
-                modifier = Modifier.align(Alignment.BottomEnd).safeDrawingPadding().padding(16.dp).padding(bottom = 56.dp),
+                modifier = Modifier.align(Alignment.BottomEnd).safeDrawingPadding().padding(16.dp).padding(bottom = 84.dp),
             )
         }
         upNext?.let { n ->
@@ -333,6 +401,98 @@ private fun TrackPicker(player: Player, version: Int, onClose: () -> Unit) {
             }
         },
     )
+}
+
+/** Play/pause with 10 second skips, the same jump the TV remote's left/right makes. */
+@Composable
+fun PlayerCenterControls(
+    visible: Boolean,
+    playing: Boolean,
+    onTogglePlay: () -> Unit,
+    onSkipBack: () -> Unit,
+    onSkipForward: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    if (!visible) return
+    Row(modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(28.dp)) {
+        OutlinedButton(onClick = onSkipBack, colors = ButtonDefaults.outlinedButtonColors(containerColor = Color(0x66000000), contentColor = Color.White)) { Text("-10s") }
+        Box(
+            Modifier.size(64.dp).clip(CircleShape).background(Color(0x66000000)).clickable(onClick = onTogglePlay),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (playing) {
+                // material-icons-core has no pause glyph, so the two bars are drawn.
+                Row(horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(7.dp)) {
+                    Box(Modifier.width(8.dp).height(28.dp).background(Color.White))
+                    Box(Modifier.width(8.dp).height(28.dp).background(Color.White))
+                }
+            } else {
+                Icon(Icons.Filled.PlayArrow, contentDescription = "Play", tint = Color.White, modifier = Modifier.size(36.dp))
+            }
+        }
+        OutlinedButton(onClick = onSkipForward, colors = ButtonDefaults.outlinedButtonColors(containerColor = Color(0x66000000), contentColor = Color.White)) { Text("+10s") }
+    }
+}
+
+/** The TV player's seek bar: a 4.dp rounded track, buffered gray, played red. The touch target
+ *  around it is 32.dp so a thumb can drag it; tapping anywhere on it jumps there. Public for pixel tests. */
+@Composable
+fun PlayerSeekBar(positionMs: Long, bufferedMs: Long, durationMs: Long, onSeekToFraction: (Float) -> Unit, modifier: Modifier = Modifier) {
+    var dragFraction by remember { mutableStateOf<Float?>(null) }
+    val duration = durationMs.coerceAtLeast(1L)
+    val played = dragFraction ?: (positionMs.toFloat() / duration).coerceIn(0f, 1f)
+    val buffered = (bufferedMs.toFloat() / duration).coerceIn(0f, 1f)
+    Box(
+        modifier
+            .height(32.dp)
+            .pointerInput(Unit) {
+                detectTapGestures { onSeekToFraction((it.x / size.width).coerceIn(0f, 1f)) }
+            }
+            .pointerInput(Unit) {
+                detectHorizontalDragGestures(
+                    onDragStart = { dragFraction = (it.x / size.width).coerceIn(0f, 1f) },
+                    onHorizontalDrag = { change, _ -> dragFraction = (change.position.x / size.width).coerceIn(0f, 1f) },
+                    onDragEnd = { dragFraction?.let(onSeekToFraction); dragFraction = null },
+                    onDragCancel = { dragFraction = null },
+                )
+            },
+    ) {
+        Box(
+            Modifier.align(Alignment.Center).fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)).background(DriftfinColors.ProgressTrack),
+        ) {
+            Box(Modifier.fillMaxWidth(buffered).height(4.dp).background(Color(0xFF7A7A7A)))
+            Box(Modifier.fillMaxWidth(played).height(4.dp).background(DriftfinColors.Red))
+        }
+    }
+}
+
+/** Bottom strip mirroring the TV player's: current time, seek bar, remaining time, on a dark fade. */
+@Composable
+fun PlayerProgressBar(
+    visible: Boolean,
+    positionMs: Long,
+    bufferedMs: Long,
+    durationMs: Long,
+    onSeekToFraction: (Float) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    if (!visible) return
+    Column(
+        modifier
+            .fillMaxWidth()
+            .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.8f))))
+            .safeDrawingPadding()
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text((positionMs * 10_000L).ticksToHms(), color = Color.White, fontSize = 12.sp)
+            Spacer(Modifier.width(10.dp))
+            PlayerSeekBar(positionMs, bufferedMs, durationMs, onSeekToFraction, Modifier.weight(1f).testTag("player-seek-bar"))
+            Spacer(Modifier.width(10.dp))
+            val remaining = (durationMs - positionMs).coerceAtLeast(0L)
+            Text("-${(remaining * 10_000L).ticksToHms()}", color = DriftfinColors.TextSecondary, fontSize = 12.sp)
+        }
+    }
 }
 
 /** Compact dark prompt, same look as the TV app. Extracted so pixel checks can render it without a player. */
