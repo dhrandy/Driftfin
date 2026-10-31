@@ -112,6 +112,7 @@ fun PlayerScreen(
     androidx.compose.runtime.DisposableEffect(hostView) { onDispose { hostView.keepScreenOn = false } }
     // Cast strip while paused: people are fetched once, the first time the video is paused.
     val pauseCastOn by tv.jetflix.app.data.AppSettings.pauseCast.collectAsState()
+    val pauseInfoOn by tv.jetflix.app.data.AppSettings.pauseInfo.collectAsState()
     val isPausedNow by tv.jetflix.app.ui.components.PlaybackPause.paused.collectAsState()
     var cast by remember { mutableStateOf(emptyList<tv.jetflix.app.data.BaseItemPerson>()) }
     var castFetched by remember { mutableStateOf(false) }
@@ -125,6 +126,19 @@ fun PlayerScreen(
         }
     }
     LaunchedEffect(isPausedNow, pauseCastOn) { if (!isPausedNow || !pauseCastOn) { castIndex = null; castKeys.reset() } }
+    // "Up next" line while paused: the next episode is looked up once, the first time the video is paused
+    // (the same server-order lookup the end-of-episode card uses, just earlier).
+    var nextEp by remember { mutableStateOf<BaseItemDto?>(null) }
+    var nextFetched by remember { mutableStateOf(false) }
+    LaunchedEffect(isPausedNow) {
+        if (isPausedNow && pauseInfoOn && !nextFetched) {
+            nextFetched = true
+            val seriesId = item.SeriesId
+            if (item.isEpisode && seriesId != null) {
+                (lookupUpNext(api, seriesId, session.userId, item.Id) as? UpNextLookup.Found)?.let { nextEp = it.next }
+            }
+        }
+    }
     var introSegments by remember { mutableStateOf(emptyList<tv.jetflix.app.data.MediaSegmentDto>()) }
     val skipIntroEnabled by tv.jetflix.app.data.AppSettings.skipIntro.collectAsState()
     var positionTicks by remember { mutableLongStateOf(item.UserData?.PlaybackPositionTicks ?: 0L) }
@@ -498,13 +512,16 @@ fun PlayerScreen(
         PlayerOverlay(
             visible = controlsVisible, item = item, isPlaying = isPlaying,
             positionTicks = positionTicks, bufferedTicks = bufferedTicks, durationTicks = durationTicks,
+            nextEpisode = nextEp,
+            infoVisible = pauseInfoOn,
             castVisible = PlayerKeys.castReady(isPausedNow, true, pauseCastOn, cast.size),
             cast = cast, castSelected = castIndex, personImageUrl = { repo.personImageUrl(it) },
         )
     }
 }
 
-/** Title, pause icon, progress bar and (while paused) the cast strip. Public so renders show the real overlay. */
+/** Title, pause icon, progress bar and (while paused) the summary, "Up next" line and cast strip.
+ *  Public so renders show the real overlay. */
 @Composable
 fun PlayerOverlay(
     visible: Boolean,
@@ -513,6 +530,8 @@ fun PlayerOverlay(
     positionTicks: Long,
     bufferedTicks: Long,
     durationTicks: Long,
+    nextEpisode: BaseItemDto? = null,
+    infoVisible: Boolean = true,
     castVisible: Boolean,
     cast: List<tv.jetflix.app.data.BaseItemPerson>,
     castSelected: Int?,
@@ -520,6 +539,12 @@ fun PlayerOverlay(
 ) {
 AnimatedVisibility(visible = visible, enter = fadeIn(), exit = fadeOut()) {
         Box(Modifier.fillMaxSize()) {
+            // Paused only: light, even dim across the whole frame (Randy's pick). Uniform, no
+            // gradient, so text and controls stay readable without a visible box; the video's
+            // color shows through. Same drawing approach as the existing scrims, no blur.
+            if (!isPlaying) {
+                Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.42f)))
+            }
             // Top: title
             Column(
                 Modifier
@@ -542,6 +567,31 @@ AnimatedVisibility(visible = visible, enter = fadeIn(), exit = fadeOut()) {
                         style = JetflixType.body,
                         color = JetflixColors.TextSecondary,
                     )
+                }
+                // Paused only: the item's own summary (already loaded, no fetch) and the next episode's
+                // name, over the whole-frame dim above (Randy's readability review and pick).
+                if (!isPlaying && infoVisible) {
+                    Column(Modifier.padding(top = 10.dp)) {
+                        item.Overview?.takeIf { it.isNotBlank() }?.let { overview ->
+                            Text(
+                                text = overview,
+                                style = JetflixType.caption,
+                                color = JetflixColors.TextSecondary,
+                                maxLines = 3,
+                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                            )
+                        }
+                        upNextLine(nextEpisode)?.let { line ->
+                            Text(
+                                text = line,
+                                style = JetflixType.caption,
+                                color = JetflixColors.TextSecondary,
+                                maxLines = 1,
+                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                                modifier = Modifier.padding(top = 4.dp),
+                            )
+                        }
+                    }
                 }
             }
 
@@ -746,6 +796,13 @@ internal suspend fun lookupUpNext(api: tv.jetflix.app.data.JellyfinApi, seriesId
     if (!resp.isSuccessful) return UpNextLookup.Failed
     val next = tv.jetflix.app.data.NextEpisode.pick(resp.body()?.Items ?: emptyList(), currentId)
     return if (next != null) UpNextLookup.Found(next) else UpNextLookup.None
+}
+
+/** "Up next: S2:E6 · Back to Town" on the paused overlay; null when there is no next episode or it has no name. */
+internal fun upNextLine(next: BaseItemDto?): String? {
+    if (next == null) return null
+    val label = listOfNotNull(next.episodeLabel(), next.Name).joinToString(" · ")
+    return if (label.isBlank()) null else "Up next: $label"
 }
 
 /** Only movies and episodes earn the watched check at their natural end; local trailers and other

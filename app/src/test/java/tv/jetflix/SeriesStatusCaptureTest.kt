@@ -24,7 +24,8 @@ import tv.jetflix.app.ui.details.DetailsContent
 import tv.jetflix.app.ui.details.DetailsUiState
 import tv.jetflix.app.ui.theme.JetflixTheme
 
-/** A series page with multiple seasons shows the server's series status at the end of the season row. */
+/** A series page shows the server's series status on the quiet genre line ("Premiered ... · Continuing ·
+ *  Drama · Crime"), for one-season and genre-less series too - not on the season controls row. */
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], qualifiers = "w960dp-h540dp-xhdpi")
@@ -56,7 +57,11 @@ class SeriesStatusCaptureTest {
 
     private lateinit var ls: LazyListState
 
-    private fun show(status: String?) {
+    private fun show(status: String?, genres: List<String> = listOf("Drama", "Crime"),
+                     seasons: List<BaseItemDto> = listOf(
+                         BaseItemDto(Id = "s1", Name = "Season 1", Type = "Season"),
+                         BaseItemDto(Id = "s2", Name = "Season 2", Type = "Season"),
+                     )) {
         val repo = JellyfinRepository().apply { apiFor("http://demo.test") }
         rule.setContent {
             ls = rememberLazyListState()
@@ -65,14 +70,11 @@ class SeriesStatusCaptureTest {
                     DetailsContent(
                         DetailsUiState(
                             loading = false,
-                            item = series.copy(SeriesStatus = status),
+                            item = series.copy(SeriesStatus = status, Genres = genres),
                             playTarget = ep,
                             episodes = listOf(ep),
-                            seasons = listOf(
-                                BaseItemDto(Id = "s1", Name = "Season 1", Type = "Season"),
-                                BaseItemDto(Id = "s2", Name = "Season 2", Type = "Season"),
-                            ),
-                            selectedSeasonId = "s1",
+                            seasons = seasons,
+                            selectedSeasonId = seasons.firstOrNull()?.Id,
                         ),
                         repo, {}, { _, _ -> }, {}, {}, {}, listState = ls,
                     )
@@ -82,22 +84,33 @@ class SeriesStatusCaptureTest {
         rule.waitForIdle()
     }
 
-    @Test fun returningSeriesShowsBesideSeasons() {
-        show("Continuing")
-        // The seasons row sits below the header; scroll until it is composed, then the status is visible.
+    /** Scrolls until the genre line is composed and on screen. */
+    private fun scrollToGenreLine() {
         for (i in 0..10) {
             rule.runOnUiThread { runBlocking { ls.scrollToItem(i, 0) } }
             rule.waitForIdle()
             val info = ls.layoutInfo
-            if (info.visibleItemsInfo.firstOrNull { it.key == "seasons" }?.let { it.offset >= 0 && it.offset + it.size <= info.viewportEndOffset } == true) break
+            if (info.visibleItemsInfo.firstOrNull { it.key == "genres" }?.let { it.offset >= 0 && it.offset + it.size <= info.viewportEndOffset } == true) break
         }
-        rule.onNodeWithText("Returning Series").assertIsDisplayed()
-        capture("series-status-returning")
+    }
+
+    @Test fun continuingShowsOnTheGenreLine() {
+        show("Continuing")
+        scrollToGenreLine()
+        rule.onNodeWithText("Continuing", substring = true).assertIsDisplayed()
+        capture("series-status-continuing")
+    }
+
+    @Test fun oneSeasonNoGenresStillShowsStatus() {
+        show("Ended", genres = emptyList(), seasons = listOf(BaseItemDto(Id = "s1", Name = "Season 1", Type = "Season")))
+        scrollToGenreLine()
+        rule.onNodeWithText("Ended", substring = true).assertIsDisplayed()
+        capture("series-status-ended-single-season")
     }
 
     @Test fun unknownStatusShowsNothing() {
         show(null)
-        rule.onNodeWithText("Returning Series").assertDoesNotExist()
-        rule.onNodeWithText("Ended").assertDoesNotExist()
+        rule.onNodeWithText("Continuing", substring = true).assertDoesNotExist()
+        rule.onNodeWithText("Ended", substring = true).assertDoesNotExist()
     }
 }

@@ -581,10 +581,11 @@ fun DetailsContent(
             }
         }
 
-        if (item != null && item.Genres.isNotEmpty()) {
+        val statusGenreLine = item?.let { genreLine(it, state.playTarget) }.orEmpty()
+        if (item != null && statusGenreLine.isNotBlank()) {
             item(key = "genres") {
                 Text(
-                    text = genreLine(item, state.playTarget),
+                    text = statusGenreLine,
                     style = JetflixType.caption,
                     color = JetflixColors.TextMuted,
                     modifier = Modifier.padding(horizontal = 48.dp),
@@ -597,8 +598,6 @@ fun DetailsContent(
                 LazyRow(
                     contentPadding = PaddingValues(horizontal = 48.dp, vertical = 12.dp),
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    // Center on the cross axis so the quiet status text rides on the chips' own center line.
-                    verticalAlignment = Alignment.CenterVertically,
                 ) {
                     items(state.seasons, key = { it.Id }) { season ->
                         SeasonChip(
@@ -606,12 +605,6 @@ fun DetailsContent(
                             selected = season.Id == state.selectedSeasonId,
                             onClick = { onSelectSeason(item.Id, season.Id) },
                         )
-                    }
-                    // The server's own series status sits quietly at the end of the season row.
-                    seriesStatusLabel(item.SeriesStatus)?.let { status ->
-                        item(key = "series-status") {
-                            Text(status, style = JetflixType.caption, color = JetflixColors.TextMuted, modifier = Modifier.padding(start = 6.dp))
-                        }
                     }
                 }
             }
@@ -869,9 +862,10 @@ fun CastChip(person: BaseItemPerson, imageUrl: String?, onClick: () -> Unit = {}
     }
 }
 
-/** The genre line on a series page leads with the play target's air date: "Aired Oct 22, 2026 · Drama · Comedy"
- * (settled after build 40 - the date leaves the header and joins this existing quiet line). Movies and
- * missing dates leave the genres alone. */
+/** The genre line on a series page leads with the show's premiere date, then the series status:
+ * "Premiered Oct 22, 2026  ·  Continuing  ·  Drama · Comedy" (the date settled after build 40; the status
+ * moved here from the end of the season row so one-season and genre-less series show it too). Movies and
+ * missing dates/statuses leave those segments out. */
 fun genreLine(item: BaseItemDto, playTarget: BaseItemDto?): String {
     val genres = item.Genres.joinToString(" · ")
     // The premiere date leads the genre line only when the episode's air date took its meta-row slot
@@ -879,12 +873,13 @@ fun genreLine(item: BaseItemDto, playTarget: BaseItemDto?): String {
     // and the first genre, on the "little, not a lot" review note.
     val epAired = playTarget?.takeIf { item.isSeries && it.Type == "Episode" }?.airDateLabel()
     val premiered = if (item.isSeries && epAired != null) item.airDateLabel() else null
-    return listOfNotNull(premiered?.let { "Premiered $it" }, genres.takeIf { it.isNotBlank() }).joinToString("  ·  ")
+    val status = if (item.isSeries) seriesStatusLabel(item.SeriesStatus) else null
+    return listOfNotNull(premiered?.let { "Premiered $it" }, status, genres.takeIf { it.isNotBlank() }).joinToString("  ·  ")
 }
 
-/** "Returning Series" / "Ended" from the server's SeriesStatus; anything unknown shows nothing. */
+/** "Continuing" / "Ended" / "Canceled" from the server's SeriesStatus; anything unknown shows nothing. */
 fun seriesStatusLabel(status: String?): String? = when (status?.trim()?.lowercase()) {
-    "continuing" -> "Returning Series"
+    "continuing" -> "Continuing"
     "ended" -> "Ended"
     "canceled", "cancelled" -> "Canceled"
     else -> null

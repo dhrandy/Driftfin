@@ -5,38 +5,61 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
-import kotlinx.coroutines.launch
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Button
 import androidx.tv.material3.ButtonDefaults
 import androidx.tv.material3.Text
+import kotlinx.coroutines.launch
 import tv.jetflix.app.data.AppSettings
 import tv.jetflix.app.ui.components.JetflixTab
 import tv.jetflix.app.ui.components.TopNavBar
 import tv.jetflix.app.ui.theme.JetflixColors
 import tv.jetflix.app.ui.theme.JetflixType
+import kotlin.math.cos
+import kotlin.math.sin
+
+/** Settings groups in the left rail, in remote order. Focusing a group shows its pane on the right. */
+enum class SettingsCategory(val label: String, val subtitle: String) {
+    Updates("Updates", "Keep Driftfin current."),
+    Playback("Playback", "What happens while you watch."),
+    HomeDiscovery("Home & discovery", "What appears on Home and Search."),
+    Appearance("Appearance", "How posters, logos and badges look across the app."),
+    MyStuff("My Stuff", "Your watchlist."),
+    Sound("Sound", "Remote control sounds."),
+    Performance("Performance", "Measurement switches."),
+    Account("Account", "Who is signed in on this TV."),
+}
 
 @Composable
 fun SettingsScreen(
@@ -96,9 +119,11 @@ fun SettingsScreen(
         continueWatchingPosters = AppSettings.continueWatchingPosters.collectAsState().value,
         onToggleContinueWatchingPosters = { AppSettings.setContinueWatchingPosters(!AppSettings.continueWatchingPosters.value) },
         pauseCast = AppSettings.pauseCast.collectAsState().value,
+        pauseInfo = AppSettings.pauseInfo.collectAsState().value,
         showWatchlist = watchlist,
         onToggleWatchlist = { AppSettings.setShowWatchlist(!watchlist) },
         onTogglePauseCast = { AppSettings.setPauseCast(!AppSettings.pauseCast.value) },
+        onTogglePauseInfo = { AppSettings.setPauseInfo(!AppSettings.pauseInfo.value) },
         skipIntro = AppSettings.skipIntro.collectAsState().value,
         onToggleSkipIntro = { AppSettings.setSkipIntro(!AppSettings.skipIntro.value) },
         update = update,
@@ -137,6 +162,7 @@ fun SettingsScreen(
             AppSettings.setButtonSound(next)
             tv.jetflix.app.ui.components.ButtonSounds.preview(next)
         },
+        buildLabel = "Driftfin TV build ${tv.jetflix.app.BuildConfig.VERSION_CODE}",
     )
 }
 
@@ -163,6 +189,8 @@ fun SettingsContent(
     onToggleContinueWatchingPosters: () -> Unit = {},
     pauseCast: Boolean = true,
     onTogglePauseCast: () -> Unit = {},
+    pauseInfo: Boolean = true,
+    onTogglePauseInfo: () -> Unit = {},
     skipIntro: Boolean = true,
     onToggleSkipIntro: () -> Unit = {},
     onForgetProfile: () -> Unit = {},
@@ -182,92 +210,145 @@ fun SettingsContent(
     onToggleExcludeHomeAnimation: () -> Unit = {},
     searchRecommendations: Boolean = true,
     onToggleSearchRecommendations: () -> Unit = {},
+    /** Tests open a specific pane; the screen opens on Updates. */
+    initialCategory: SettingsCategory = SettingsCategory.Updates,
+    /** Shown at the bottom of the pane; empty hides it (tests pass nothing). */
+    buildLabel: String = "",
 ) {
     val menuBack = tv.jetflix.app.ui.components.rememberMenuBack()
-    val first = remember { FocusRequester() }
+    // Rail and pane focus anchors: Left from any pane row returns to the rail, Right from the rail
+    // enters the pane's first control. Focusing a control never changes it; only OK does.
+    val paneFirst = remember { FocusRequester() }
+    val railFocus = remember { FocusRequester() }
+    var category by remember { mutableStateOf(initialCategory) }
     // Captured at composition: arriving by a tab sweep keeps focus on the tab until Down or OK (NavSweep is
     // cleared by the handoff, so reading it live here races and either steals focus or defers it forever).
     val openedBySweep = remember { tv.jetflix.app.ui.components.NavSweep.active }
-    LaunchedEffect(Unit) { if (!openedBySweep) try { first.requestFocus() } catch (_: Exception) { } }
+    LaunchedEffect(Unit) { if (!openedBySweep) try { paneFirst.requestFocus() } catch (_: Exception) { } }
     Box(Modifier.fillMaxSize().background(JetflixColors.Background)) {
         val (uValue, uDetail) = updateTexts(update)
         Column(Modifier.fillMaxSize().padding(start = 48.dp, end = 48.dp, top = 92.dp, bottom = 24.dp)) {
             Text("Settings", style = JetflixType.sectionTitle, color = JetflixColors.TextPrimary)
             Spacer(Modifier.height(10.dp))
-            // Two columns on a TV screen: playback and Home behavior on the left, the look of the app on the
-            // right. Down walks one column, Left/Right moves between them; the account actions stay pinned below.
             Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
+                // Category rail: moving onto a group swaps the pane, like the top menu switching tabs.
                 Column(
-                    Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                    Modifier.width(252.dp).fillMaxHeight()
+                        .background(Color(0xFF191919), RoundedCornerShape(12.dp)).padding(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
-                    Text("Updates", style = JetflixType.body, color = JetflixColors.TextSecondary)
-                    SettingRow("Check for updates", uDetail, true, onUpdateClick, Modifier.focusProperties { up = menuBack.focus }.focusRequester(first), valueText = uValue)
-                    Text("Playback", style = JetflixType.body, color = JetflixColors.TextSecondary)
-                    SettingRow("Autoplay next episode", "Starts the next episode after a 5 second countdown.", autoplay, onToggleAutoplay)
-                    SettingRow("Cast while paused", "Shows the cast along the bottom when you pause. Press Down to pick an actor and OK to see their movies on your server.", pauseCast, onTogglePauseCast)
-                    SettingRow("Skip Intro button", "Shows a Skip Intro button in the player when your Jellyfin server has marked an intro. It only skips when you press OK.", skipIntro, onToggleSkipIntro)
-                    Text("Home and discovery", style = JetflixType.body, color = JetflixColors.TextSecondary)
-                    SettingRow("Show My List on Home", "My List uses your Jellyfin favorites for this user.", showMyList, onToggleMyList)
-                    SettingRow("Show Next Up on Home", "Jellyfin's next unwatched episode of series you follow.", showNextUp, onToggleNextUp)
-                    SettingRow("Exclude animated movies from Home banner", "Hide movies tagged Animation in the Home banner only. Library rows are unchanged.", excludeHomeAnimation, onToggleExcludeHomeAnimation)
-                    SettingRow("Age rating and score on Home", "Shows the age rating and community score under the title on the Home banner.", heroRatings, onToggleHeroRatings)
-                    SettingRow("Recommended rows on Search", "Shows recommended movies and shows on the Search page before you type.", searchRecommendations, onToggleSearchRecommendations)
+                    SettingsCategory.values().forEachIndexed { index, cat ->
+                        RailItem(
+                            cat = cat,
+                            selected = cat == category,
+                            onPreview = { category = cat },
+                            onEnter = { category = cat; try { paneFirst.requestFocus() } catch (_: Exception) { } },
+                            modifier = Modifier
+                                .then(if (cat == category) Modifier.focusRequester(railFocus) else Modifier)
+                                .focusProperties {
+                                    right = paneFirst
+                                    if (index == 0) up = menuBack.focus
+                                },
+                        )
+                    }
                 }
-                Column(
-                    Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
-                ) {
-                    Text("Appearance", style = JetflixType.body, color = JetflixColors.TextSecondary)
-                    SettingRow("Poster size", "Small, Medium or Large cards on Home and in libraries. Press OK to change.", true, onCyclePosterSize, Modifier.focusProperties { up = menuBack.focus }, valueText = posterSize.label)
-                    SettingRow("Continue Watching art", "Scene images (the wide look) or posters for the Continue Watching row. Press OK to change.", true, onToggleContinueWatchingPosters, valueText = if (continueWatchingPosters) "Posters" else "Scene images")
-                    SettingRow("Title logos", "Shows a show's own title lettering on Home and Details when Jellyfin has it. Falls back to plain text.", titleLogos, onToggleTitleLogos)
-                    SettingRow("HDR and Dolby Vision tags", "Shows HDR, HDR10, HDR10+ or Dolby Vision on a movie's Details page when the file says it has them. It shows what the file contains, not what your TV is outputting.", formatBadges, onToggleFormatBadges)
-                    SettingRow("Poster wall on startup", "Shows the Driftfin poster wall while Home loads the first time. Off goes straight to the ordinary empty Home.", startupWall, onToggleStartupWall)
-                    Text("My Stuff", style = JetflixType.body, color = JetflixColors.TextSecondary)
-                    SettingRow("Watchlist", "Star movies and shows to watch later. Adds the star button on their pages and the Watchlist section under My Stuff.", showWatchlist, onToggleWatchlist)
-                    Text("Sound", style = JetflixType.body, color = JetflixColors.TextSecondary)
-                    SettingRow("Button sound", "A quiet sound when you move and when you select. Press OK to try the next one.", true, onCycleButtonSound, valueText = buttonSound.label)
-                    Text("Performance", style = JetflixType.body, color = JetflixColors.TextSecondary)
-                    SettingRow("Live blur", "On is the normal look. Off swaps the live blur for a pre-softened picture, to see whether blur is what slows scrolling. Takes effect when you open the next screen.", liveBlur, onToggleLiveBlur)
+                // The selected group's pane.
+                Column(Modifier.weight(1f).fillMaxHeight()) {
+                    Text(category.label, style = JetflixType.sectionTitle, color = JetflixColors.TextPrimary)
+                    Text(category.subtitle, style = JetflixType.caption, color = JetflixColors.TextSecondary)
+                    Spacer(Modifier.height(10.dp))
+                    Column(
+                        Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        // First control of each pane also carries Up-to-menu and the pane entry anchor.
+                        fun firstRow(): Modifier = Modifier
+                            .focusProperties { up = menuBack.focus; left = railFocus }
+                            .focusRequester(paneFirst)
+                        fun nextRow(): Modifier = Modifier.focusProperties { left = railFocus }
+                        when (category) {
+                            SettingsCategory.Updates -> {
+                                SettingRow("Check for updates", uDetail, true, onUpdateClick, firstRow(), valueText = uValue)
+                            }
+                            SettingsCategory.Playback -> {
+                                SettingRow("Autoplay next episode", "Starts the next episode after a 5 second countdown.", autoplay, onToggleAutoplay, firstRow())
+                                SettingRow("Cast while paused", "Shows the cast along the bottom when you pause. Press Down to pick an actor and OK to see their movies on your server.", pauseCast, onTogglePauseCast, nextRow())
+                                SettingRow("Episode and movie info while paused", "Shows the story summary and the Up next line when you pause. The title and player controls always stay.", pauseInfo, onTogglePauseInfo, nextRow())
+                                SettingRow("Skip Intro button", "Shows a Skip Intro button in the player when your Jellyfin server has marked an intro. It only skips when you press OK.", skipIntro, onToggleSkipIntro, nextRow())
+                            }
+                            SettingsCategory.HomeDiscovery -> {
+                                SettingRow("Show My List on Home", "My List uses your Jellyfin favorites for this user.", showMyList, onToggleMyList, firstRow())
+                                SettingRow("Show Next Up on Home", "Jellyfin's next unwatched episode of series you follow.", showNextUp, onToggleNextUp, nextRow())
+                                SettingRow("Exclude animated movies from Home banner", "Hide movies tagged Animation in the Home banner only. Library rows are unchanged.", excludeHomeAnimation, onToggleExcludeHomeAnimation, nextRow())
+                                SettingRow("Age rating and score on Home", "Shows the age rating and community score under the title on the Home banner.", heroRatings, onToggleHeroRatings, nextRow())
+                                SettingRow("Recommended rows on Search", "Shows recommended movies and shows on the Search page before you type.", searchRecommendations, onToggleSearchRecommendations, nextRow())
+                            }
+                            SettingsCategory.Appearance -> {
+                                SettingRow("Poster size", "Small, Medium or Large cards on Home and in libraries. Press OK to change.", true, onCyclePosterSize, firstRow(), valueText = posterSize.label)
+                                SettingRow("Continue Watching art", "Scene images (the wide look) or posters for the Continue Watching row. Press OK to change.", true, onToggleContinueWatchingPosters, nextRow(), valueText = if (continueWatchingPosters) "Posters" else "Scene images")
+                                SettingRow("Title logos", "Shows a show's own title lettering on Home and Details when Jellyfin has it. Falls back to plain text.", titleLogos, onToggleTitleLogos, nextRow())
+                                SettingRow("HDR and Dolby Vision tags", "Shows HDR, HDR10, HDR10+ or Dolby Vision on a movie's Details page when the file says it has them. It shows what the file contains, not what your TV is outputting.", formatBadges, onToggleFormatBadges, nextRow())
+                                SettingRow("Startup strip on launch", "Shows the logo and poster strip while Home loads the first time. Off goes straight to the ordinary empty Home.", startupWall, onToggleStartupWall, nextRow())
+                            }
+                            SettingsCategory.MyStuff -> {
+                                SettingRow("Watchlist", "Star movies and shows to watch later. Adds the star button on their pages and the Watchlist section under My Stuff.", showWatchlist, onToggleWatchlist, firstRow())
+                            }
+                            SettingsCategory.Sound -> {
+                                SettingRow("Button sound", "A quiet sound when you move and when you select. Press OK to try the next one.", true, onCycleButtonSound, firstRow(), valueText = buttonSound.label)
+                            }
+                            SettingsCategory.Performance -> {
+                                SettingRow("Live blur", "On is the normal look. Off swaps the live blur for a pre-softened picture, to see whether blur is what slows scrolling. Takes effect when you open the next screen.", liveBlur, onToggleLiveBlur, firstRow())
+                            }
+                            SettingsCategory.Account -> {
+                                Row(
+                                    Modifier.fillMaxWidth().background(JetflixColors.Surface, RoundedCornerShape(6.dp)).padding(horizontal = 20.dp, vertical = 14.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Column {
+                                        Text("Signed in as ${userName ?: "-"}", style = JetflixType.body, color = JetflixColors.TextPrimary)
+                                        Text(
+                                            if (serverUrl != null) "Server connected: $serverUrl" else "No server connected",
+                                            style = JetflixType.caption, color = JetflixColors.TextSecondary,
+                                        )
+                                    }
+                                }
+                                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                    Button(
+                                        onClick = onSignOut,
+                                        modifier = firstRow(),
+                                        shape = ButtonDefaults.shape(shape = RoundedCornerShape(6.dp)),
+                                        colors = ButtonDefaults.colors(
+                                            containerColor = JetflixColors.SurfaceLight.copy(alpha = 0.7f),
+                                            contentColor = Color.White,
+                                            focusedContainerColor = JetflixColors.Red,
+                                            focusedContentColor = Color.White,
+                                        ),
+                                    ) { Text("Switch profile") }
+                                    Button(
+                                        onClick = onForgetProfile,
+                                        shape = ButtonDefaults.shape(shape = RoundedCornerShape(6.dp)),
+                                        colors = ButtonDefaults.colors(
+                                            containerColor = JetflixColors.SurfaceLight.copy(alpha = 0.7f),
+                                            contentColor = Color.White,
+                                            focusedContainerColor = JetflixColors.Red,
+                                            focusedContentColor = Color.White,
+                                        ),
+                                    ) { Text("Sign out and forget this profile") }
+                                }
+                            }
+                        }
+                    }
+                    if (buildLabel.isNotEmpty()) {
+                        Spacer(Modifier.height(8.dp))
+                        Text(buildLabel, style = JetflixType.caption, color = JetflixColors.TextMuted)
+                    }
                 }
-            }
-            Spacer(Modifier.height(10.dp))
-            Text("Account", style = JetflixType.body, color = JetflixColors.TextSecondary)
-            Text(
-                "Signed in as ${userName ?: "-"}${if (serverUrl != null) " on $serverUrl" else ""}",
-                style = JetflixType.caption,
-                color = JetflixColors.TextSecondary,
-            )
-            Spacer(Modifier.height(8.dp))
-            // Account actions side by side: the pinned footer stays one row tall so both columns keep their room.
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Button(
-                    onClick = onSignOut,
-                    shape = ButtonDefaults.shape(shape = androidx.compose.foundation.shape.RoundedCornerShape(6.dp)),
-                    colors = ButtonDefaults.colors(
-                        containerColor = JetflixColors.SurfaceLight.copy(alpha = 0.7f),
-                        contentColor = Color.White,
-                        focusedContainerColor = JetflixColors.Red,
-                        focusedContentColor = Color.White,
-                    ),
-                ) { Text("Switch profile") }
-                Button(
-                    onClick = onForgetProfile,
-                    shape = ButtonDefaults.shape(shape = androidx.compose.foundation.shape.RoundedCornerShape(6.dp)),
-                    colors = ButtonDefaults.colors(
-                        containerColor = JetflixColors.SurfaceLight.copy(alpha = 0.7f),
-                        contentColor = Color.White,
-                        focusedContainerColor = JetflixColors.Red,
-                        focusedContentColor = Color.White,
-                    ),
-                ) { Text("Sign out and forget this profile") }
             }
         }
         TopNavBar(
             solid = true,
             selectedFocus = menuBack.focus,
-            downFocus = first,
+            downFocus = paneFirst,
             onNavFocusChange = { menuBack.navHasFocus = it },
             selected = JetflixTab.SETTINGS,
             userName = userName,
@@ -278,13 +359,132 @@ fun SettingsContent(
     }
 }
 
+/** One rail entry: icon plus label. Previews its pane on focus, enters the pane on OK. */
+@Composable
+private fun RailItem(
+    cat: SettingsCategory,
+    selected: Boolean,
+    onPreview: () -> Unit,
+    onEnter: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    var focused by remember { mutableStateOf(false) }
+    Button(
+        onClick = onEnter,
+        modifier = modifier.fillMaxWidth().onFocusChanged {
+            focused = it.isFocused
+            if (it.isFocused) onPreview()
+        },
+        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 12.dp),
+        shape = ButtonDefaults.shape(shape = RoundedCornerShape(8.dp)),
+        colors = ButtonDefaults.colors(
+            containerColor = if (selected) JetflixColors.Surface else Color.Transparent,
+            contentColor = Color.White,
+            focusedContainerColor = JetflixColors.SurfaceLight,
+            focusedContentColor = Color.White,
+        ),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                Modifier.width(3.dp).height(20.dp)
+                    .background(if (selected) JetflixColors.Red else Color.Transparent, RoundedCornerShape(2.dp)),
+            )
+            Spacer(Modifier.width(10.dp))
+            CategoryIcon(cat, tint = if (selected || focused) JetflixColors.Red else JetflixColors.TextMuted)
+            Spacer(Modifier.width(12.dp))
+            Text(cat.label, style = JetflixType.body, color = if (selected || focused) Color.White else JetflixColors.TextSecondary)
+        }
+    }
+}
+
+/** Simple line icons for the rail, drawn in the app's accent or muted gray. */
+@Composable
+private fun CategoryIcon(cat: SettingsCategory, tint: Color) {
+    androidx.compose.foundation.Canvas(Modifier.size(20.dp)) {
+        val s = size.minDimension
+        val w = s * 0.11f
+        when (cat) {
+            SettingsCategory.Updates -> {
+                drawArc(tint, 30f, 300f, false, topLeft = Offset(s * 0.14f, s * 0.14f), size = Size(s * 0.72f, s * 0.72f), style = Stroke(w))
+                val head = Path().apply {
+                    moveTo(s * 0.90f, s * 0.28f); lineTo(s * 0.70f, s * 0.26f); lineTo(s * 0.84f, s * 0.50f); close()
+                }
+                drawPath(head, tint)
+            }
+            SettingsCategory.Playback -> {
+                val p = Path().apply {
+                    moveTo(s * 0.32f, s * 0.16f); lineTo(s * 0.32f, s * 0.84f); lineTo(s * 0.82f, s * 0.50f); close()
+                }
+                drawPath(p, tint)
+            }
+            SettingsCategory.HomeDiscovery -> {
+                val roof = Path().apply {
+                    moveTo(s * 0.10f, s * 0.52f); lineTo(s * 0.50f, s * 0.14f); lineTo(s * 0.90f, s * 0.52f); close()
+                }
+                drawPath(roof, tint)
+                drawRect(tint, topLeft = Offset(s * 0.24f, s * 0.52f), size = Size(s * 0.52f, s * 0.36f))
+            }
+            SettingsCategory.Appearance -> {
+                drawCircle(tint, radius = s * 0.38f, style = Stroke(w))
+                drawCircle(tint, radius = s * 0.15f)
+            }
+            SettingsCategory.MyStuff -> {
+                val cx = s / 2f
+                val cy = s / 2f
+                val star = Path()
+                for (i in 0 until 10) {
+                    val r = if (i % 2 == 0) s * 0.46f else s * 0.19f
+                    val a = Math.toRadians((i * 36 - 90).toDouble())
+                    val x = (cx + r * cos(a)).toFloat()
+                    val y = (cy + r * sin(a)).toFloat()
+                    if (i == 0) star.moveTo(x, y) else star.lineTo(x, y)
+                }
+                star.close()
+                drawPath(star, tint)
+            }
+            SettingsCategory.Sound -> {
+                drawRect(tint, topLeft = Offset(s * 0.10f, s * 0.36f), size = Size(s * 0.18f, s * 0.28f))
+                val horn = Path().apply {
+                    moveTo(s * 0.28f, s * 0.32f); lineTo(s * 0.52f, s * 0.16f); lineTo(s * 0.52f, s * 0.84f); lineTo(s * 0.28f, s * 0.68f); close()
+                }
+                drawPath(horn, tint)
+                drawArc(tint, -55f, 110f, false, topLeft = Offset(s * 0.44f, s * 0.24f), size = Size(s * 0.46f, s * 0.52f), style = Stroke(w))
+            }
+            SettingsCategory.Performance -> {
+                drawArc(tint, 150f, 240f, false, topLeft = Offset(s * 0.12f, s * 0.16f), size = Size(s * 0.76f, s * 0.76f), style = Stroke(w))
+                drawLine(tint, Offset(s * 0.50f, s * 0.56f), Offset(s * 0.70f, s * 0.30f), strokeWidth = w)
+            }
+            SettingsCategory.Account -> {
+                drawCircle(tint, radius = s * 0.16f, center = Offset(s * 0.5f, s * 0.30f))
+                drawArc(tint, 180f, 180f, true, topLeft = Offset(s * 0.16f, s * 0.52f), size = Size(s * 0.68f, s * 0.68f))
+            }
+        }
+    }
+}
+
+/** TV toggle: red track when on, neutral track when off, white knob. */
+@Composable
+private fun SettingsSwitch(on: Boolean) {
+    Box(
+        Modifier.width(44.dp).height(24.dp)
+            .background(if (on) JetflixColors.Red else Color(0xFF444444), RoundedCornerShape(12.dp))
+            .padding(3.dp),
+    ) {
+        Box(
+            Modifier.size(18.dp)
+                .align(if (on) Alignment.CenterEnd else Alignment.CenterStart)
+                .background(Color.White, CircleShape),
+        )
+    }
+}
+
 @Composable
 internal fun SettingRow(title: String, detail: String, on: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier, valueText: String? = null) {
     Button(
         onClick = onClick,
         modifier = modifier.fillMaxWidth(),
         contentPadding = PaddingValues(horizontal = 20.dp, vertical = 10.dp),
-        shape = ButtonDefaults.shape(shape = androidx.compose.foundation.shape.RoundedCornerShape(6.dp)),
+        shape = ButtonDefaults.shape(shape = RoundedCornerShape(6.dp)),
         colors = ButtonDefaults.colors(
             containerColor = JetflixColors.Surface,
             contentColor = Color.White,
@@ -297,7 +497,13 @@ internal fun SettingRow(title: String, detail: String, on: Boolean, onClick: () 
                 Text(title, style = JetflixType.body)
                 Text(detail, style = JetflixType.caption, color = JetflixColors.TextSecondary)
             }
-            Text(valueText ?: if (on) "On" else "Off", style = JetflixType.body, color = if (on) JetflixColors.Red else JetflixColors.TextMuted)
+            if (valueText != null) {
+                Text(valueText, style = JetflixType.body, color = JetflixColors.TextSecondary)
+                Spacer(Modifier.width(6.dp))
+                Text("›", style = JetflixType.body, color = JetflixColors.TextMuted)
+            } else {
+                SettingsSwitch(on)
+            }
         }
     }
 }

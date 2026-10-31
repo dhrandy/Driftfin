@@ -5,10 +5,10 @@ import org.junit.Assert.assertNull
 import org.junit.Test
 import tv.jetflix.app.ui.details.seriesStatusLabel
 
-/** The label beside the season buttons: only the server's own status, never a guessed one. */
+/** The series status on the genre line: only the server's own status, never a guessed one. */
 class SeriesStatusTest {
-    @Test fun continuingReadsReturningSeries() {
-        assertEquals("Returning Series", seriesStatusLabel("Continuing"))
+    @Test fun continuingReadsContinuing() {
+        assertEquals("Continuing", seriesStatusLabel("Continuing"))
     }
 
     @Test fun endedReadsEnded() {

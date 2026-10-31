@@ -41,6 +41,11 @@ object AppSettings {
     val pauseCast: StateFlow<Boolean> = _pauseCast
     fun setPauseCast(v: Boolean) { _pauseCast.value = v; prefs?.edit()?.putBoolean("pause_cast", v)?.apply() }
 
+    /** Episode/movie info (summary + Up next line) on the paused player. On by default. */
+    private val _pauseInfo = MutableStateFlow(true)
+    val pauseInfo: StateFlow<Boolean> = _pauseInfo
+    fun setPauseInfo(v: Boolean) { _pauseInfo.value = v; prefs?.edit()?.putBoolean("pause_info", v)?.apply() }
+
     /** Remembered player track choice: audio language (default English) and subtitle language (null = off). */
     var audioLanguage: String
         get() = prefs?.getString("audio_language", null) ?: "eng"
@@ -116,6 +121,7 @@ object AppSettings {
         _titleLogos.value = p.getBoolean("title_logos", true)
         _formatBadges.value = p.getBoolean("format_badges", true)
         _pauseCast.value = p.getBoolean("pause_cast", true)
+        _pauseInfo.value = p.getBoolean("pause_info", true)
         _startupWall.value = p.getBoolean("startup_wall", true)
         _excludeHomeAnimation.value = p.getBoolean("exclude_home_animation", false)
         _heroRatings.value = p.getBoolean("hero_ratings", true)

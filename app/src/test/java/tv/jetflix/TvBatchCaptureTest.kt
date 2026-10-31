@@ -24,6 +24,7 @@ class TvBatchCaptureTest {
  @Test fun animationSettingFocused(){
   var enabled=false
   rule.setContent{JetflixTheme{SettingsContent(true,true,true,"Demo",null,{},{},{},{},{},excludeHomeAnimation=enabled,onToggleExcludeHomeAnimation={enabled=!enabled})}}
+  rule.onNodeWithText("Home & discovery").requestFocus();rule.waitForIdle()
   rule.onNodeWithText("Exclude animated movies from Home banner").requestFocus();rule.waitForIdle()
   rule.onRoot().performKeyInput{pressKey(Key.DirectionCenter)};rule.waitForIdle();Assert.assertTrue(enabled)
   capture("batch-animation-setting")

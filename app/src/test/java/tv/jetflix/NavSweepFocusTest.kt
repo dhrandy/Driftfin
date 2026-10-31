@@ -102,13 +102,19 @@ class NavSweepFocusTest {
         assertEquals("Back from the content returns to the Settings tab", "Settings", focusedLabel())
         press(Key.DirectionDown)
         assertTrue("Down from the bar must enter the content, was: ${focusedLabel()}", focusedLabel().contains("Check for updates"))
-        // The whole list must be reachable, including the rows that start offscreen.
+        // Every group is reachable through the rail, and the Account pane holds the sign-out actions.
+        press(Key.DirectionLeft)
+        assertTrue("Left from the pane lands on the rail, was: ${focusedLabel()}", focusedLabel().contains("Updates"))
         val seen = mutableListOf<String>()
-        repeat(20) {
+        repeat(7) {
             press(Key.DirectionDown)
             seen += focusedLabel()
         }
-        assertTrue("Down must walk every Settings row to the bottom; visited: $seen", seen.any { it.contains("Sign out and forget") })
+        assertTrue("Down must walk every rail group; visited: $seen", seen.any { it.contains("Account") })
+        press(Key.DirectionRight)
+        assertTrue("Account pane opens on Switch profile, was: ${focusedLabel()}", focusedLabel().contains("Switch profile"))
+        press(Key.DirectionRight)
+        assertTrue("Sign out reachable in the Account pane, was: ${focusedLabel()}", focusedLabel().contains("Sign out and forget"))
     }
 
     @Test fun sweepArrivalAtSearchThenOkAndDownReachTheField() {

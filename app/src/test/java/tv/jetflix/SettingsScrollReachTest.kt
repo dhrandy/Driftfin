@@ -18,7 +18,7 @@ import org.robolectric.annotation.Config
 import tv.jetflix.app.ui.settings.SettingsContent
 import tv.jetflix.app.ui.theme.JetflixTheme
 
-/** The Settings list is taller than a 540dp screen: Down must reach the last row and keep it on screen. */
+/** The rail lists the groups and each pane its rows: every control must be D-pad reachable and stay on screen. */
 @OptIn(ExperimentalTestApi::class)
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], qualifiers = "w960dp-h540dp-xhdpi")
@@ -26,43 +26,44 @@ class SettingsScrollReachTest {
     @get:Rule val rule = createAndroidComposeRule<androidx.activity.ComponentActivity>()
 
     private fun press(key: Key) { rule.onRoot().performKeyInput { pressKey(key) }; rule.waitForIdle() }
+    private fun focusedLabel(): String {
+        val n = rule.onAllNodes(isFocused()).fetchSemanticsNodes().firstOrNull() ?: return ""
+        return n.config.getOrNull(SemanticsProperties.Text)?.joinToString(",") { it.text }?.takeIf { it.isNotEmpty() }
+            ?: n.children.joinToString("|") { c -> c.config.getOrNull(SemanticsProperties.Text)?.joinToString(",") { it.text } ?: "?" }
+    }
+    private fun focusedBottom() = rule.onAllNodes(isFocused()).fetchSemanticsNodes().firstOrNull()?.boundsInRoot?.bottom ?: -1f
 
-    @Test fun downReachesSignOutAndItStaysOnScreen() {
+    @Test fun railAndPanesReachEveryControlOnScreen() {
         rule.setContent {
             JetflixTheme { SettingsContent(true, true, true, "demo", null, {}, {}, {}, {}, {}) }
         }
         rule.waitForIdle()
         // The update row is first in Settings and takes the opening focus.
-        val firstNode = rule.onAllNodes(isFocused()).fetchSemanticsNodes().firstOrNull()
-        val firstLabel = firstNode?.config?.getOrNull(SemanticsProperties.Text)?.joinToString(",") { it.text }
-            ?: firstNode?.children?.joinToString { c -> c.config.getOrNull(SemanticsProperties.Text)?.joinToString(",") { it.text } ?: "?" } ?: ""
-        assertTrue("opening focus should be on Check for updates, was: $firstLabel", firstLabel.contains("Check for updates"))
-        val seen = mutableListOf<String>()
-        var lastBottom = 0f
-        repeat(20) {
-            press(Key.DirectionDown)
-            val n = rule.onAllNodes(isFocused()).fetchSemanticsNodes().firstOrNull() ?: return@repeat
-            val label = n.config.getOrNull(SemanticsProperties.Text)?.joinToString(",") { it.text } ?: n.children.joinToString { c -> c.config.getOrNull(SemanticsProperties.Text)?.joinToString(",") { it.text } ?: "?" }
-            seen += label
-            lastBottom = n.boundsInRoot.bottom
-        }
-        // The account buttons are side by side in one pinned footer row: Down from the last settings row
-        // lands on one of them (which one is spatial-search's choice), and Left/Right moves between them.
-        assertTrue("never focused the account footer; focus visited: $seen", seen.any { it.contains("Switch profile") || it.contains("Sign out and forget") })
+        assertTrue("opening focus should be on Check for updates, was: ${focusedLabel()}", focusedLabel().contains("Check for updates"))
         val rootH = rule.onRoot().fetchSemanticsNode().boundsInRoot.height
-        assertTrue("focused row is below the visible area: bottom=$lastBottom of $rootH; visited $seen", lastBottom <= rootH + 1f)
-        // Walk to "Switch profile" if we are not there, then Right must land on Sign out.
-        var guard = 0
-        fun footerLabel(): String {
-            val n = rule.onAllNodes(isFocused()).fetchSemanticsNodes().firstOrNull() ?: return ""
-            return n.config.getOrNull(SemanticsProperties.Text)?.joinToString(",") { it.text } ?: ""
+
+        // Left enters the rail on the shown group; Down walks every group and previews its pane.
+        press(Key.DirectionLeft)
+        assertTrue("rail focused on Updates, was: ${focusedLabel()}", focusedLabel().contains("Updates"))
+        val seen = mutableListOf<String>()
+        repeat(7) {
+            press(Key.DirectionDown)
+            seen += focusedLabel()
+            assertTrue("focused rail item below the screen: $seen", focusedBottom() <= rootH + 1f)
         }
-        while (!footerLabel().contains("Switch profile") && guard++ < 2) { press(Key.DirectionLeft) }
-        assertTrue("Switch profile reachable in the footer, was: ${footerLabel()}", footerLabel().contains("Switch profile"))
+        assertTrue("Down must walk the rail to Account; visited: $seen", seen.lastOrNull()?.contains("Account") == true)
+
+        // The Account pane holds both profile actions, side by side.
         press(Key.DirectionRight)
-        val label = footerLabel()
-        assertTrue("Right from Switch profile should focus Sign out, was: $label", label.contains("Sign out and forget"))
-        val bottom = rule.onAllNodes(isFocused()).fetchSemanticsNodes().firstOrNull()!!.boundsInRoot.bottom
-        assertTrue("sign out is below the visible area: bottom=$bottom of $rootH", bottom <= rootH + 1f)
+        assertTrue("Account pane opens on Switch profile, was: ${focusedLabel()}", focusedLabel().contains("Switch profile"))
+        assertTrue("Switch profile on screen", focusedBottom() <= rootH + 1f)
+        press(Key.DirectionRight)
+        assertTrue("Right from Switch profile should focus Sign out, was: ${focusedLabel()}", focusedLabel().contains("Sign out and forget"))
+        assertTrue("Sign out on screen", focusedBottom() <= rootH + 1f)
+
+        // Left from a pane control returns to the rail on the same group.
+        press(Key.DirectionLeft)
+        press(Key.DirectionLeft)
+        assertTrue("Left returns to the rail, was: ${focusedLabel()}", focusedLabel().contains("Account"))
     }
 }

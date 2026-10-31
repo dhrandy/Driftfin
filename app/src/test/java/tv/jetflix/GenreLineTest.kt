@@ -23,4 +23,16 @@ class GenreLineTest {
 
     @Test fun missingTargetKeepsPlainGenres() =
         assertEquals("Drama · Comedy", genreLine(series, null))
+
+    @Test fun seriesStatusJoinsAfterThePremiereDate() =
+        assertEquals("Premiered May 15, 2020  ·  Ended  ·  Drama · Comedy", genreLine(series.copy(SeriesStatus = "Ended"), ep))
+
+    @Test fun continuingReadsContinuingOnTheLine() =
+        assertEquals("Premiered May 15, 2020  ·  Continuing  ·  Drama · Comedy", genreLine(series.copy(SeriesStatus = "Continuing"), ep))
+
+    @Test fun statusShowsWithoutGenresOrADate() =
+        assertEquals("Ended", genreLine(series.copy(Genres = emptyList(), SeriesStatus = "Ended"), null))
+
+    @Test fun movieNeverShowsASeriesStatus() =
+        assertEquals("Drama · Comedy", genreLine(series.copy(Type = "Movie", SeriesStatus = "Ended"), ep.copy(Type = "Movie")))
 }

@@ -36,17 +36,18 @@ class NavUpReturnTest {
     private fun move(d: FocusDirection) { rule.runOnUiThread { fm!!.moveFocus(d) }; rule.waitForIdle() }
     private val tabs = listOf("Home", "Shows", "Movies", "My Stuff", "Settings")
 
-    @Test fun settingsUpFromEitherColumnLandsOnSettingsTab() {
+    @Test fun settingsUpFromPaneAndRailLandsOnSettingsTab() {
         rule.setContent { JetflixTheme { fm = LocalFocusManager.current; SettingsContent(true, true, true, "demo", null, {}, {}, {}, {}, {}) } }
         rule.waitForIdle()
         assertTrue("opens on Check for updates: ${focused()}", focused().any { it.contains("Check for updates") })
         move(FocusDirection.Up)
-        assertEquals("left column Up", listOf("Settings"), focused().filter { it in tabs })
+        assertEquals("pane Up", listOf("Settings"), focused().filter { it in tabs })
         move(FocusDirection.Down)
-        move(FocusDirection.Right)
-        assertTrue("moved to right column: ${focused()}", focused().any { it.contains("Poster size") })
+        assertTrue("Down re-enters the pane: ${focused()}", focused().any { it.contains("Check for updates") })
+        move(FocusDirection.Left)
+        assertTrue("Left lands on the rail: ${focused()}", focused().any { it.contains("Updates") })
         move(FocusDirection.Up)
-        assertEquals("right column Up", listOf("Settings"), focused().filter { it in tabs })
+        assertEquals("rail Up", listOf("Settings"), focused().filter { it in tabs })
     }
 
     @Test fun searchUpFromFieldLeavesFieldAndNeverLandsOnAnotherTab() {

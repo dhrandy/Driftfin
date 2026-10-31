@@ -22,10 +22,12 @@ class SwitchCancelNavigationTest {
   rule.runOnIdle { AppSettings.lastSeenBuild=Int.MAX_VALUE;AppSettings.setStartupWall(false);SessionManager.signIn(Session(server.url("/").toString().trimEnd('/'),"u","Demo","fake","install")) }
   rule.waitForIdle()
   rule.onNodeWithText("Settings").requestFocus();key(Key.DirectionCenter)
+  rule.onNodeWithText("Account").requestFocus();rule.waitForIdle()
   rule.onNodeWithText("Switch profile").requestFocus();key(Key.DirectionCenter)
   rule.onNodeWithText("Sign in with Jellyfin").assertExists()
   assertEquals("fake",SessionManager.session.value?.token)
   rule.activityRule.scenario.onActivity{it.onBackPressedDispatcher.onBackPressed()};rule.waitForIdle()
+  rule.onNodeWithText("Account").requestFocus();rule.waitForIdle()
   rule.onNodeWithText("Switch profile").assertExists();rule.onNodeWithText("Sign in with Jellyfin").assertDoesNotExist()
   assertEquals("fake",SessionManager.session.value?.token)
   rule.onNodeWithText("Sign out and forget this profile").requestFocus();key(Key.DirectionCenter)

@@ -4,6 +4,13 @@ Each build lists its real changes here. The CI release workflow copies the secti
 matching the build tag onto the GitHub release page and appends the standard
 automated-build footer.
 
+## build-46
+
+Changes:
+- Settings has a new layout: a category rail on the left with a preview pane on the right, so options are easier to find and each shows what it does.
+- A series page now shows whether the show is Continuing or Ended in the details line with the premiere date and genres. One-season shows show it too.
+- Pausing shows a short summary of what you're watching and the name of the next episode, over a lightly dimmed screen that keeps the picture's color. A new "Episode and movie info while paused" setting turns this off.
+
 ## build-45
 
 Changes:
