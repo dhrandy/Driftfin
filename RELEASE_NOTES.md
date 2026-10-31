@@ -4,6 +4,12 @@ Each build lists its real changes here. The CI release workflow copies the secti
 matching the build tag onto the GitHub release page and appends the standard
 automated-build footer.
 
+## build-45
+
+Changes:
+- Posters and backdrop artwork now download as WebP instead of JPEG: about a quarter of the size in tests against a real server. Title logos are unchanged. Needs a server that can encode WebP (Jellyfin has for years; verified on server 12.4).
+- The app now lets more image downloads run at the same time, instead of capping them at five.
+
 ## build-44
 
 Changes:

@@ -46,8 +46,8 @@ class ArtworkPrefetcher(
     private val recentLimit: Int = 96,
 ) {
     companion object {
-        /** Total in-flight prefetches allowed across every screen's prefetcher. */
-        internal const val MAX_IN_FLIGHT = 8
+        /** Total in-flight prefetches allowed across every screen's prefetcher; matches the image client's per-host cap so warm-ups are not the tighter bottleneck. */
+        internal const val MAX_IN_FLIGHT = 12
         private val inFlight = AtomicInteger(0)
 
         /** In-flight prefetches right now, across all prefetchers; visible for tests. */

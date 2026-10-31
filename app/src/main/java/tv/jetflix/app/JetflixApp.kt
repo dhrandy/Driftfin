@@ -29,7 +29,11 @@ class JetflixApp : Application(), ImageLoaderFactory {
 
     /** Coil image loader that authenticates image requests with the Jellyfin token. */
     override fun newImageLoader(): ImageLoader {
+        // OkHttp's default 5-requests-per-host cap serialises poster rows: a screen of posters
+        // loads noticeably faster when more fetches run at once (measured against a live server).
+        val imageDispatcher = okhttp3.Dispatcher().apply { maxRequestsPerHost = 12 }
         val client = SessionManager.authenticatedClientBuilder()
+            .dispatcher(imageDispatcher)
             .build()
         return ImageLoader.Builder(this)
             .okHttpClient(client)

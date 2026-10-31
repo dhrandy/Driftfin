@@ -82,6 +82,25 @@ class JellyfinRepositoryTest {
         assertTrue(repo.imageUrl("i1", "Primary", 300, "t").contains("/Items/i1/Images/Primary"))
     }
 
+    @Test fun imageUrlsRequestWebp() = runTest {
+        // Artwork goes out as WebP: far smaller than the default JPEG at poster sizes.
+        repo.apiFor(base())
+        assertEquals(
+            base() + "/Items/i1/Images/Primary?maxWidth=342&tag=t&format=Webp&quality=85",
+            repo.imageUrl("i1", "Primary", 342, "t"),
+        )
+        assertEquals(
+            base() + "/Items/i1/Images/Backdrop/0?maxWidth=1280&format=Webp&quality=85",
+            repo.imageUrl("i1", "Backdrop", 1280, null, 0),
+        )
+        // Logos deliberately keep their original URL shape: they carry transparency, and a
+        // server without a WebP encoder would flatten a requested WebP to JPEG.
+        assertEquals(
+            base() + "/Items/i1/Images/Logo?maxWidth=600",
+            repo.imageUrl("i1", "Logo", 600),
+        )
+    }
+
     @Test fun itemLabels() {
         val ep = BaseItemDto(Type = "Episode", SeriesName = "Show", ParentIndexNumber = 2, IndexNumber = 5, RunTimeTicks = 36_000_000_000)
         assertEquals("Show", ep.displayTitle())
