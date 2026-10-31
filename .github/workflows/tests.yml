@@ -30,3 +30,16 @@ jobs:
 
       - name: Phone unit tests
         run: gradle --no-daemon :phone:testDebugUnitTest
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports
+          if-no-files-found: ignore
+          retention-days: 7
+          path: |
+            app/build/reports/tests/
+            app/build/test-results/
+            phone/build/reports/tests/
+            phone/build/test-results/
