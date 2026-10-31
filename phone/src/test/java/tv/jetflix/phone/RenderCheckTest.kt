@@ -6,9 +6,14 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.captureToImage
+import androidx.compose.ui.test.hasScrollToIndexAction
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.graphics.asAndroidBitmap
 import org.junit.Assert.assertTrue
@@ -71,7 +76,12 @@ class RenderCheckTest {
         assertTrue("shell is not a blank frame (${colors.size} colors)", colors.size > 3)
     }
 
-    /** A populated Home: a local fake server returns synthetic titles and generated gradient art, so the frosted bar blurs real pixels. */
+    /**
+     * A populated Home on the phone's real viewport: a local fake server returns synthetic titles and
+     * generated gradient art, so the frosted bar blurs real pixels. Continue Watching and Next Up sit
+     * below the fold, so they are scrolled into view before their artwork requests are checked; the
+     * remaining rows are scrolled through for the visual record.
+     */
     @Test fun populatedHomeWithGeneratedArt() {
         fun png(seed: Int): ByteArray {
             val b = Bitmap.createBitmap(200, 300, Bitmap.Config.ARGB_8888)
@@ -103,31 +113,51 @@ class RenderCheckTest {
         tv.jetflix.phone.Graph.rebuildImagesForTest()
         tv.jetflix.phone.Graph.signIn(tv.jetflix.phone.data.Session(server.url("/").toString().trimEnd('/'), "u1", "Tester", "tok", "dev"))
         rule.setContent { DriftfinTheme { tv.jetflix.phone.ui.DriftfinShell() } }
+        val out = File("build/render-check"); out.mkdirs()
         val decor = rule.activity.window.decorView
-        val bmp = Bitmap.createBitmap(1080, 2400, Bitmap.Config.ARGB_8888)
-        val colors = HashSet<Int>()
-        fun render(): Int {
-            rule.waitForIdle(); org.robolectric.shadows.ShadowLooper.idleMainLooper()
-            decor.measure(android.view.View.MeasureSpec.makeMeasureSpec(1080, android.view.View.MeasureSpec.EXACTLY), android.view.View.MeasureSpec.makeMeasureSpec(2400, android.view.View.MeasureSpec.EXACTLY))
-            decor.layout(0, 0, 1080, 2400)
+        fun idle() { rule.waitForIdle(); org.robolectric.shadows.ShadowLooper.idleMainLooper() }
+        fun snap(name: String): Int {
+            idle()
+            val bmp = Bitmap.createBitmap(decor.width, decor.height, Bitmap.Config.ARGB_8888)
             decor.draw(android.graphics.Canvas(bmp))
-            colors.clear()
+            File(out, name).outputStream().use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
+            val colors = HashSet<Int>()
             for (x in 0 until bmp.width step 6) for (y in 0 until bmp.height step 6) colors.add(bmp.getPixel(x, y))
             return colors.size
         }
-        // Adaptive settle: wait until the things the assertions below check are actually observable,
-        // instead of a fixed wall-clock window (slow shared runners need longer than 8s).
-        val end = System.currentTimeMillis() + 30_000
-        var colorCount = render()
-        while (System.currentTimeMillis() < end && (colorCount <= 200 || imagePaths.none { it.contains("/Items/s") && it.contains("Primary") })) {
-            Thread.sleep(250)
-            colorCount = render()
+        // Feeds load sequentially in one effect; wait until the first section below the hero exists.
+        val loadedEnd = System.currentTimeMillis() + 30_000
+        while (System.currentTimeMillis() < loadedEnd && rule.onAllNodesWithText("Recommended").fetchSemanticsNodes().isEmpty()) {
+            Thread.sleep(250); idle()
         }
-        val out = File("build/render-check"); out.mkdirs()
-        File(out, "home-populated.png").outputStream().use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
+        val colorCounts = mutableListOf(snap("home-1-top.png"))
+        // Home's LazyColumn is the one tall vertical lazy list (section rows are short horizontal ones);
+        // rows past the fold compose only once scrolled to.
+        val homeList = hasScrollToIndexAction() and SemanticsMatcher("home list") { it.boundsInRoot.height > 1000f }
+        rule.onNode(homeList).performScrollToNode(hasText("Continue Watching"))
+        colorCounts += snap("home-2-continue-watching.png")
+        rule.onNode(homeList).performScrollToNode(hasText("Next Up"))
+        colorCounts += snap("home-3-next-up.png")
+        val posterEnd = System.currentTimeMillis() + 15_000
+        while (System.currentTimeMillis() < posterEnd && imagePaths.none { it.contains("/Items/s") && it.contains("Primary") }) {
+            Thread.sleep(250); idle()
+        }
+        // Snapshot of every request issued while the only composed episode cards were Continue Watching /
+        // Next Up: rows scrolled to later cannot leak into this copy even if something prefetches.
+        val posterPhasePaths = imagePaths.toList()
+        assertTrue("Continue Watching and Next Up asked for series posters: $posterPhasePaths", posterPhasePaths.any { it.contains("/Items/s") && it.contains("Primary") })
+        // The poster rows' episode cards must use the SERIES poster at card size. The episode cards those
+        // rows composed are deterministically i2 and i4 (first two episodes in each row at this viewport),
+        // so their series primaries must show up at maxWidth=400. A poster card requests exactly one image,
+        // so this also proves no episode still took the slot; rows below (Favorites, Recently Added
+        // Episodes) legitimately request episode stills and are not attributed here.
+        val seriesCards = listOf("s2", "s4").filter { sid -> posterPhasePaths.any { it.contains("/Items/$sid/Images/Primary") && it.contains("maxWidth=400") } }
+        assertTrue("Continue Watching/Next Up episode cards used series posters at card size, not episode stills (expected s2 and s4): $posterPhasePaths", seriesCards.size == 2)
+        rule.onNode(homeList).performScrollToNode(hasText("Recently Added Movies"))
+        colorCounts += snap("home-4-movies.png")
+        rule.onNode(homeList).performScrollToNode(hasText("Recently Added Episodes"))
+        colorCounts += snap("home-5-episodes.png")
         server.shutdown()
-        assertTrue("Continue Watching and Next Up asked for series posters: $imagePaths", imagePaths.any { it.contains("/Items/s") && it.contains("Primary") })
-        assertTrue("no episode still was requested at poster-card size (the wide hero may still use one): $imagePaths", imagePaths.none { it.contains("maxWidth=400") && it.contains("tag=still") })
-        assertTrue("populated home has art (${colors.size} colors)", colors.size > 200)
+        assertTrue("populated home has art ($colorCounts colors)", colorCounts.all { it > 200 })
     }
 }

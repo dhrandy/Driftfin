@@ -1,5 +1,6 @@
 package tv.jetflix.phone.data
 
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 @Serializable
@@ -146,7 +147,7 @@ data class BaseItemDto(
     val ParentBackdropImageTags: List<String> = emptyList(),
     val ParentThumbItemId: String? = null,
     val ParentThumbImageTag: String? = null,
-    val SeriesStatus: String? = null,
+    @SerialName("Status") val SeriesStatus: String? = null,
     val UserData: UserItemDataDto? = null,
     val RemoteTrailers: List<MediaUrl> = emptyList(),
     val LocalTrailerCount: Int? = null,
