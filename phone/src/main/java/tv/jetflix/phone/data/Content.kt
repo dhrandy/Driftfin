@@ -36,14 +36,25 @@ object Content {
         }
     }
 
+    /** A library's most recently added titles for its own Home row: a movies library lists movies, a TV library lists series, anything else lists both. Same request as the TV app's library rows. */
+    suspend fun latestInLibrary(view: BaseItemDto): List<BaseItemDto> = safe(emptyList()) {
+        api.getItems(userId, parentId = view.Id,
+            includeItemTypes = when (view.CollectionType?.lowercase()) { "movies" -> "Movie"; "tvshows" -> "Series"; else -> "Movie,Series" },
+            recursive = true, sortBy = "DateCreated", sortOrder = "Descending", limit = 16).body()?.Items.orEmpty()
+    }
+
     /** The server's video libraries (Movies, Shows, Kids...) for the Browse library filter. Music, books and the like never appear. */
     suspend fun libraries(): List<BaseItemDto> = safe(emptyList()) {
         api.getUserViews(userId).body()?.Items.orEmpty().filter { isVideoLibrary(it) }
     }
 
-    /** One Recommended row mixing movies and shows, best rated first, capped at 15. */
-    suspend fun recommendedAll(): List<BaseItemDto> = safe(emptyList()) {
-        (recommended("Movie") + recommended("Series")).sortedByDescending { it.CommunityRating ?: Float.MIN_VALUE }.take(15)
+    /** Home's last row, same as the TV app: the server's similar-items list for the most recently played
+     *  movie or show, filtered to believable matches. Null when there is nothing worth showing. */
+    suspend fun moreLike(): Pair<String, List<BaseItemDto>>? = safe(null) {
+        val last = api.getItems(userId, includeItemTypes = "Movie,Series", recursive = true, sortBy = "DatePlayed", sortOrder = "Descending",
+            limit = 1, filters = "IsPlayed", fields = "Genres").body()?.Items.orEmpty().firstOrNull() ?: return@safe null
+        val sim = RelatedItems.filter(last, api.getSimilar(last.Id, userId, limit = 24).body()?.Items.orEmpty()).take(16)
+        if (sim.isEmpty()) null else ("More like ${last.Name}" to sim)
     }
 
     suspend fun search(term: String): List<BaseItemDto> = safe(emptyList()) {

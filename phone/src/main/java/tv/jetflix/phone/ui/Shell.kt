@@ -106,7 +106,7 @@ fun DriftfinShell() {
     ) { inner ->
         Box(Modifier.fillMaxSize().padding(bottom = inner.calculateBottomPadding())) {
             NavHost(nav, startDestination = Routes.Home) {
-                composable(Routes.Home) { HomeScreen(onOpen = { nav.navigate(Routes.details(it.Id)) }, onOpenLibrary = { lib -> nav.navigate(Routes.library(lib.Id, lib.Name.orEmpty())) }, onTrailer = { t ->
+                composable(Routes.Home) { HomeScreen(onOpen = { nav.navigate(Routes.details(it.Id)) }, onTrailer = { t ->
                     when (t) {
                         is tv.jetflix.phone.data.TrailerSource.Local -> nav.navigate(Routes.player(t.item.Id))
                         is tv.jetflix.phone.data.TrailerSource.YouTube -> nav.navigate(Routes.trailer(t.videoId, t.title))

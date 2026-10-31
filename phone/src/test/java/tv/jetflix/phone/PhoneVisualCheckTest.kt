@@ -4,6 +4,7 @@ import android.graphics.Bitmap
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performScrollTo
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -74,8 +75,8 @@ class PhoneVisualCheckTest {
         val updatesTop = rule.onNodeWithText("Check for updates").fetchSemanticsNode().boundsInRoot.top
         val autoplayTop = rule.onNodeWithText("Autoplay next episode").fetchSemanticsNode().boundsInRoot.top
         assertTrue("Check for updates is above the preferences", updatesTop < autoplayTop)
-        rule.onNodeWithText("Who's watching?").assertIsDisplayed()
-        rule.onNodeWithText("Ava").assertIsDisplayed()
+        rule.onNodeWithText("Who's watching?").performScrollTo().assertIsDisplayed()
+        rule.onNodeWithText("Ava").performScrollTo().assertIsDisplayed()
         capture("settings-profiles.png")
         Graph.signOut()
     }

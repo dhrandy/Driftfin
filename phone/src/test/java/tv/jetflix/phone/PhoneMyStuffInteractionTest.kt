@@ -81,7 +81,13 @@ class PhoneMyStuffInteractionTest {
         rule.onNodeWithText("Favorites").assertIsDisplayed()
         rule.onNodeWithText("Watchlist").assertIsDisplayed()
         rule.onNodeWithText("Collections").assertIsDisplayed()
-        rule.waitUntil(30_000) { rule.onAllNodes(cover).fetchSemanticsNodes().size >= 2 }
+        // Wall-clock wait with the paused main looper pumped each pass: Compose-clock waitUntil can
+        // starve under a loaded CI runner while the network fetch is in flight. Same 30s budget.
+        val coverDeadline = System.currentTimeMillis() + 30_000
+        while (System.currentTimeMillis() < coverDeadline && rule.onAllNodes(cover).fetchSemanticsNodes().size < 2) {
+            rule.waitForIdle(); org.robolectric.shadows.ShadowLooper.idleMainLooper(); Thread.sleep(80)
+        }
+        assertTrue("favorite covers did not render within 30s", rule.onAllNodes(cover).fetchSemanticsNodes().size >= 2)
         val end = System.currentTimeMillis() + 5000
         while (System.currentTimeMillis() < end) { rule.waitForIdle(); org.robolectric.shadows.ShadowLooper.idleMainLooper(); Thread.sleep(60) }
 

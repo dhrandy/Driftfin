@@ -3,6 +3,13 @@
 The phone app has its own release line: `phone-build-N` prereleases, separate from the TV app's
 `build-N` releases. The phone's Check for updates reads these; the TV app never sees them.
 
+## phone-build-5
+
+Changes:
+- Home now matches the TV app: Continue Watching, Next Up, Recently Added Movies and Recently Added Episodes (each combining all your matching libraries), Favorites, then a More like row based on what you last watched.
+- The Libraries card row and the separate per-library rows are gone - the combined Recently Added rows already cover every library, and the full libraries are always in the Shows and Movies tabs.
+- Profiles still see only the libraries and titles they can access.
+
 ## phone-build-4
 
 Changes:

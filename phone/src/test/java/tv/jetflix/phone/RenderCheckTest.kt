@@ -14,6 +14,8 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performScrollToNode
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipe
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.graphics.asAndroidBitmap
 import org.junit.Assert.assertTrue
@@ -93,6 +95,9 @@ class RenderCheckTest {
         }
         fun item(n: Int) = if (n % 2 == 0) """{"Id":"i$n","Name":"Synthetic Episode $n","Type":"Episode","SeriesId":"s$n","SeriesName":"Synthetic Show $n","SeriesPrimaryImageTag":"st","ImageTags":{"Primary":"still"},"UserData":{"Played":false,"PlayedPercentage":${if (n % 3 == 0) 45.0 else 0.0}}}""" else """{"Id":"i$n","Name":"Synthetic Title $n","Type":"Movie","ImageTags":{"Primary":"t"},"BackdropImageTags":["b"],"UserData":{"Played":${n % 4 == 0},"PlayedPercentage":${if (n % 3 == 0) 45.0 else 0.0}}}"""
         val items = (1..14).joinToString(",") { item(it) }
+        // The More-like row's fixture: one played drama and four same-genre matches (below four, the row hides).
+        val playedLast = """{"Items":[{"Id":"i60","Name":"Synthetic Drama","Type":"Movie","Genres":["Drama"],"ImageTags":{"Primary":"t"},"BackdropImageTags":["b"],"UserData":{"Played":true}}],"TotalRecordCount":1,"StartIndex":0}"""
+        val similarItems = """{"Items":[${(50..53).joinToString(",") { n -> """{"Id":"i$n","Name":"Synthetic Similar $n","Type":"Movie","Genres":["Drama"],"ImageTags":{"Primary":"t"},"UserData":{"Played":false}}""" }}],"TotalRecordCount":4,"StartIndex":0}"""
         val server = okhttp3.mockwebserver.MockWebServer()
         val imagePaths = java.util.Collections.synchronizedList(mutableListOf<String>())
         server.dispatcher = object : okhttp3.mockwebserver.Dispatcher() {
@@ -102,6 +107,10 @@ class RenderCheckTest {
                 return when {
                     path.contains("/Images/") -> okhttp3.mockwebserver.MockResponse().setHeader("Content-Type", "image/png")
                         .setBody(okio.Buffer().write(png((Regex("/Items/[is](\\d+)/").find(path)?.groupValues?.get(1)?.toInt() ?: 1) + (if (path.contains("/Items/s")) 5 else 0))))
+                    // Four video libraries exist; Home shows no per-library rows, so no parentId branch is needed.
+                    path.contains("/UserViews") -> okhttp3.mockwebserver.MockResponse().setHeader("Content-Type", "application/json").setBody("""{"Items":[{"Id":"libS","Name":"TV Shows","CollectionType":"tvshows"},{"Id":"libKS","Name":"Kids TV Shows","CollectionType":"tvshows"},{"Id":"libM","Name":"Movies","CollectionType":"movies"},{"Id":"libK","Name":"Kids Movies","CollectionType":"movies"}],"TotalRecordCount":4}""")
+                    path.contains("/Similar") -> okhttp3.mockwebserver.MockResponse().setHeader("Content-Type", "application/json").setBody(similarItems)
+                    path.contains("filters=IsPlayed") -> okhttp3.mockwebserver.MockResponse().setHeader("Content-Type", "application/json").setBody(playedLast)
                     path.contains("Latest") -> okhttp3.mockwebserver.MockResponse().setHeader("Content-Type", "application/json").setBody("[$items]")
                     else -> okhttp3.mockwebserver.MockResponse().setHeader("Content-Type", "application/json").setBody("""{"Items":[$items],"TotalRecordCount":14,"StartIndex":0}""")
                 }
@@ -127,7 +136,7 @@ class RenderCheckTest {
         }
         // Feeds load sequentially in one effect; wait until the first section below the hero exists.
         val loadedEnd = System.currentTimeMillis() + 30_000
-        while (System.currentTimeMillis() < loadedEnd && rule.onAllNodesWithText("Recommended").fetchSemanticsNodes().isEmpty()) {
+        while (System.currentTimeMillis() < loadedEnd && rule.onAllNodesWithText("Continue Watching").fetchSemanticsNodes().isEmpty()) {
             Thread.sleep(250); idle()
         }
         val colorCounts = mutableListOf(snap("home-1-top.png"))
@@ -157,6 +166,17 @@ class RenderCheckTest {
         colorCounts += snap("home-4-movies.png")
         rule.onNode(homeList).performScrollToNode(hasText("Recently Added Episodes"))
         colorCounts += snap("home-5-episodes.png")
+        // Favorites sits below the combined Recently Added rows, and More like <last watched> is the
+        // last row - the TV app's composition. No per-library rows exist to capture.
+        rule.onNode(homeList).performScrollToNode(hasText("Favorites"))
+        colorCounts += snap("home-6-favorites.png")
+        // performScrollToNode lands the last row's heading just above the nav bar; a short natural
+        // swipe brings the More-like row's cards into view for the capture.
+        rule.onNode(homeList).performScrollToNode(hasText("More like Synthetic Drama"))
+        rule.onNode(homeList).performTouchInput {
+            swipe(androidx.compose.ui.geometry.Offset(600f, 2000f), androidx.compose.ui.geometry.Offset(600f, 1200f), 300)
+        }
+        colorCounts += snap("home-7-more-like.png")
         server.shutdown()
         assertTrue("populated home has art ($colorCounts colors)", colorCounts.all { it > 200 })
     }
