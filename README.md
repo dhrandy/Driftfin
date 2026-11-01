@@ -8,6 +8,8 @@
 
 An Android TV client for your own Jellyfin server, with a TV-first layout (home rows, hero banner, My List, details, search, player). Not affiliated with Jellyfin.
 
+Free to use, not free to fork. Download the APK and use it, file bugs, but please don't publish offshoots. I want to keep one focused build.
+
 **Status: alpha.** Expect rough edges and bugs. It is unit-tested and snapshot-tested, and it has had hands-on use on one Android TV, but that is not broad device coverage. Playback, HLS transcodes, subtitle loading, remote-control focus and scrolling smoothness are still being checked on real hardware, and known issues are open. Do not rely on it as your only way to watch.
 
 ## Screenshots
@@ -92,6 +94,6 @@ The workflow in `.github/workflows/android.yml` builds a signed release APK from
 
 ## License
 
-Copyright (c) 2026 dhrandy. All rights reserved. Driftfin's own code and original assets are proprietary for builds published after build 24; no open-source license is granted for them. Build 24 and earlier were published under MIT, and that grant is unchanged for those builds. Third-party libraries and artwork are not covered and keep their own terms; see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Driftfin is an independent project, not affiliated with Jellyfin.
+Driftfin is free for personal use: download the official APKs and use them, and view, clone or build the source for personal use and testing. Contributions are welcome (see [CONTRIBUTING.md](CONTRIBUTING.md)). You may not redistribute builds, publish modified or renamed versions, or use Driftfin source or binaries in another project without written permission, and the Driftfin name and logo may not brand another build or product. Build 24 and earlier were published under MIT; anyone who received them keeps their MIT rights to that material, including MIT-licensed material carried forward into later builds (the full MIT text is in the LICENSE appendix). See [LICENSE](LICENSE). Third-party libraries and artwork are not covered and keep their own terms; see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Driftfin is an independent project, not affiliated with Jellyfin.
 
 Movie and TV show posters belong to their respective copyright owners. Driftfin does not claim ownership of that artwork.
