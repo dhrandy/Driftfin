@@ -82,6 +82,11 @@ object AppSettings {
 
 
     /** Recommended movie and show rows on the Search page before anything is typed. On by default. */
+    private val _homeAutoRefresh = MutableStateFlow(true)
+    /** Home re-reads Continue Watching and Next Up on its own (on return to the app and about once a minute). On by default. */
+    val homeAutoRefresh: StateFlow<Boolean> = _homeAutoRefresh
+    fun setHomeAutoRefresh(v: Boolean) { _homeAutoRefresh.value = v; prefs?.edit()?.putBoolean("home_auto_refresh", v)?.apply() }
+
     private val _searchRecommendations = MutableStateFlow(true)
     val searchRecommendations: StateFlow<Boolean> = _searchRecommendations
     fun setSearchRecommendations(v: Boolean) { _searchRecommendations.value = v; prefs?.edit()?.putBoolean("search_recommendations", v)?.apply() }
@@ -196,6 +201,7 @@ object AppSettings {
         _excludeHomeAnimation.value = p.getBoolean("exclude_home_animation", false)
         _heroRatings.value = p.getBoolean("hero_ratings", true)
         _searchRecommendations.value = p.getBoolean("search_recommendations", true)
+        _homeAutoRefresh.value = p.getBoolean("home_auto_refresh", true)
         loadAvatars(p)
         _buttonSound.value = tv.jetflix.app.ui.components.ButtonSound.values().firstOrNull { it.name == p.getString("button_sound", null) } ?: tv.jetflix.app.ui.components.ButtonSound.Off
         tv.jetflix.app.ui.components.ButtonSounds.style = _buttonSound.value

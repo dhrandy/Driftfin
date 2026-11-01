@@ -5,8 +5,10 @@ line, so phone work never prompts, renumbers, or rebuilds the TV app's releases.
 
 ## Release scheme
 
-- TV: `build-N` releases from `.github/workflows/android.yml`, asset `jetflix-release.apk`.
-  `releases/latest` always points at one of these, and the TV updater requires it to.
+- TV: `build-N` releases from `.github/workflows/android.yml`, asset `driftfin-release.apk` - plus
+  the legacy `jetflix-release.apk` name during the rename transition, because TVs on build 50 or
+  older require that exact asset name. The TV updater prefers the current name and accepts the
+  legacy one. `releases/latest` always points at a TV release, and the TV updater requires it to.
 - Phone: `phone-build-N` **prereleases** from `.github/workflows/phone.yml`, asset
   `driftfin-phone-release.apk` (+ `.sha256`). Prerelease status keeps them out of
   `releases/latest`, which is load-bearing: the TV updater reads only that endpoint.

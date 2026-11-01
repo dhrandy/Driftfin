@@ -50,6 +50,35 @@ class UpdaterTest {
         enqueueRelease(); assertEquals(CheckResult.UpToDate(25), updater().check(25))
     }
 
+    private fun releaseWithAssets(tag: String = "build-20", vararg names: String): String {
+        val assets = names.joinToString(",") { """{"name":"$it","browser_download_url":"${base()}$tag/$it","size":10}""" }
+        return """{"tag_name":"$tag","assets":[$assets]}"""
+    }
+
+    @Test fun renamedAssetIsAccepted() {
+        enqueueRelease(releaseWithAssets("build-20", "driftfin-release.apk", "driftfin-release.apk.sha256"))
+        val r = updater().check(1)
+        assertTrue(r is CheckResult.Available)
+        assertEquals("driftfin-release.apk", (r as CheckResult.Available).info.apk.name)
+        assertEquals("driftfin-release.apk.sha256", (r as CheckResult.Available).info.sha?.name)
+    }
+
+    @Test fun bothAssetNamesPrefersTheCurrentName() {
+        enqueueRelease(releaseWithAssets("build-20",
+            "jetflix-release.apk", "jetflix-release.apk.sha256", "driftfin-release.apk", "driftfin-release.apk.sha256"))
+        val r = updater().check(1) as CheckResult.Available
+        assertEquals("driftfin-release.apk", r.info.apk.name)
+        assertEquals("driftfin-release.apk.sha256", r.info.sha?.name)
+    }
+
+    @Test fun legacyAssetNameAloneIsStillAccepted() {
+        // Releases published before the rename only carry the old name; installs must keep updating from them.
+        enqueueRelease(releaseWithAssets("build-20", "jetflix-release.apk", "jetflix-release.apk.sha256"))
+        val r = updater().check(1) as CheckResult.Available
+        assertEquals("jetflix-release.apk", r.info.apk.name)
+        assertEquals("jetflix-release.apk.sha256", r.info.sha?.name)
+    }
+
     @Test fun oddTagsAndOffSiteAssetsAreRejected() {
         enqueueRelease(release(tag = "v2.0")); assertTrue(updater().check(1) is CheckResult.Failed)
         enqueueRelease(release(tag = "build-99999999999")); assertTrue(updater().check(1) is CheckResult.Failed)

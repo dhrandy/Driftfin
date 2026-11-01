@@ -487,11 +487,13 @@ fun DetailsContent(
                             Button(
                                 onClick = { onPlay(target) },
                                 modifier = Modifier.focusRequester(playFocus),
+                                // Primary action stays the white pill with dark content while focused
+                                // too; the white outline ring is the focus cue.
                                 colors = ButtonDefaults.colors(
                                     containerColor = Color.White,
                                     contentColor = Color.Black,
-                                    focusedContainerColor = JetflixColors.SurfaceLight.copy(alpha = 0.7f),
-                                    focusedContentColor = Color.White,
+                                    focusedContainerColor = Color.White,
+                                    focusedContentColor = Color.Black,
                                 ),
                                 border = buttonFocusOutline(RoundedCornerShape(percent = 50)),
                             ) {

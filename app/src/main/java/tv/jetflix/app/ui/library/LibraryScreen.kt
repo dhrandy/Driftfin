@@ -460,10 +460,12 @@ fun LibraryContent(
     var picker by remember { androidx.compose.runtime.mutableStateOf<String?>(null) }
     if (picker == "sort") {
         val ascending = (state.sort.order == "Ascending") != state.reversed
+        // 3 columns fit the longest label at normal text scale; OptionPicker widens the cells
+        // itself when the TV's text/display scale is up.
         OptionPicker(
             "Sort by",
             LibrarySort.values().map { it.label to "sort:${it.name}" } + listOf("Ascending" to "order:asc", "Descending" to "order:desc"),
-            "sort:${state.sort.name}", { picker = null }, allLabel = null,
+            "sort:${state.sort.name}", { picker = null }, allLabel = null, columns = 3,
         ) { v ->
             when {
                 v == null -> {}
@@ -742,13 +744,24 @@ fun <T> OptionPicker(title: String, options: List<Pair<String, T>>, selected: T?
         ) {
             Text(title, style = JetflixType.sectionTitle, color = androidx.compose.ui.graphics.Color.White)
             if (options.isEmpty()) Text("The server returned no ${title.lowercase()} values.", style = JetflixType.body, color = JetflixColors.TextSecondary)
+            val all: List<Pair<String, T?>> = (if (allLabel != null) listOf<Pair<String, T?>>(allLabel to null) else emptyList()) + options
+            // Larger TV text/display scale needs wider cells or option labels clip: halve the columns
+            // (at least two) so every label still renders in full; ellipsis stays the last resort.
+            // Density alone does not change the layout - only the text scale does.
+            val effectiveColumns = if (androidx.compose.ui.platform.LocalConfiguration.current.fontScale > 1.3f)
+                (columns / 2).coerceAtLeast(2) else columns
+            // Fit the grid to its content: short pickers (Sort by, Show, Filter) no longer sit over a
+            // large empty block; long lists (Genre, Year) still cap and scroll. The content padding
+            // gives the focused option's white outline room at the top and bottom edges.
+            val rows = (all.size + effectiveColumns - 1) / effectiveColumns
+            val gridHeight = (rows * 60 + (rows - 1) * 8 + 12).dp.coerceAtMost(if (allLabel == null) 300.dp else 320.dp)
             androidx.compose.foundation.lazy.grid.LazyVerticalGrid(
-                columns = androidx.compose.foundation.lazy.grid.GridCells.Fixed(columns),
-                modifier = Modifier.height(if (allLabel == null) 220.dp else 320.dp),
+                columns = androidx.compose.foundation.lazy.grid.GridCells.Fixed(effectiveColumns),
+                modifier = Modifier.height(gridHeight),
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(vertical = 6.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                val all: List<Pair<String, T?>> = (if (allLabel != null) listOf<Pair<String, T?>>(allLabel to null) else emptyList()) + options
                 items(all.size) { i ->
                     val (label, value) = all[i]
                     val isSel = value == selected
@@ -762,7 +775,7 @@ fun <T> OptionPicker(title: String, options: List<Pair<String, T>>, selected: T?
                             focusedContentColor = Color.White,
                         ),
                         border = buttonFocusOutline(RoundedCornerShape(percent = 50)),
-                    ) { Text(label, style = JetflixType.body, maxLines = 1) }
+                    ) { Text(label, style = JetflixType.body, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis) }
                 }
             }
         }

@@ -289,6 +289,10 @@ fun JetflixRoot() {
             val vm: HomeViewModel = viewModel(key = "home-${session?.userId}", factory = viewModelFactory { HomeViewModel(app.repo) })
             val excludeAnimation by tv.jetflix.app.data.AppSettings.excludeHomeAnimation.collectAsState()
             LaunchedEffect(excludeAnimation) { vm.load() }
+            tv.jetflix.app.ui.home.HomeAutoRefresh(
+                enabled = tv.jetflix.app.data.AppSettings.homeAutoRefresh.collectAsState().value,
+                refresh = vm::refreshContinueWatching,
+            )
             HomeScreen(
                 viewModel = vm,
                 userName = userName,

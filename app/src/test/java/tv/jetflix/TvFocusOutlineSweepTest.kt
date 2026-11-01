@@ -31,9 +31,12 @@ import tv.jetflix.app.ui.library.LibraryUiState
 import tv.jetflix.app.ui.theme.JetflixTheme
 import tv.jetflix.app.update.WhatsNewCard
 
-/** The build-50 white-outline-on-focus rule beyond Details: home hero Play, a top-nav tab,
- *  a library chip, and the What's new OK button all show the WHITE OUTLINE on a DARK fill when
- *  focused - actual pixels (the v1 constant-only check passed while focused Play was a white block). */
+/** The build-50 white-outline-on-focus rule beyond Details: a non-selected top-nav tab, a library
+ *  chip, and the What's new OK button all show the WHITE OUTLINE on a DARK fill when focused -
+ *  actual pixels (the v1 constant-only check passed while focused Play was a white block).
+ *  On top of that rule: the PRIMARY white actions (hero Play, details Play/Resume)
+ *  and the selected top-nav tab KEEP the white pill with dark text while focused; the outline ring
+ *  carries the focus cue there. */
 @OptIn(ExperimentalTestApi::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @RunWith(RobolectricTestRunner::class)
@@ -83,6 +86,22 @@ class TvFocusOutlineSweepTest {
     }
 
 
+    /** The primary Play/Resume buttons and the selected top-nav tab must KEEP the
+     *  white pill with dark text while focused; the white outline ring
+     *  outside the pill is the focus cue. Fill bright at both flanks, dark glyphs in the text band. */
+    private fun assertWhitePill(tag: String, node: androidx.compose.ui.test.SemanticsNodeInteraction) {
+        val b = node.fetchSemanticsNode().boundsInRoot
+        val cy = ((b.top + b.bottom) / 2).toInt()
+        for (frac in listOf(0.10f, 0.90f)) {
+            val px = pixelAt((b.left + (b.right - b.left) * frac).toInt(), cy)
+            val r = android.graphics.Color.red(px); val g = android.graphics.Color.green(px); val bl = android.graphics.Color.blue(px)
+            assertTrue("$tag keeps the white fill when focused at ${(frac * 100).toInt()}% width (was rgb($r,$g,$bl))", r > 200 && g > 200 && bl > 200)
+        }
+        val dark = (0..40).map { pixelAt((b.left + (b.right - b.left) * (0.3f + it * 0.01f)).toInt(), cy) }
+            .count { android.graphics.Color.red(it) < 120 && android.graphics.Color.green(it) < 120 && android.graphics.Color.blue(it) < 120 }
+        assertTrue("$tag keeps dark text when focused ($dark dark pixels across the text band)", dark > 0)
+    }
+
     /** Decisive render for CI inspection (uploaded with the test reports), written BEFORE the
      *  assertions so the capture exists even when a check fails. */
     private fun writeQaCapture(name: String) {
@@ -96,7 +115,9 @@ class TvFocusOutlineSweepTest {
         assertTrue("$name is not a blank frame (${colors.size} colors)", colors.size > 3)
     }
 
-    @Test fun homeHeroPlayFocusedShowsWhiteOutlineOnDarkFill() {
+    /** The hero Play button is a primary action: it keeps the white pill + dark text when focused;
+     *  the outline ring is the focus cue. */
+    @Test fun homeHeroPlayFocusedKeepsWhitePill() {
         rule.setContent {
             JetflixTheme {
                 HomeContent(
@@ -111,7 +132,31 @@ class TvFocusOutlineSweepTest {
         play.requestFocus(); rule.waitForIdle()
         play.assertIsFocused()
         writeQaCapture("home-hero-play-focus.png")
-        assertFocusOutline("Home hero Play", play)
+        assertWhitePill("Home hero Play", play)
+    }
+
+    /** The details-page primary button must stay the white pill + dark text when focused.
+     *  Secondary actions
+     *  (Play from start, trailer, watched, watchlist) keep the outlined dark focus look. */
+    @Test fun detailsResumeFocusedKeepsWhitePill() {
+        val series = items.first().copy(Id = "serp", Type = "Series", Name = "Marshals")
+        val resumeEp = items[1].copy(Id = "ep1", Type = "Episode", Name = "Piya Wiconi", SeriesId = "serp",
+            SeriesName = "Marshals", ParentIndexNumber = 1, IndexNumber = 3,
+            UserData = tv.jetflix.app.data.UserItemDataDto(PlaybackPositionTicks = 123L * 10_000_000))
+        rule.setContent {
+            JetflixTheme {
+                tv.jetflix.app.ui.details.DetailsContent(
+                    tv.jetflix.app.ui.details.DetailsUiState(loading = false, item = series, playTarget = resumeEp),
+                    repo, {}, { _, _ -> }, {}, {}, {},
+                )
+            }
+        }
+        rule.waitForIdle(); rule.mainClock.advanceTimeBy(1500); rule.waitForIdle()
+        val play = rule.onNodeWithText("Resume S1:E3")
+        play.requestFocus(); rule.waitForIdle()
+        play.assertIsFocused()
+        writeQaCapture("details-resume-focus.png")
+        assertWhitePill("Details Resume S1:E3", play)
     }
 
     @Test fun topNavTabFocusedShowsWhiteOutlineOnDarkFill() {
@@ -130,6 +175,36 @@ class TvFocusOutlineSweepTest {
         tab.assertIsFocused()
         writeQaCapture("topnav-movies-tab-focus.png")
         assertFocusOutline("Top-nav Movies tab", tab)
+    }
+
+    /** The selected page's tab must STAY the white pill when it holds focus - the white outline
+     *  ring outside it is the focus cue. Non-selected focused tabs keep the dark fill (see the
+     *  Movies-tab case above). */
+    @Test fun topNavSelectedTabFocusedKeepsWhitePill() {
+        rule.setContent {
+            JetflixTheme {
+                HomeContent(
+                    HomeUiState(loading = false, hero = items.first(), heroes = emptyList(),
+                        sections = listOf(HomeSection("Continue Watching", items.drop(1).take(8), wide = true))),
+                    repo, "demo", {}, {}, {}, {},
+                )
+            }
+        }
+        rule.waitForIdle(); rule.mainClock.advanceTimeBy(1500); rule.waitForIdle()
+        val tab = rule.onNodeWithText("Home")
+        tab.requestFocus(); rule.waitForIdle()
+        tab.assertIsFocused()
+        writeQaCapture("topnav-selected-home-tab-focus.png")
+        val b = tab.fetchSemanticsNode().boundsInRoot
+        val cy = ((b.top + b.bottom) / 2).toInt()
+        for (frac in listOf(0.10f, 0.90f)) {
+            val px = pixelAt((b.left + (b.right - b.left) * frac).toInt(), cy)
+            val r = android.graphics.Color.red(px); val g = android.graphics.Color.green(px); val bl = android.graphics.Color.blue(px)
+            assertTrue("Selected Home tab keeps the white pill when focused at ${(frac * 100).toInt()}% width (was rgb($r,$g,$bl))", r > 200 && g > 200 && bl > 200)
+        }
+        val dark = (0..40).map { pixelAt((b.left + (b.right - b.left) * (0.3f + it * 0.01f)).toInt(), cy) }
+            .count { android.graphics.Color.red(it) < 120 && android.graphics.Color.green(it) < 120 && android.graphics.Color.blue(it) < 120 }
+        assertTrue("Selected Home tab keeps dark text when focused ($dark dark pixels across the text band)", dark > 0)
     }
 
     @Test fun libraryChipFocusedShowsWhiteOutlineOnDarkFill() {

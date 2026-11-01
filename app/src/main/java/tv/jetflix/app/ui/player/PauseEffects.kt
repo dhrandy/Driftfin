@@ -18,8 +18,12 @@ object PauseEffects {
     /** What the player should do for the given toggles on the given device. */
     data class State(val textureSurface: Boolean, val grayscale: Boolean, val blurRadius: Float)
 
+    /** Both effects are RenderEffect-based, so both need Android 12 (API 31) and a TextureView.
+     *  Same threshold for grayscale and blur - there is no lower-API grayscale path. */
+    fun supported(sdkInt: Int): Boolean = sdkInt >= Build.VERSION_CODES.S
+
     fun state(bwOn: Boolean, blurOn: Boolean, sdkInt: Int): State {
-        val supported = sdkInt >= Build.VERSION_CODES.S
+        val supported = supported(sdkInt)
         return State(
             textureSurface = supported && (bwOn || blurOn),
             grayscale = supported && bwOn,

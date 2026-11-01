@@ -41,6 +41,10 @@ object PhoneSettings {
     /** The Next Up row on Home. */
     val showNextUp: StateFlow<Boolean> = _showNextUp
 
+    private val _homeAutoRefresh = MutableStateFlow(true)
+    /** Home re-reads Continue Watching and Next Up on its own (on return to the app and about once a minute). */
+    val homeAutoRefresh: StateFlow<Boolean> = _homeAutoRefresh
+
     private val _showFavorites = MutableStateFlow(true)
     /** The Favorites row on Home. */
     val showFavorites: StateFlow<Boolean> = _showFavorites
@@ -59,6 +63,7 @@ object PhoneSettings {
         _excludeHomeAnimation.value = p.getBoolean("exclude_home_animation", false)
         _showNextUp.value = p.getBoolean("show_next_up", true)
         _showFavorites.value = p.getBoolean("show_favorites", true)
+        _homeAutoRefresh.value = p.getBoolean("home_auto_refresh", true)
         _titleLogos.value = p.getBoolean("title_logos", true)
         _lastSeenBuild.value = p.getInt("last_seen_build", 0)
     }
@@ -71,5 +76,6 @@ object PhoneSettings {
     fun setHeroRatings(v: Boolean) { _heroRatings.value = v; prefs?.edit()?.putBoolean("hero_ratings", v)?.apply() }
     fun setExcludeHomeAnimation(v: Boolean) { _excludeHomeAnimation.value = v; prefs?.edit()?.putBoolean("exclude_home_animation", v)?.apply() }
     fun setShowNextUp(v: Boolean) { _showNextUp.value = v; prefs?.edit()?.putBoolean("show_next_up", v)?.apply() }
+    fun setHomeAutoRefresh(v: Boolean) { _homeAutoRefresh.value = v; prefs?.edit()?.putBoolean("home_auto_refresh", v)?.apply() }
     fun setShowFavorites(v: Boolean) { _showFavorites.value = v; prefs?.edit()?.putBoolean("show_favorites", v)?.apply() }
 }

@@ -132,6 +132,14 @@ fun SettingsScreen() {
             }
             androidx.compose.material3.Switch(checked = nextUp, onCheckedChange = { tv.jetflix.phone.data.PhoneSettings.setShowNextUp(it) })
         }
+        val autoRefresh by tv.jetflix.phone.data.PhoneSettings.homeAutoRefresh.collectAsState()
+        androidx.compose.foundation.layout.Row(Modifier.fillMaxWidth().heightIn(min = 52.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("Keep Continue Watching up to date", fontSize = 16.sp)
+                Text("Refresh Continue Watching and Next Up while Home is open (about once a minute) and when you come back to the app. Off: they update only when you open Home.", fontSize = 14.sp, color = DriftfinColors.TextSecondary)
+            }
+            androidx.compose.material3.Switch(checked = autoRefresh, onCheckedChange = { tv.jetflix.phone.data.PhoneSettings.setHomeAutoRefresh(it) })
+        }
         val favorites by tv.jetflix.phone.data.PhoneSettings.showFavorites.collectAsState()
         androidx.compose.foundation.layout.Row(Modifier.fillMaxWidth().heightIn(min = 52.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {

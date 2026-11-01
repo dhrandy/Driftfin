@@ -13,6 +13,10 @@ object Content {
     suspend fun localTrailers(itemId: String): List<BaseItemDto> = safe(emptyList()) { api.getLocalTrailers(itemId, userId).body().orEmpty() }
 
     suspend fun resume(): List<BaseItemDto> = safe(emptyList()) { api.getResumeItems(userId).body()?.Items.orEmpty() }
+    /** Like [resume] but null when the request failed, so a quiet refresh can keep the row instead of blanking it. */
+    suspend fun resumeOrNull(): List<BaseItemDto>? = try { api.getResumeItems(userId).let { if (it.isSuccessful) it.body()?.Items.orEmpty() else null } } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (e: Exception) { null }
+    suspend fun nextUpOrNull(): List<BaseItemDto>? = try { api.getNextUp(userId).let { if (it.isSuccessful) it.body()?.Items.orEmpty() else null } } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (e: Exception) { null }
+
     suspend fun nextUp(): List<BaseItemDto> = safe(emptyList()) { api.getNextUp(userId).body()?.Items.orEmpty() }
     suspend fun latest(type: String): List<BaseItemDto> = safe(emptyList()) { api.getLatest(userId, includeItemTypes = type).body().orEmpty() }
 

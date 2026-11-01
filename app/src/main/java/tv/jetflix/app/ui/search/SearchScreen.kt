@@ -21,6 +21,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.focusGroup
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.onFocusChanged
@@ -92,7 +93,15 @@ class SearchViewModel(val repo: JellyfinRepository) : ViewModel() {
         val suggested = try {
             api.getSuggestions(userId = userId, type = type, limit = 24).body()?.Items
         } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (_: Exception) { null }
-        if (!suggested.isNullOrEmpty()) return suggested.filter { repo.posterUrl(it) != null }.take(20)
+        // Items/Suggestions is random and does not skip played titles. Keep only ids the server itself returns for filters=IsUnplayed
+        // (set intersection, fail closed: if that query fails nothing from the suggestions is kept). A short list falls through to the unplayed list below.
+        val withPoster = suggested.orEmpty().filter { repo.posterUrl(it) != null }
+        val unplayedIds: Set<String> = if (withPoster.isEmpty()) emptySet() else try {
+            api.getItems(userId = userId, ids = withPoster.joinToString(",") { it.Id }, filters = "IsUnplayed", limit = withPoster.size)
+                .body()?.Items.orEmpty().map { it.Id }.toSet()
+        } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (_: Exception) { emptySet() }
+        val unwatched = tv.jetflix.app.data.RecommendationFilter.onlyIn(withPoster, unplayedIds)
+        if (unwatched.size >= tv.jetflix.app.data.RecommendationFilter.MIN_SUGGESTED) return unwatched.take(20)
         val fallback = try {
             api.getItems(
                 userId = userId, includeItemTypes = type, recursive = true,
@@ -197,6 +206,9 @@ fun SearchContent(
     var fieldFocused by remember { mutableStateOf(false) }
     val fieldFocus = remember { androidx.compose.ui.focus.FocusRequester() }
     val firstActorFocus = remember { androidx.compose.ui.focus.FocusRequester() }
+    val firstRecFocus = remember { androidx.compose.ui.focus.FocusRequester() }
+    // Idle page with recommended rows: Down from the menu or the field goes to them, not back into the text field (which reopens the keyboard).
+    val idleRecs = state.query.isBlank() && state.results.isEmpty() && state.people.isEmpty() && state.recommendations.isNotEmpty()
     val hasActors = state.people.isNotEmpty()
     // Captured at composition: arriving by a tab sweep keeps focus on the tab until Down or OK (NavSweep is
     // cleared by the handoff, so reading it live here races and either steals focus or defers it forever).
@@ -216,7 +228,7 @@ fun SearchContent(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 48.dp)
-                    .focusProperties { up = menuBack.focus; if (hasActors) down = firstActorFocus }
+                    .focusProperties { up = menuBack.focus; if (hasActors) down = firstActorFocus else if (idleRecs) down = firstRecFocus }
                     .focusRequester(fieldFocus)
                     .onFocusChanged { fieldFocused = it.isFocused }
                     .background(JetflixColors.SurfaceLight, RoundedCornerShape(4.dp))
@@ -288,7 +300,8 @@ fun SearchContent(
                         Modifier.fillMaxSize().verticalScroll(androidx.compose.foundation.rememberScrollState()).padding(top = 28.dp),
                         verticalArrangement = Arrangement.spacedBy(28.dp),
                     ) {
-                        state.recommendations.forEach { (title, items) ->
+                        state.recommendations.forEachIndexed { rowIdx, (title, items) ->
+                          androidx.compose.foundation.layout.Box(if (rowIdx == 0) Modifier.focusRequester(firstRecFocus).focusGroup() else Modifier) {
                             tv.jetflix.app.ui.components.MediaRow(
                                 title = title,
                                 items = items,
@@ -296,6 +309,7 @@ fun SearchContent(
                                 imageUrlFor = { repo.posterUrl(it) },
                                 onItemClick = onItemClick,
                             )
+                          }
                         }
                     }
                 }
@@ -312,7 +326,7 @@ fun SearchContent(
         TopNavBar(
             solid = true,
             selectedFocus = menuBack.focus,
-            downFocus = fieldFocus,
+            downFocus = if (idleRecs) firstRecFocus else fieldFocus,
             onNavFocusChange = { menuBack.navHasFocus = it },
             selected = JetflixTab.SEARCH,
             userName = userName,

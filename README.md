@@ -12,6 +12,13 @@ Free to use, not free to fork. Download the APK and use it, file bugs, but pleas
 
 **Status: alpha.** Expect rough edges and bugs. It is unit-tested and snapshot-tested, and it has had hands-on use on one Android TV, but that is not broad device coverage. Playback, HLS transcodes, subtitle loading, remote-control focus and scrolling smoothness are still being checked on real hardware, and known issues are open. Do not rely on it as your only way to watch.
 
+## Get the app
+
+- **TV:** latest build on the [releases page](https://github.com/dhrandy/Driftfin/releases/latest)
+- **Phone (alpha):** newest `phone-build-N` prerelease on the [releases page](https://github.com/dhrandy/Driftfin/releases)
+
+TV and phone are separate release lines with their own build numbers, so one never overwrites the other.
+
 ## Screenshots
 
 ![Home: hero banner, Resume / Play from start / More Info, and the Continue Watching row](https://github.com/dhrandy/Driftfin/releases/download/build-24/home.png)
@@ -65,6 +72,8 @@ Driftfin is an APK you sideload. You need an Android TV or Google TV and a Jelly
 2. Open Downloader and allow it to install apps from unknown sources when Android asks (Settings, then the install-unknown-apps permission for Downloader).
 3. In Downloader's address box, type this link and select Go:
    `https://github.com/dhrandy/Driftfin/releases/latest/download/jetflix-release.apk`
+
+   (The file is being renamed to `driftfin-release.apk`; use the new name once it appears on the latest release - the old name keeps working during the transition.)
 4. When the download finishes, select Install, then Open.
 
 Typing a long link with a remote is slow. The same file is on the [releases page](https://github.com/dhrandy/Driftfin/releases/latest), and you can also download it on a computer and copy it to the TV with a USB drive or `adb install`.
@@ -90,7 +99,7 @@ Android SDK 35, JDK 17, Gradle 8.10.2. `gradle testDebugUnitTest assembleDebug`.
 
 ## Releases and signing
 
-The workflow in `.github/workflows/android.yml` builds a signed release APK from repository secrets (`JETFLIX_KEYSTORE_B64`, `JETFLIX_KEYSTORE_PASSWORD`, `JETFLIX_KEY_ALIAS`, `JETFLIX_KEY_PASSWORD`). It refuses to build without them. No key is stored in the repo. The phone app ships from its own workflow (`.github/workflows/phone.yml`) as signed `phone-build-N` prereleases with the same secrets; see `docs/phone-release-ci.md`.
+The workflow in `.github/workflows/android.yml` builds a signed release APK from repository secrets (`JETFLIX_KEYSTORE_B64`, `JETFLIX_KEYSTORE_PASSWORD`, `JETFLIX_KEY_ALIAS`, `JETFLIX_KEY_PASSWORD`). It refuses to build without them. No key is stored in the repo. From the first release after the rename lands, each TV release attaches the APK as `driftfin-release.apk` and, during the transition, also the older `jetflix-release.apk` name so already-installed TVs keep finding updates; the in-app updater accepts either name. The phone app ships from its own workflow (`.github/workflows/phone.yml`) as signed `phone-build-N` prereleases with the same secrets; see `docs/phone-release-ci.md`.
 
 ## License
 

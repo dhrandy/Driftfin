@@ -74,9 +74,12 @@ class Updater(
                 val build = m.groupValues[1].toInt()
                 if (build <= currentBuild) return CheckResult.UpToDate(currentBuild)
                 val base = source.assetPrefix + rel.tag_name + "/"
-                val apk = rel.assets.firstOrNull { it.name == "jetflix-release.apk" && it.browser_download_url == base + it.name }
+                // Releases publish the APK under both names during the rename transition: prefer the
+                // current name, accept the legacy one so builds from before the rename still update.
+                fun asset(name: String) = rel.assets.firstOrNull { it.name == name && it.browser_download_url == base + it.name }
+                val apk = asset(APK_ASSET) ?: asset(LEGACY_APK_ASSET)
                     ?: return CheckResult.Failed("Release has no app file in the expected place.")
-                val sha = rel.assets.firstOrNull { it.name == "jetflix-release.apk.sha256" && it.browser_download_url == base + it.name }
+                val sha = asset(apk.name + SHA_SUFFIX)
                 CheckResult.Available(ReleaseInfo(build, apk, sha))
             }
         } catch (e: Exception) {
@@ -143,5 +146,12 @@ class Updater(
         }
     }
 
-    private companion object { val HEX64 = Regex("[0-9a-f]{64}") }
+    companion object {
+        /** APK asset name on current releases. */
+        const val APK_ASSET = "driftfin-release.apk"
+        /** APK asset name on releases up to build 50; still accepted so those installs keep updating. */
+        const val LEGACY_APK_ASSET = "jetflix-release.apk"
+        private const val SHA_SUFFIX = ".sha256"
+        private val HEX64 = Regex("[0-9a-f]{64}")
+    }
 }

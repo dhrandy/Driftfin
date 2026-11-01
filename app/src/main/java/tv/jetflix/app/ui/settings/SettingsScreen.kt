@@ -27,6 +27,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.composed
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -168,6 +172,8 @@ fun SettingsScreen(
         onToggleStartupWall = { AppSettings.setStartupWall(!AppSettings.startupWall.value) },
         heroRatings = AppSettings.heroRatings.collectAsState().value,
         onToggleHeroRatings = { AppSettings.setHeroRatings(!AppSettings.heroRatings.value) },
+        homeAutoRefresh = AppSettings.homeAutoRefresh.collectAsState().value,
+        onToggleHomeAutoRefresh = { AppSettings.setHomeAutoRefresh(!AppSettings.homeAutoRefresh.value) },
         searchRecommendations = AppSettings.searchRecommendations.collectAsState().value,
         onToggleSearchRecommendations = { AppSettings.setSearchRecommendations(!AppSettings.searchRecommendations.value) },
         liveBlur = AppSettings.liveBlur.collectAsState().value,
@@ -218,6 +224,8 @@ fun SettingsContent(
     onTogglePauseBw: () -> Unit = {},
     pauseBlur: Boolean = false,
     onTogglePauseBlur: () -> Unit = {},
+    // False below Android 12 (PauseEffects gate): the BW/blur rows render dimmed and inert.
+    pauseEffectsSupported: Boolean = tv.jetflix.app.ui.player.PauseEffects.supported(android.os.Build.VERSION.SDK_INT),
     skipIntro: Boolean = true,
     onToggleSkipIntro: () -> Unit = {},
     onForgetProfile: () -> Unit = {},
@@ -237,6 +245,8 @@ fun SettingsContent(
     onToggleExcludeHomeAnimation: () -> Unit = {},
     homeBanner: Boolean = true,
     onToggleHomeBanner: () -> Unit = {},
+    homeAutoRefresh: Boolean = true,
+    onToggleHomeAutoRefresh: () -> Unit = {},
     searchRecommendations: Boolean = true,
     onToggleSearchRecommendations: () -> Unit = {},
     /** Tests open a specific pane; the screen opens on Updates. */
@@ -278,12 +288,20 @@ fun SettingsContent(
             Spacer(Modifier.height(10.dp))
             Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
                 // Category rail: moving onto a group swaps the pane, like the top menu switching tabs.
+                val railScroll = rememberScrollState()
+                val railViewport = remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
+                val railChrome = Modifier.outlineRevealRoom(railViewport, railScroll)
                 Column(
                     Modifier.width(252.dp).fillMaxHeight()
-                        .background(Color(0xFF191919), RoundedCornerShape(12.dp)).padding(8.dp)
+                        .background(Color(0xFF191919), RoundedCornerShape(12.dp)).padding(horizontal = 8.dp)
                         // Some TVs overscan or render taller text; the rail scrolls so the last
                         // group (Account) is never cut off, and focus auto-reveals it.
-                        .verticalScroll(rememberScrollState()),
+                        .verticalScroll(railScroll)
+                        .onGloballyPositioned { railViewport.value = it.boundsInRoot() }
+                        // Inside the scroll content: the focused row's white outline is drawn past the
+                        // row's bounds, so the first/last groups need room at the viewport extremes or
+                        // the viewport clips the outline's top/bottom edge.
+                        .padding(vertical = 6.dp),
                     verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
                     SettingsCategory.values().forEachIndexed { index, cat ->
@@ -297,7 +315,8 @@ fun SettingsContent(
                                 .focusProperties {
                                     right = paneFirst
                                     if (index == 0) up = menuBack.focus
-                                },
+                                }
+                                .then(railChrome),
                         )
                     }
                 }
@@ -306,8 +325,15 @@ fun SettingsContent(
                     Text(category.label, style = JetflixType.sectionTitle, color = JetflixColors.TextPrimary)
                     Text(category.subtitle, style = JetflixType.caption, color = JetflixColors.TextSecondary)
                     Spacer(Modifier.height(10.dp))
+                    val paneScroll = rememberScrollState()
+                    val paneViewport = remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
+                    val paneChrome = Modifier.outlineRevealRoom(paneViewport, paneScroll)
                     Column(
-                        Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()),
+                        // Vertical room inside the scroll content: the focused row's white outline is
+                        // drawn past the row's bounds and must not clip at the viewport extremes.
+                        Modifier.weight(1f).fillMaxWidth().verticalScroll(paneScroll)
+                            .onGloballyPositioned { paneViewport.value = it.boundsInRoot() }
+                            .padding(vertical = 6.dp),
                         verticalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
                         // First control of each pane also carries Up-to-menu and the pane entry anchor.
@@ -317,16 +343,17 @@ fun SettingsContent(
                                 if (last) down = androidx.compose.ui.focus.FocusRequester.Cancel
                             }
                             .focusRequester(paneFirst)
+                            .then(paneChrome)
                         fun nextRow(last: Boolean = false): Modifier = Modifier.focusProperties {
                             left = railFocus
                             // Down on the last row must stay put; only Left returns to the rail (TV46 report).
                             if (last) down = androidx.compose.ui.focus.FocusRequester.Cancel
-                        }
+                        }.then(paneChrome)
                         when (category) {
                             SettingsCategory.Updates -> {
                                 SettingRow("Check for updates", uDetail, true, onUpdateClick, firstRow(), valueText = uValue)
                                 SettingRow("What's new in this build", "Replays the change list shown after this update installed.", false, onWhatsNewClick, nextRow(), valueText = "Replay")
-                                SettingRow("Update notifications", "Shows the startup popup and the red dot by your name when a newer build exists. The startup check always runs and you can check here any time.", updateNotices, onToggleUpdateNotices, nextRow(last = true))
+                                SettingRow("Update notifications", "Turns the red dot by your name on or off. The dot appears when a newer build exists. The startup check always runs and you can check here any time.", updateNotices, onToggleUpdateNotices, nextRow(last = true))
                             }
                             SettingsCategory.Playback -> {
                                 SettingRow("Autoplay next episode", "Starts the next episode after a 5 second countdown.", autoplay, onToggleAutoplay, firstRow())
@@ -338,8 +365,8 @@ fun SettingsContent(
                                     modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 4.dp, bottom = 8.dp),
                                 )
                                 SettingRow("Episode and movie info while paused", "Shows the story summary and the Up next line when you pause. The title and player controls always stay.", pauseInfo, onTogglePauseInfo, nextRow())
-                                SettingRow("Black and white while paused", "Turns the paused video frame black and white. Off by default. Needs Android 12 or newer; on older devices this does nothing.", pauseBw, onTogglePauseBw, nextRow())
-                                SettingRow("Blur while paused", "Blurs the paused video frame. Off by default. Needs Android 12 or newer; on older devices this does nothing.", pauseBlur, onTogglePauseBlur, nextRow())
+                                SettingRow("Black and white while paused", if (pauseEffectsSupported) "Turns the paused video frame black and white. Off by default." else "Needs Android 12 or newer.", pauseBw, onTogglePauseBw, nextRow(), enabled = pauseEffectsSupported)
+                                SettingRow("Blur while paused", if (pauseEffectsSupported) "Blurs the paused video frame. Off by default." else "Needs Android 12 or newer.", pauseBlur, onTogglePauseBlur, nextRow(), enabled = pauseEffectsSupported)
                                 SettingRow("Skip Intro button", "Shows a Skip Intro button in the player when your Jellyfin server has marked an intro. It only skips when you press OK.", skipIntro, onToggleSkipIntro, nextRow(last = true))
                             }
                             SettingsCategory.HomeDiscovery -> {
@@ -348,6 +375,7 @@ fun SettingsContent(
                                 SettingRow("Exclude animated movies from Home banner", "Hide movies tagged Animation in the Home banner only. Library rows are unchanged.", excludeHomeAnimation, onToggleExcludeHomeAnimation, nextRow())
                                 SettingRow("Home banner", "Shows the featured movie banner at the top of Home. Off starts Home with the rows.", homeBanner, onToggleHomeBanner, nextRow())
                                 SettingRow("Age rating and score on Home", "Shows the age rating and community score under the title on the Home banner.", heroRatings, onToggleHeroRatings, nextRow())
+                                SettingRow("Keep Continue Watching up to date", "Refreshes Continue Watching and Next Up while Home is open (about once a minute) and when you come back to the app, so progress from another device shows up. Off: they update only when you open Home.", homeAutoRefresh, onToggleHomeAutoRefresh, nextRow())
                                 SettingRow("Recommended rows on Search", "Shows recommended movies and shows on the Search page before you type.", searchRecommendations, onToggleSearchRecommendations, nextRow(last = true))
                             }
                             SettingsCategory.Appearance -> {
@@ -571,7 +599,27 @@ private fun SettingsSwitch(on: Boolean) {
 }
 
 @Composable
-internal fun SettingRow(title: String, detail: String, on: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier, valueText: String? = null) {
+internal fun SettingRow(title: String, detail: String, on: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier, valueText: String? = null, enabled: Boolean = true) {
+    if (!enabled) {
+        // Unsupported capability (e.g. pause effects below Android 12): the row stays visible and shows the
+        // stored value dimmed, but takes no focus and no click - never a live-looking switch that does nothing.
+        Row(
+            modifier.fillMaxWidth().background(JetflixColors.Surface, RoundedCornerShape(6.dp))
+                .padding(horizontal = 20.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f).padding(end = 20.dp)) {
+                Text(title, style = JetflixType.body, color = JetflixColors.TextMuted)
+                Text(detail, style = JetflixType.caption, color = JetflixColors.TextMuted)
+            }
+            if (valueText != null) {
+                Text(valueText, style = JetflixType.body, color = JetflixColors.TextMuted)
+            } else {
+                Box(Modifier.alpha(0.4f)) { SettingsSwitch(on) }
+            }
+        }
+        return
+    }
     Button(
         onClick = onClick,
         modifier = modifier.fillMaxWidth(),
@@ -659,4 +707,43 @@ internal fun ShownNameDialog(initial: String, onDone: (String) -> Unit, onCancel
         }
     }
     androidx.compose.runtime.LaunchedEffect(Unit) { focus.requestFocus() }
+}
+
+
+/** A focused row's white outline is drawn past the row's bounds. When a scroll reveal leaves a row
+ *  flush with a viewport edge, that edge clips the outline (the top of a row revealed scrolling up,
+ *  the bottom of a row revealed scrolling down). After the reveal settles, nudge the content a few
+ *  dp so the focused row always rests off the edge; the first/last rows already have room from the
+ *  scroll content's vertical padding. */
+private fun Modifier.outlineRevealRoom(
+    viewport: androidx.compose.runtime.State<androidx.compose.ui.geometry.Rect?>,
+    scrollState: androidx.compose.foundation.ScrollState,
+): Modifier = composed {
+    val scope = rememberCoroutineScope()
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    var row by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
+    var focusedSelf by remember { mutableStateOf(false) }
+    onGloballyPositioned { row = it.boundsInRoot() }.onFocusChanged { st ->
+        focusedSelf = st.isFocused
+        if (!st.isFocused) return@onFocusChanged
+        scope.launch {
+            // The reveal scroll triggered by the focus change must settle first; the row's bounds
+            // update through onGloballyPositioned as the content moves.
+            kotlinx.coroutines.delay(100)
+            if (!focusedSelf) return@launch
+            val r = row ?: return@launch
+            val v = viewport.value ?: return@launch
+            val room = with(density) { 8.dp.toPx() }
+            val dy = when {
+                // Fully revealed and resting at the bottom edge: push the content up a little.
+                r.top >= v.top && r.bottom > v.bottom - room && r.bottom <= v.bottom + room && scrollState.value < scrollState.maxValue ->
+                    r.bottom - (v.bottom - room)
+                // Fully revealed and resting at the top edge: pull the content down a little.
+                r.bottom <= v.bottom && r.top < v.top + room && r.top >= v.top - room && scrollState.value > 0 ->
+                    r.top - (v.top + room)
+                else -> 0f
+            }
+            if (dy != 0f) scrollState.scrollBy(dy)
+        }
+    }
 }

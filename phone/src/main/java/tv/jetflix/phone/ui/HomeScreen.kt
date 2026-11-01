@@ -19,6 +19,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -39,7 +40,7 @@ import tv.jetflix.phone.data.Content
 /** Space the frosted top bar takes, so page content starts below it. */
 val TopBarSpace = 104.dp
 
-private data class HomeData(
+internal data class HomeData(
     val heroes: List<BaseItemDto> = emptyList(),
     val moreLike: Pair<String, List<BaseItemDto>>? = null,
     val resume: List<BaseItemDto> = emptyList(),
@@ -66,6 +67,24 @@ fun HomeScreen(onOpen: (BaseItemDto) -> Unit, onTrailer: (tv.jetflix.phone.data.
         )
         TopArt.url.value = data.heroes.firstOrNull()?.let { Graph.repo.backdropUrl(it, 960) }
     }
+    // Quiet refresh of Continue Watching and Next Up while Home is open: only those two rows change, and only when the
+    // server's answer differs; a failed request keeps what is shown. Skipped until the first full load is done and
+    // while that load could still be running (it sets data = HomeData(...) when it finishes).
+    var refreshing by remember { mutableStateOf(false) }
+    val refreshScope = androidx.compose.runtime.rememberCoroutineScope()
+    HomeAutoRefresh(enabled = tv.jetflix.phone.data.PhoneSettings.homeAutoRefresh.collectAsState().value, refresh = {
+        if (data.loaded && !refreshing) {
+            refreshing = true
+            refreshScope.launch {
+                try {
+                    val showNext = tv.jetflix.phone.data.PhoneSettings.showNextUp.value
+                    val r = Content.resumeOrNull()
+                    val n = if (showNext) Content.nextUpOrNull() else data.nextUp
+                    quietRefreshed(data, r, n)?.let { data = it }
+                } finally { refreshing = false }
+            }
+        }
+    })
     // The banner cycles on swipe; the frosted bar and the trailer button follow the showing title.
     LaunchedEffect(hero?.Id) {
         TopArt.url.value = hero?.let { Graph.repo.backdropUrl(it, 960) }
@@ -91,6 +110,12 @@ fun HomeScreen(onOpen: (BaseItemDto) -> Unit, onTrailer: (tv.jetflix.phone.data.
             item { Text("Nothing to show yet.", color = DriftfinColors.TextSecondary, modifier = Modifier.padding(24.dp)) }
         }
     }
+}
+
+/** The Home data after a quiet refresh, or null when nothing should change (not loaded yet, a failed request, or the same answer). Only the two rows are replaced. */
+internal fun quietRefreshed(cur: HomeData, resume: List<BaseItemDto>?, nextUp: List<BaseItemDto>?): HomeData? {
+    if (!cur.loaded || resume == null || nextUp == null) return null
+    return if (cur.resume == resume && cur.nextUp == nextUp) null else cur.copy(resume = resume, nextUp = nextUp)
 }
 
 private fun Int.floorMod(m: Int): Int = ((this % m) + m) % m

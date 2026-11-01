@@ -267,14 +267,16 @@ private fun NavTab(label: String, selected: Boolean, onClick: () -> Unit, modifi
             .then(if (contentDescription != null) Modifier.semantics { this.contentDescription = contentDescription } else Modifier)
             .onFocusChanged { if (focused && !it.isFocused) onFocusLost(); focused = it.isFocused },
         colors = ClickableSurfaceDefaults.colors(
-            // Current tab: white pill, dark text. Focused non-current tab: light gray pill.
+            // Current tab: white pill, dark text - also while it holds focus, so the selected page's
+            // tab stays white; the white outline ring carries the focus cue there. Focused non-current
+            // tab: light gray pill.
             containerColor = if (selected) Color.White else Color.Transparent,
             contentColor = when {
                 selected -> Color.Black
                 else -> JetflixColors.TextSecondary
             },
-            focusedContainerColor = JetflixColors.SurfaceLight.copy(alpha = 0.7f),
-            focusedContentColor = Color.White,
+            focusedContainerColor = if (selected) Color.White else JetflixColors.SurfaceLight.copy(alpha = 0.7f),
+            focusedContentColor = if (selected) Color.Black else Color.White,
         ),
         border = surfaceFocusOutline(RoundedCornerShape(50)),
         shape = ClickableSurfaceDefaults.shape(shape = androidx.compose.foundation.shape.RoundedCornerShape(50)),

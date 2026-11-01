@@ -28,6 +28,9 @@ import tv.jetflix.app.ui.search.SearchViewModel
 class SearchRecommendationsTest {
     private lateinit var server: MockWebServer
     private var suggestionsCode = 200
+    private var playedIds = setOf<String>()
+    private var unplayedQueryCode = 200
+    private val idsQueries = mutableListOf<String>()
     private val personTerms = mutableListOf<String>()
 
     private fun item(id: String, type: String, tag: String?) =
@@ -55,6 +58,13 @@ class SearchRecommendationsTest {
                         path.startsWith("/Persons") -> {
                             personTerms += request.requestUrl!!.queryParameter("searchTerm") ?: ""
                             MockResponse().setBody("""{"Items":[{"Id":"p1","Name":"Tom Actor","Type":"Person","ImageTags":{"Primary":"pt"}}]}""")
+                        }
+                        path.startsWith("/Items") && request.requestUrl!!.queryParameter("ids") != null -> {
+                            val ids = request.requestUrl!!.queryParameter("ids")!!
+                            idsQueries += ids + "|" + request.requestUrl!!.queryParameter("filters")
+                            if (unplayedQueryCode != 200) return MockResponse().setResponseCode(unplayedQueryCode)
+                            val kept = ids.split(",").filter { it !in playedIds }
+                            MockResponse().setBody("""{"Items":[${kept.joinToString(",") { item(it, "Movie", "t") }}]}""")
                         }
                         path.startsWith("/Items") -> MockResponse().setBody("""{"Items":[${item("top1", "Movie", "t3")},${item("top2", "Movie", "t4")}]}""")
                         else -> MockResponse().setResponseCode(404)
@@ -89,6 +99,25 @@ class SearchRecommendationsTest {
         val rows = v.state.value.recommendations
         assertEquals(listOf("Recommended Movies", "Recommended Shows"), rows.map { it.first })
         assertEquals(listOf("top1", "top2"), rows[0].second.map { it.Id })
+    }
+
+    @Test fun playedSuggestionsAreExcludedUsingTheServersUnplayedSet() {
+        playedIds = setOf("m1")
+        val v = SearchViewModel(JellyfinRepository())
+        awaitRows(v)
+        val rows = v.state.value.recommendations
+        // m1 is played: the server's IsUnplayed answer omits it, so it is gone; the Series row is unaffected.
+        assertTrue("movie row falls back to the unplayed list: ${rows[0].second.map { it.Id }}", "m1" !in rows[0].second.map { it.Id })
+        assertEquals(listOf("s1"), rows[1].second.map { it.Id })
+        assertTrue(idsQueries.all { it.endsWith("|IsUnplayed") })
+    }
+
+    @Test fun failedUnplayedCheckKeepsNoSuggestionsFailClosed() {
+        unplayedQueryCode = 500
+        val v = SearchViewModel(JellyfinRepository())
+        awaitRows(v)
+        val ids = v.state.value.recommendations.flatMap { it.second }.map { it.Id }
+        assertTrue("no unchecked suggestion shown: $ids", ids.none { it == "m1" || it == "s1" })
     }
 
     @Test fun settingOffLoadsNoRows() {

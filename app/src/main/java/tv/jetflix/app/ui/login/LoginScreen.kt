@@ -303,6 +303,8 @@ fun LoginContent(
     onCancelQuickConnect: () -> Unit = {},
 ) {
     val serverFocus = remember { FocusRequester() }
+    val quickFocus = remember { FocusRequester() }
+    val cancelFocus = remember { FocusRequester() }
 
     Box(
         Modifier
@@ -327,9 +329,10 @@ fun LoginContent(
                 modifier = Modifier.focusRequester(serverFocus),
             )
             if (state.quickCode == null) {
+            // Stays enabled while connecting: a disabled button cannot hold focus, so disabling the one the user just
+            // pressed threw focus back to the server field. The press is ignored while a request is in flight instead.
             Button(
-                onClick = { onQuickConnect() },
-                enabled = !state.connecting,
+                onClick = { if (!state.connecting) onQuickConnect() },
                 colors = ButtonDefaults.colors(
                     containerColor = JetflixColors.SurfaceLight,
                     contentColor = JetflixColors.TextPrimary,
@@ -337,7 +340,7 @@ fun LoginContent(
                     focusedContentColor = Color.White,
                 ),
                 border = buttonFocusOutline(RoundedCornerShape(percent = 50)),
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().focusRequester(quickFocus),
             ) {
                 Text("Quick Connect", style = JetflixType.body)
             }
@@ -390,7 +393,7 @@ fun LoginContent(
                         focusedContentColor = Color.White,
                     ),
                     border = buttonFocusOutline(RoundedCornerShape(percent = 50)),
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().focusRequester(cancelFocus),
                 ) {
                     Text("Cancel", style = JetflixType.body)
                 }
@@ -433,6 +436,12 @@ fun LoginContent(
         }
     }
     androidx.compose.runtime.LaunchedEffect(Unit) { serverFocus.requestFocus() }
+    // The Quick Connect button is replaced by the code panel and back. Focus follows it instead of falling to the first field.
+    var codeShown by remember { mutableStateOf(false) }
+    androidx.compose.runtime.LaunchedEffect(state.quickCode != null) {
+        if (state.quickCode != null) { codeShown = true; runCatching { cancelFocus.requestFocus() } }
+        else if (codeShown) { codeShown = false; runCatching { quickFocus.requestFocus() } }
+    }
 }
 
 @Composable

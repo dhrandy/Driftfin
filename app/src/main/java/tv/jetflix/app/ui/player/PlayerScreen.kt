@@ -112,7 +112,9 @@ fun PlayerScreen(
     val hostView = androidx.compose.ui.platform.LocalView.current
     androidx.compose.runtime.SideEffect { hostView.keepScreenOn = keepAwake }
     androidx.compose.runtime.DisposableEffect(hostView) { onDispose { hostView.keepScreenOn = false } }
-    // Cast strip while paused: people are fetched once, the first time the video is paused.
+    // Cast strip while paused: people are fetched once when playback starts (one lookup chain per
+    // item, only while the setting is on), so the first pause isn't waiting on the network. Pause
+    // before the lookup returns simply shows the strip when the data lands.
     val pauseCastOn by tv.jetflix.app.data.AppSettings.pauseCast.collectAsState()
     val pauseInfoOn by tv.jetflix.app.data.AppSettings.pauseInfo.collectAsState()
     val pauseBwOn by tv.jetflix.app.data.AppSettings.pauseBw.collectAsState()
@@ -124,8 +126,12 @@ fun PlayerScreen(
     var castIndex by remember { mutableStateOf<Int?>(null) }
     // OK on a cast person opens the actor on key release, never on the press (see CastKeySession).
     val castKeys = remember { PlayerKeys.CastKeySession() }
-    LaunchedEffect(isPausedNow, pauseCastOn) {
-        if (isPausedNow && pauseCastOn && !castFetched) {
+    LaunchedEffect(item.Id, pauseCastOn) {
+        castFetched = false
+        cast = emptyList()
+        castIndex = null
+        castKeys.reset()
+        if (pauseCastOn) {
             castFetched = true
             cast = tv.jetflix.app.data.loadPauseCast(api, session.userId, item, tv.jetflix.app.data.TvmazeCastResolver.resolver())
         }
@@ -337,6 +343,12 @@ fun PlayerScreen(
     }
 
     DisposableEffect(Unit) {
+        // Immediate pause/play sync on player events (the 1s poll below stays as reconciliation).
+        val stateSync = PlaybackStateSync.listener(player) { playing, awake, paused ->
+            isPlaying = playing
+            keepAwake = awake
+            tv.jetflix.app.ui.components.PlaybackPause.paused.value = paused
+        }
         val listener = object : Player.Listener {
             override fun onPlaybackStateChanged(playbackState: Int) {
                 if (playbackState == Player.STATE_ENDED) ended = true
@@ -354,8 +366,10 @@ fun PlayerScreen(
             }
         }
         player.addListener(listener)
+        player.addListener(stateSync)
         onDispose {
             player.removeListener(listener)
+            player.removeListener(stateSync)
             try {
                 val pos = player.currentPosition * 10_000
                 player.stop()

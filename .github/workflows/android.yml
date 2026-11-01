@@ -81,9 +81,14 @@ jobs:
       - name: Show APK hash and signer
         run: |
           APK=$(ls app/build/outputs/apk/release/*.apk | head -1)
+          # The APK ships under both names during the rename transition. driftfin-release.apk is the
+          # current name; jetflix-release.apk stays because TVs on build 50 or older require that exact
+          # asset name in their update checks. Drop the legacy copy once those installs have moved on.
+          cp "$APK" driftfin-release.apk
           cp "$APK" jetflix-release.apk
+          sha256sum driftfin-release.apk | tee driftfin-release.apk.sha256
           sha256sum jetflix-release.apk | tee jetflix-release.apk.sha256
-          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs jetflix-release.apk
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs driftfin-release.apk
 
       - name: Publish release
         env:
@@ -98,14 +103,17 @@ jobs:
           NOTES="$NOTES
 
           Automated build. Unit tests ran in CI, but this build was not run on a TV by CI. Known limits are listed in the README."
-          gh release create "$TAG" jetflix-release.apk jetflix-release.apk.sha256 \
+          gh release create "$TAG" driftfin-release.apk driftfin-release.apk.sha256 \
+            jetflix-release.apk jetflix-release.apk.sha256 \
             --target "${GITHUB_SHA}" \
             --title "Driftfin $TAG" \
             --notes "$NOTES"
 
       - uses: actions/upload-artifact@v7
         with:
-          name: jetflix-release
+          name: driftfin-release
           path: |
+            driftfin-release.apk
+            driftfin-release.apk.sha256
             jetflix-release.apk
             jetflix-release.apk.sha256

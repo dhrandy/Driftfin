@@ -83,6 +83,20 @@ object HeroRotation {
     fun next(index: Int, size: Int): Int = if (size <= 1) 0 else (index + 1) % size
 }
 
+/** Row swap for the quiet Continue Watching refresh: the two rows take their usual first places, everything else stays. */
+object HomeRefresh {
+    const val CONTINUE_WATCHING = "Continue Watching"
+    const val NEXT_UP = "Next Up"
+    fun merge(current: List<HomeSection>, resume: List<BaseItemDto>, nextUp: List<BaseItemDto>): List<HomeSection> {
+        val rest = current.filter { it.title != CONTINUE_WATCHING && it.title != NEXT_UP }
+        val head = buildList {
+            if (resume.isNotEmpty()) add(HomeSection(CONTINUE_WATCHING, resume, wide = true))
+            if (nextUp.isNotEmpty()) add(HomeSection(NEXT_UP, nextUp, wide = true))
+        }
+        return head + rest
+    }
+}
+
 data class HomeSection(val title: String, val items: List<BaseItemDto>, val wide: Boolean)
 
 data class HomeUiState(
@@ -122,11 +136,38 @@ class HomeViewModel(val repo: JellyfinRepository) : ViewModel() {
         }
     }
 
+    private var loadJob: kotlinx.coroutines.Job? = null
+    private var refreshJob: kotlinx.coroutines.Job? = null
+
+    /**
+     * Quiet refresh of just the Continue Watching and Next Up rows (Home stays open while the other device
+     * reports progress). It never touches the banner, the other rows, or the loading state, never blanks a
+     * row on a failed request, and does nothing while a full load or another refresh is running. A full
+     * [load] cancels it, so a late answer cannot overwrite fresher data.
+     */
+    fun refreshContinueWatching() {
+        val session = SessionManager.session.value ?: return
+        val owner = session.serverUrl + "|" + session.userId
+        if (stateOwner != owner || _state.value.loading || loadJob?.isActive == true || refreshJob?.isActive == true) return
+        val api = repo.apiFor(session.serverUrl)
+        refreshJob = viewModelScope.launch {
+            suspend fun fetch(call: suspend () -> retrofit2.Response<tv.jetflix.app.data.BaseItemDtoQueryResult>): List<BaseItemDto>? =
+                try { call().let { if (it.isSuccessful) it.body()?.Items else null } } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (_: Exception) { null }
+            val resume = fetch { api.getResumeItems(session.userId) } ?: return@launch
+            val next = if (tv.jetflix.app.data.AppSettings.showNextUp.value) (fetch { api.getNextUp(session.userId) } ?: return@launch) else emptyList()
+            val now = _state.value
+            if (stateOwner != owner || now.loading || loadJob?.isActive == true) return@launch
+            val merged = HomeRefresh.merge(now.sections, resume.filter { it.isResumeable }, next)
+            if (merged != now.sections) _state.value = now.copy(sections = merged)
+        }
+    }
+
     fun load() {
         val session = SessionManager.session.value ?: return
         val api = repo.apiFor(session.serverUrl)
         val owner = session.serverUrl + "|" + session.userId
-        viewModelScope.launch {
+        refreshJob?.cancel()
+        loadJob = viewModelScope.launch {
             if (stateOwner != owner) { _state.value = HomeUiState(loading = true); stateOwner = owner }
             if (_state.value.sections.isEmpty()) _state.value = HomeUiState(loading = true)
             try {
@@ -829,11 +870,13 @@ fun HeroBanner(
                     Button(
                         onClick = { onPlay(hero) },
                         modifier = (if (playFocus != null) Modifier.focusRequester(playFocus) else Modifier).onFocusChanged(reportFocus("play")),
+                        // Primary action stays the white pill with dark content while focused
+                        // too; the white outline ring is the focus cue.
                         colors = ButtonDefaults.colors(
                             containerColor = Color.White,
                             contentColor = Color.Black,
-                            focusedContainerColor = JetflixColors.SurfaceLight.copy(alpha = 0.7f),
-                            focusedContentColor = Color.White,
+                            focusedContainerColor = Color.White,
+                            focusedContentColor = Color.Black,
                         ),
                         border = buttonFocusOutline(RoundedCornerShape(percent = 50)),
                     ) {
