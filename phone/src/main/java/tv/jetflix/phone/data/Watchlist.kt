@@ -64,6 +64,17 @@ object Watchlist {
     // There is deliberately no automatic removal of saved ids. A server answer that lacks some of them (library
     // offline, access change, partial reply) must never delete the user's list; only toggle() by the user does.
 
+    /** Read-only diagnostic: how many saved titles sit under OTHER server/user keys in this phone's list store. Sizes only,
+     *  never the keys or ids, and nothing is written. A sign-in under a different address or account reads its own key, so
+     *  an older list can exist untouched while the current one looks empty. */
+    fun otherListSizes(): List<Int> {
+        val me = owner
+        return prefs?.all.orEmpty()
+            .filter { (k, v) -> k != me && v is String }
+            .map { (_, v) -> (v as String).split(',').count { it.isNotBlank() } }
+            .filter { it > 0 }
+    }
+
     internal fun resetForTest() {
         prefs?.edit()?.clear()?.apply()
         owner = null

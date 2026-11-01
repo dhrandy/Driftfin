@@ -73,6 +73,8 @@ fun MyStuffScreen(onOpen: (BaseItemDto) -> Unit, onOpenCollection: (BaseItemDto)
     val showFailed = section == MySection.Watchlist && watchlistFailed
     val showEmpty = items?.isEmpty() == true && !showFailed
     val savedIdsKept = starred.isNotEmpty()
+    // Read once per composition, only for the empty Watchlist: titles saved under another sign-in on this phone (count only).
+    val otherSaved = if (showEmpty && section == MySection.Watchlist && !savedIdsKept) tv.jetflix.phone.data.Watchlist.otherListSizes().isNotEmpty() else false
     LazyVerticalGrid(
         columns = GridCells.Fixed(tv.jetflix.phone.data.PhoneSettings.posterSize.collectAsState().value.gridColumns), modifier = Modifier.fillMaxSize().statusBarsPadding(),
         contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
@@ -112,7 +114,7 @@ fun MyStuffScreen(onOpen: (BaseItemDto) -> Unit, onOpenCollection: (BaseItemDto)
         if (showEmpty) item(span = { GridItemSpan(maxLineSpan) }) {
             Text(when (section) {
                 MySection.Favorites -> "Nothing starred yet. Tap the heart on a title."
-                MySection.Watchlist -> if (savedIdsKept) "Your saved titles aren't available from the server right now. They are kept." else "Your watchlist is empty. Tap Watchlist on a title to save it for later."
+                MySection.Watchlist -> if (savedIdsKept) "Your saved titles aren't available from the server right now. They are kept." else if (otherSaved > 0) "This watchlist is empty, but this phone still holds another saved list. Nothing in that list has been changed." else "Your watchlist is empty. Tap Watchlist on a title to save it for later."
                 MySection.Collections -> "No collections on this server."
             }, color = DriftfinColors.TextSecondary, fontSize = 14.sp)
         }
