@@ -8,7 +8,7 @@ The phone app has its own release line: `phone-build-N` prereleases, separate fr
 Changes:
 - Back from a title now keeps your place in the Movies list instead of jumping back to the top.
 - An episode's cast on the details page no longer lists the whole series' cast: you see the episode's own guest stars, or no one.
-- My Stuff: if your watchlist is empty but this phone still holds a list saved under another sign-in, the page now says so (count only). Nothing in that list has been changed.
+- My Stuff: if your watchlist is empty but this phone still holds a list saved under another sign-in, the page now says so. Nothing in that list has been changed.
 - Actor pages: changed how the page's grid reads content while it is loading, adopting the same guard used elsewhere in the app, after a crash appeared in automated testing.
 
 ## phone-build-9
