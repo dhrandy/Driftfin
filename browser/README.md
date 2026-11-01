@@ -109,15 +109,13 @@ services:
       exec node src/server.js'
 ```
 
-### Important: this stack fails until browser/ is merged upstream
+### Important: this stack pulls browser/ from Driftfin main
 
-Until `browser/` exists on Driftfin main, this compose will fail
-at startup at the copy step (`cp -a /tmp/driftfin-src/browser/.`).
-That is expected, and it is the signal that the merge has not
-happened yet. Do not "fix" it by mounting a local source volume
-as the primary path; that was superseded by this pull-on-startup
-pattern. Do not push to GitHub from here; that merge is a separate
-step for Randy/Wade.
+This compose downloads the Driftfin main tarball on startup and
+copies browser/ from it. If browser/ is ever removed from main
+upstream, it will fail at startup at the copy step
+(`cp -a /tmp/driftfin-src/browser/.`). Do not "fix" it by mounting
+a local source volume as the primary path.
 
 ## What is in this folder
 
@@ -197,7 +195,7 @@ not hard-coded demo titles.
   pull-on-startup script has not been run in a `node:22-alpine`
   container. It parses as
   valid YAML with the expected service keys, but it needs a real
-  Dockhand deploy to prove it, after browser/ is merged upstream.
+  Dockhand deploy to prove it.
 - The responsive layout has not been checked on a real phone or
   tablet, only by breakpoint rules in `styles.css`.
 - Actual video rendering in a real browser was not tested: the
