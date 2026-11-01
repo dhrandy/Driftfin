@@ -62,7 +62,12 @@ class PhoneSettingsOptionsTest {
     }
 
     @Test fun settingsScreenListsAndFlipsOptions() {
-        rule.setContent { DriftfinTheme { SettingsScreen() } }
+        try {
+            rule.setContent { DriftfinTheme { SettingsScreen() } }
+        } catch (t: Throwable) {
+            logNonIdleContext(t) // diagnostic only: prints context, then rethrows the original failure
+            throw t
+        }
         rule.waitForIdle()
         rule.onNodeWithText("Check for updates").assertIsDisplayed() // still first
         rule.onNodeWithText("Poster size: Medium").assertIsDisplayed()
@@ -87,5 +92,22 @@ class PhoneSettingsOptionsTest {
         val colors = HashSet<Int>()
         for (x in 0 until bmp.width step 6) for (y in 0 until bmp.height step 6) colors.add(bmp.getPixel(x, y))
         org.junit.Assert.assertTrue("settings-options.png is not a blank frame (${colors.size} colors)", colors.size > 3)
+    }
+
+    /** Bounded, public-API-only context for a non-idle timeout. Does not change any assertion or wait. */
+    private fun logNonIdleContext(t: Throwable) {
+        val sb = StringBuilder("NONIDLE-DIAG ${t.javaClass.simpleName}\n")
+        runCatching { sb.append("compose clock: autoAdvance=${rule.mainClock.autoAdvance} t=${rule.mainClock.currentTime}ms\n") }
+        runCatching { sb.append("main looper idle=${org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).isIdle}\n") }
+        runCatching {
+            val traces = Thread.getAllStackTraces()
+            sb.append("threads=${traces.size}\n")
+            traces.entries.filter { (th, _) -> th.name.contains("main", true) || th.name.contains("Dispatcher") || th.name.contains("Robolectric") || th.name.contains("Choreographer") }
+                .sortedBy { it.key.name }.take(12).forEach { (th, st) ->
+                    sb.append("  ${th.name} state=${th.state}\n")
+                    st.take(8).forEach { sb.append("    at $it\n") }
+                }
+        }
+        println(sb.toString().take(6000))
     }
 }

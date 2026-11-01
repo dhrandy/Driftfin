@@ -43,7 +43,7 @@ jobs:
           fi
 
       - name: Phone test XML to log (diagnostic)
-        if: always() && inputs.phone_filter != ''
+        if: always()
         run: |
           shopt -s nullglob
           for f in phone/build/test-results/testDebugUnitTest/*.xml; do
