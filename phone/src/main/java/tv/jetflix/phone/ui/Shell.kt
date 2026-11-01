@@ -169,11 +169,39 @@ private fun goTo(nav: NavHostController, route: String) {
         nav.navigate(Routes.Search) { launchSingleTop = true }
         return
     }
+    // Search is never a saved tab: drop it (and anything pushed on top of it, like an actor page) before
+    // switching, so popUpTo/saveState below can never save a Search that restoreState would resurrect.
+    nav.popBackStack(Routes.Search, inclusive = true)
+    if (route == Routes.Home) {
+        // Tapping Home must land on Home: pages pushed directly on bare Home (a details or actor page)
+        // are dropped unsaved, so the saveState pop below can never map a saved subtree onto Home for
+        // restoreState to resurrect. When another real tab is on the back stack, nothing is dropped:
+        // the save/restore of subtrees above My Stuff, Settings, Shows and Movies is unchanged.
+        if (!anotherTabOnBackStack(nav)) {
+            while (true) {
+                val r = nav.currentDestination?.route
+                if (r == null || r == Routes.Home) break
+                if (!nav.popBackStack()) break
+            }
+        }
+    }
     nav.navigate(route) {
         popUpTo(nav.graph.findStartDestination().id) { saveState = true }
         launchSingleTop = true
         restoreState = true
     }
+}
+
+private fun anotherTabOnBackStack(nav: NavHostController): Boolean {
+    for (tab in listOf(Routes.MyStuff, Routes.Settings, Routes.Shows, Routes.Movies)) {
+        try {
+            nav.getBackStackEntry(tab)
+            return true
+        } catch (expected: IllegalArgumentException) {
+            // That tab is not on the back stack.
+        }
+    }
+    return false
 }
 
 @Composable

@@ -3,6 +3,11 @@
 The phone app has its own release line: `phone-build-N` prereleases, separate from the TV app's
 `build-N` releases. The phone's Check for updates reads these; the TV app never sees them.
 
+## phone-build-7
+
+Changes:
+- Fix: the bottom tabs could get stuck: tapping Home or another tab could stay on Search, or bounce back to Search or a page opened from it. Switching tabs now closes Search and its pages, and tapping Home from a page opened straight off Home lands on Home.
+
 ## phone-build-6
 
 Changes:
