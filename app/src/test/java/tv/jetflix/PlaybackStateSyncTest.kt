@@ -112,6 +112,32 @@ class PlaybackStateSyncTest {
         player.release()
     }
 
+    /** Skip-back/forward while playing must NEVER surface a pause: the seek dips isPlaying for a
+     *  split second (buffering) but playWhenReady stays on, so the settled predicate the pause
+     *  visuals key off must stay unpaused across the whole transient (user report, build 52:
+     *  pause button + black-and-white flashed for a split second on skip-back). */
+    @Test fun seekWhilePlayingNeverReportsPaused() {
+        val player = pipelinePlayer()
+        awaitReady(player)
+        val syncs = mutableListOf<Sync>()
+        val listener = PlaybackStateSync.listener(player) { p, a, paused -> syncs += Sync(p, a, paused) }
+        player.addListener(listener)
+        syncs.clear()
+        player.seekTo(if (player.duration > 2_000) player.duration / 2 else 0L)
+        // Sample across the whole seek transient, buffering included: no event-path sync may
+        // report paused while playWhenReady stays on. If the fake pipeline fires no events for
+        // the seek, the settle checks below still pin the predicate.
+        val used = flushUntil(900) {
+            if (syncs.isNotEmpty()) {
+                assertFalse("paused reported during a seek while playing: $syncs", syncs.last().paused)
+            }
+            player.playbackState == Player.STATE_READY && player.isPlaying
+        }
+        assertTrue("seek settled back to playing within the virtual budget", used < 900)
+        assertFalse("settled after the seek: still unpaused", PlaybackStateSync.pausedNow(player))
+        player.release()
+    }
+
     @Test fun removedListenerStopsSyncing() {
         val player = ExoPlayer.Builder(ApplicationProvider.getApplicationContext()).build()
         player.setMediaItem(MediaItem.fromUri("http://demo.test/none.mp4"))

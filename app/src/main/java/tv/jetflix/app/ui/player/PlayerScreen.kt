@@ -506,7 +506,11 @@ fun PlayerScreen(
                         this.player = player
                     }
                 },
-                update = { view -> PauseEffects.applyTo(view, !isPlaying, pauseFx) },
+                // Pause effects key off the SETTLED pause state (playWhenReady off + READY), not
+                // !isPlaying: a seek or buffering dip while playing is not a pause and must not
+                // flash black-and-white/blur for a split second (user report on skip-back, build 52).
+                // Real pauses stay instant - the event listener writes this state on the pause event.
+                update = { view -> PauseEffects.applyTo(view, isPausedNow, pauseFx) },
                 modifier = Modifier.fillMaxSize(),
             )
         }
@@ -539,8 +543,10 @@ fun PlayerScreen(
                     .padding(horizontal = 16.dp, vertical = 8.dp),
             )
         }
+        // Same settled pause state as the effects above: the pause icon, dim and paused info must
+        // not flash during a seek or buffering dip. The param stays named isPlaying (see below).
         PlayerOverlay(
-            visible = controlsVisible, item = item, isPlaying = isPlaying,
+            visible = controlsVisible, item = item, isPlaying = !isPausedNow,
             positionTicks = positionTicks, bufferedTicks = bufferedTicks, durationTicks = durationTicks,
             nextEpisode = nextEp,
             infoVisible = pauseInfoOn,
@@ -557,6 +563,8 @@ fun PlayerScreen(
 fun PlayerOverlay(
     visible: Boolean,
     item: BaseItemDto,
+    // Settled playing state from the call site: false only when actually paused (playWhenReady
+    // off + READY), so seek/buffering dips never draw the paused visuals.
     isPlaying: Boolean,
     positionTicks: Long,
     bufferedTicks: Long,
