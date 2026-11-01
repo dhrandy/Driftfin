@@ -333,8 +333,8 @@ fun LoginContent(
                 colors = ButtonDefaults.colors(
                     containerColor = JetflixColors.SurfaceLight,
                     contentColor = JetflixColors.TextPrimary,
-                    focusedContainerColor = JetflixColors.SurfaceLight,
-                    focusedContentColor = JetflixColors.TextPrimary,
+                    focusedContainerColor = JetflixColors.SurfaceLight.copy(alpha = 0.7f),
+                    focusedContentColor = Color.White,
                 ),
                 border = buttonFocusOutline(RoundedCornerShape(percent = 50)),
                 modifier = Modifier.fillMaxWidth(),
@@ -357,8 +357,8 @@ fun LoginContent(
                             colors = ButtonDefaults.colors(
                                 containerColor = if (state.username == name) JetflixColors.Red else JetflixColors.SurfaceLight,
                                 contentColor = JetflixColors.TextPrimary,
-                                focusedContainerColor = if (state.username == name) JetflixColors.Red else JetflixColors.SurfaceLight,
-                                focusedContentColor = JetflixColors.TextPrimary,
+                                focusedContainerColor = JetflixColors.SurfaceLight.copy(alpha = 0.7f),
+                                focusedContentColor = Color.White,
                             ),
                             border = buttonFocusOutline(RoundedCornerShape(percent = 50)),
                         ) { Text(if (isSaved) "\u2713 $name" else name, style = JetflixType.caption) }
@@ -370,8 +370,8 @@ fun LoginContent(
                     colors = ButtonDefaults.colors(
                         containerColor = JetflixColors.SurfaceLight,
                         contentColor = JetflixColors.TextPrimary,
-                        focusedContainerColor = JetflixColors.SurfaceLight,
-                        focusedContentColor = JetflixColors.TextPrimary,
+                        focusedContainerColor = JetflixColors.SurfaceLight.copy(alpha = 0.7f),
+                        focusedContentColor = Color.White,
                     ),
                     border = buttonFocusOutline(RoundedCornerShape(percent = 50)),
                 ) { Text("Show profiles on this server", style = JetflixType.caption) }
@@ -386,8 +386,8 @@ fun LoginContent(
                     colors = ButtonDefaults.colors(
                         containerColor = JetflixColors.SurfaceLight,
                         contentColor = JetflixColors.TextPrimary,
-                        focusedContainerColor = JetflixColors.SurfaceLight,
-                        focusedContentColor = JetflixColors.TextPrimary,
+                        focusedContainerColor = JetflixColors.SurfaceLight.copy(alpha = 0.7f),
+                        focusedContentColor = Color.White,
                     ),
                     border = buttonFocusOutline(RoundedCornerShape(percent = 50)),
                     modifier = Modifier.fillMaxWidth(),
@@ -420,8 +420,8 @@ fun LoginContent(
                 colors = ButtonDefaults.colors(
                     containerColor = JetflixColors.Red,
                     contentColor = JetflixColors.TextPrimary,
-                    focusedContainerColor = JetflixColors.Red,
-                    focusedContentColor = JetflixColors.TextPrimary,
+                    focusedContainerColor = JetflixColors.SurfaceLight.copy(alpha = 0.7f),
+                    focusedContentColor = Color.White,
                 ),
                 border = buttonFocusOutline(RoundedCornerShape(percent = 50)),
                 modifier = Modifier.fillMaxWidth(),

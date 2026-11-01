@@ -73,6 +73,7 @@ import tv.jetflix.app.ui.components.JetflixTab
 import tv.jetflix.app.ui.components.MediaRow
 import tv.jetflix.app.ui.components.TopNavBar
 import tv.jetflix.app.ui.theme.JetflixColors
+import tv.jetflix.app.ui.theme.buttonFocusOutline
 import tv.jetflix.app.ui.theme.JetflixType
 
 /** Which banner title is showing. Cycles through the list and wraps. */
@@ -831,9 +832,10 @@ fun HeroBanner(
                         colors = ButtonDefaults.colors(
                             containerColor = Color.White,
                             contentColor = Color.Black,
-                            focusedContainerColor = Color.White,
-                            focusedContentColor = Color.Black,
+                            focusedContainerColor = JetflixColors.SurfaceLight.copy(alpha = 0.7f),
+                            focusedContentColor = Color.White,
                         ),
+                        border = buttonFocusOutline(RoundedCornerShape(percent = 50)),
                     ) {
                         Icon(Icons.Filled.PlayArrow, contentDescription = null)
                         Spacer(Modifier.width(6.dp))
@@ -846,9 +848,10 @@ fun HeroBanner(
                             colors = ButtonDefaults.colors(
                                 containerColor = JetflixColors.SurfaceLight.copy(alpha = 0.7f),
                                 contentColor = Color.White,
-                                focusedContainerColor = JetflixColors.SurfaceLight,
+                                focusedContainerColor = JetflixColors.SurfaceLight.copy(alpha = 0.7f),
                                 focusedContentColor = Color.White,
                             ),
+                            border = buttonFocusOutline(RoundedCornerShape(percent = 50)),
                         ) {
                             Text("Play from start")
                         }
@@ -859,9 +862,10 @@ fun HeroBanner(
                         colors = ButtonDefaults.colors(
                             containerColor = JetflixColors.SurfaceLight.copy(alpha = 0.7f),
                             contentColor = Color.White,
-                            focusedContainerColor = JetflixColors.SurfaceLight,
+                            focusedContainerColor = JetflixColors.SurfaceLight.copy(alpha = 0.7f),
                             focusedContentColor = Color.White,
                         ),
+                        border = buttonFocusOutline(RoundedCornerShape(percent = 50)),
                     ) {
                         Text("More Info")
                     }
@@ -872,9 +876,10 @@ fun HeroBanner(
                             colors = ButtonDefaults.colors(
                                 containerColor = JetflixColors.SurfaceLight.copy(alpha = 0.7f),
                                 contentColor = Color.White,
-                                focusedContainerColor = JetflixColors.SurfaceLight,
+                                focusedContainerColor = JetflixColors.SurfaceLight.copy(alpha = 0.7f),
                                 focusedContentColor = Color.White,
                             ),
+                            border = buttonFocusOutline(RoundedCornerShape(percent = 50)),
                         ) {
                             Icon(tv.jetflix.app.ui.details.TrailerIcon, contentDescription = "Watch trailer", modifier = Modifier.size(24.dp))
                         }

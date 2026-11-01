@@ -23,6 +23,8 @@ import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Button
 import androidx.tv.material3.Text
 import tv.jetflix.app.ui.theme.JetflixType
+import tv.jetflix.app.ui.theme.JetflixColors
+import tv.jetflix.app.ui.theme.buttonFocusOutline
 
 /**
  * What changed, shown once after an update installs. Release builds embed the matching
@@ -108,9 +110,10 @@ internal fun WhatsNewCard(
             colors = androidx.tv.material3.ButtonDefaults.colors(
                 containerColor = Color(0xFF3A3A3A),
                 contentColor = Color.White,
-                focusedContainerColor = Color.White,
-                focusedContentColor = Color.Black,
+                focusedContainerColor = JetflixColors.SurfaceLight.copy(alpha = 0.7f),
+                focusedContentColor = Color.White,
             ),
+            border = buttonFocusOutline(RoundedCornerShape(percent = 50)),
         ) { Text("OK") }
     }
     LaunchedEffect(Unit) { repeat(10) { try { okFocus.requestFocus(); return@LaunchedEffect } catch (_: Exception) { kotlinx.coroutines.delay(60) } } }

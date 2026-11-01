@@ -74,6 +74,13 @@ class TvActionFocusTest {
             val best = pts.maxOf { pt -> android.graphics.Color.red(pixelAt(pt.first, pt.second)) }
             assertTrue("$tag focused outline is white at $name edge (brightest strip pixel r=$best)", best > 200)
         }
+        // The focused body must be DARK (fill), not a white block: sample the fill zone between
+        // the outline and the glyphs on the center row.
+        for (frac in listOf(0.10f, 0.90f)) {
+            val px = pixelAt((b.left + (b.right - b.left) * frac).toInt(), cy)
+            val r = android.graphics.Color.red(px); val g = android.graphics.Color.green(px); val bl = android.graphics.Color.blue(px)
+            assertTrue("$tag focused body is dark at ${(frac * 100).toInt()}% width (was rgb($r,$g,$bl))", r < 120 && g < 120 && bl < 120)
+        }
     }
 
     @Test fun playFocusedShowsWhiteOutlineOnOpen() {

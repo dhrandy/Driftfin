@@ -46,12 +46,22 @@ fun JetflixTheme(content: @Composable () -> Unit) {
     )
 }
 
-/** Focus cue for buttons: the control keeps its own colors and a white outline marks the
- *  cursor (user's pick on build 49: outline instead of a filled focus color; the avatar ring
- *  stays red). */
+/** Focus cue for buttons: on focus the control takes a dark fill with light content and this
+ *  white outline marks the cursor (user's pick on build 49: outline instead of a filled focus
+ *  color; the avatar ring stays red). Idle colors are untouched. */
 @Composable
 fun buttonFocusOutline(shape: androidx.compose.ui.graphics.Shape): androidx.tv.material3.ButtonBorder =
     androidx.tv.material3.ButtonDefaults.border(
+        focusedBorder = androidx.tv.material3.Border(
+            androidx.compose.foundation.BorderStroke(2.dp, Color.White),
+            shape = shape,
+        ),
+    )
+
+/** Same focus cue for clickable surfaces (top-bar tabs): dark fill, light content, white outline. */
+@Composable
+fun surfaceFocusOutline(shape: androidx.compose.ui.graphics.Shape): androidx.tv.material3.ClickableSurfaceBorder =
+    androidx.tv.material3.ClickableSurfaceDefaults.border(
         focusedBorder = androidx.tv.material3.Border(
             androidx.compose.foundation.BorderStroke(2.dp, Color.White),
             shape = shape,

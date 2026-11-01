@@ -471,9 +471,10 @@ private fun RailItem(
         colors = ButtonDefaults.colors(
             containerColor = if (selected) JetflixColors.Surface else Color.Transparent,
             contentColor = Color.White,
-            focusedContainerColor = JetflixColors.SurfaceLight,
+            focusedContainerColor = JetflixColors.SurfaceLight.copy(alpha = 0.7f),
             focusedContentColor = Color.White,
         ),
+        border = buttonFocusOutline(RoundedCornerShape(8.dp)),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(
@@ -579,9 +580,10 @@ internal fun SettingRow(title: String, detail: String, on: Boolean, onClick: () 
         colors = ButtonDefaults.colors(
             containerColor = JetflixColors.Surface,
             contentColor = Color.White,
-            focusedContainerColor = JetflixColors.SurfaceLight,
+            focusedContainerColor = JetflixColors.SurfaceLight.copy(alpha = 0.7f),
             focusedContentColor = Color.White,
         ),
+        border = buttonFocusOutline(RoundedCornerShape(6.dp)),
     ) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f).padding(end = 20.dp)) {

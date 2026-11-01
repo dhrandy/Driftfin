@@ -1,5 +1,6 @@
 package tv.jetflix.app.ui.components
 
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
@@ -36,6 +37,7 @@ import androidx.tv.material3.ClickableSurfaceDefaults
 import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
 import tv.jetflix.app.ui.theme.JetflixColors
+import tv.jetflix.app.ui.theme.surfaceFocusOutline
 import tv.jetflix.app.ui.theme.JetflixType
 
 enum class JetflixTab(val label: String) { HOME("Home"), SHOWS("Shows"), MOVIES("Movies"), MY_LIST("My Stuff"), SEARCH("Search"), SETTINGS("Settings") }
@@ -233,9 +235,10 @@ private fun SearchIconTab(selected: Boolean, onClick: () -> Unit, modifier: Modi
         colors = ClickableSurfaceDefaults.colors(
             containerColor = if (selected) Color.White else Color.Transparent,
             contentColor = if (selected) Color.Black else JetflixColors.TextPrimary,
-            focusedContainerColor = Color(0xFFD0D0D0),
-            focusedContentColor = Color.Black,
+            focusedContainerColor = JetflixColors.SurfaceLight.copy(alpha = 0.7f),
+            focusedContentColor = Color.White,
         ),
+        border = surfaceFocusOutline(RoundedCornerShape(50)),
         shape = ClickableSurfaceDefaults.shape(shape = androidx.compose.foundation.shape.RoundedCornerShape(50)),
     ) {
         // Magnifier drawn by hand (the extended icon set is not a dependency).
@@ -270,9 +273,10 @@ private fun NavTab(label: String, selected: Boolean, onClick: () -> Unit, modifi
                 selected -> Color.Black
                 else -> JetflixColors.TextSecondary
             },
-            focusedContainerColor = Color.White,
-            focusedContentColor = Color.Black,
+            focusedContainerColor = JetflixColors.SurfaceLight.copy(alpha = 0.7f),
+            focusedContentColor = Color.White,
         ),
+        border = surfaceFocusOutline(RoundedCornerShape(50)),
         shape = ClickableSurfaceDefaults.shape(shape = androidx.compose.foundation.shape.RoundedCornerShape(50)),
     ) {
         if (leading == null) {

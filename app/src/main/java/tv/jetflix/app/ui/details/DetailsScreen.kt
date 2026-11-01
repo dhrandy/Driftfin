@@ -490,8 +490,8 @@ fun DetailsContent(
                                 colors = ButtonDefaults.colors(
                                     containerColor = Color.White,
                                     contentColor = Color.Black,
-                                    focusedContainerColor = Color.White,
-                                    focusedContentColor = Color.Black,
+                                    focusedContainerColor = JetflixColors.SurfaceLight.copy(alpha = 0.7f),
+                                    focusedContentColor = Color.White,
                                 ),
                                 border = buttonFocusOutline(RoundedCornerShape(percent = 50)),
                             ) {
@@ -788,8 +788,8 @@ private fun SeasonChip(season: BaseItemDto, selected: Boolean, onClick: () -> Un
         colors = ButtonDefaults.colors(
             containerColor = if (selected) Color.White else JetflixColors.Surface,
             contentColor = if (selected) Color.Black else JetflixColors.TextSecondary,
-            focusedContainerColor = if (selected) Color.White else JetflixColors.Surface,
-            focusedContentColor = if (selected) Color.Black else JetflixColors.TextSecondary,
+            focusedContainerColor = JetflixColors.SurfaceLight.copy(alpha = 0.7f),
+            focusedContentColor = Color.White,
         ),
         border = buttonFocusOutline(RoundedCornerShape(20.dp)),
         shape = ButtonDefaults.shape(shape = RoundedCornerShape(20.dp)),

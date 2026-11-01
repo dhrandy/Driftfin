@@ -1,5 +1,6 @@
 package tv.jetflix.app.ui.library
 
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.width
@@ -10,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import tv.jetflix.app.ui.components.rememberFocusMemory
@@ -43,6 +45,7 @@ import tv.jetflix.app.ui.components.JetflixTab
 import tv.jetflix.app.ui.components.PosterCard
 import tv.jetflix.app.ui.components.TopNavBar
 import tv.jetflix.app.ui.theme.JetflixColors
+import tv.jetflix.app.ui.theme.buttonFocusOutline
 import tv.jetflix.app.ui.theme.JetflixType
 
 /** Orders Jellyfin supports for the Shows and Movies grids. */
@@ -609,9 +612,10 @@ fun LibraryContent(
                                     colors = androidx.tv.material3.ButtonDefaults.colors(
                                         containerColor = if (selected) androidx.compose.ui.graphics.Color(0xFF3A3A3A) else androidx.compose.ui.graphics.Color.Transparent,
                                         contentColor = androidx.compose.ui.graphics.Color.White,
-                                        focusedContainerColor = androidx.compose.ui.graphics.Color.White,
-                                        focusedContentColor = androidx.compose.ui.graphics.Color.Black,
+                                        focusedContainerColor = JetflixColors.SurfaceLight.copy(alpha = 0.7f),
+                                        focusedContentColor = Color.White,
                                     ),
+                                    border = buttonFocusOutline(RoundedCornerShape(percent = 50)),
                                 ) { Text(sec.label, style = JetflixType.body) }
                             }
                         }
@@ -644,22 +648,26 @@ fun LibraryContent(
                                 onClick = { picker = "sort" },
                                 modifier = Modifier.focusRequester(sortFocus),
                                 colors = chipColors(true),
+                                border = buttonFocusOutline(RoundedCornerShape(percent = 50)),
                             ) { Text("Sort: ${state.sort.label} ${if (ascending) "\u2191" else "\u2193"}", style = JetflixType.body) }
                             androidx.tv.material3.Button(
                                 onClick = { picker = "filter" },
                                 modifier = Modifier.focusRequester(filterFocus),
                                 colors = chipColors(active > 0),
+                                border = buttonFocusOutline(RoundedCornerShape(percent = 50)),
                             ) { Text(if (active > 0) "Filter ($active)" else "Filter", style = JetflixType.body) }
                             if (state.kidsAvailable || state.audience != Audience.All) {
                                 androidx.tv.material3.Button(
                                     onClick = { picker = "audience" },
                                     colors = chipColors(state.audience != Audience.All),
+                                    border = buttonFocusOutline(RoundedCornerShape(percent = 50)),
                                 ) { Text("Show: ${state.audience.label}", style = JetflixType.body) }
                             }
                             if (state.libraries.size > 1) {
                                 androidx.tv.material3.Button(
                                     onClick = { picker = "library" },
                                     colors = chipColors(state.libraryId != null),
+                                    border = buttonFocusOutline(RoundedCornerShape(percent = 50)),
                                 ) { Text("Library: ${state.libraries.firstOrNull { it.first == state.libraryId }?.second ?: "All"}", style = JetflixType.body) }
                             }
                         }
@@ -750,9 +758,10 @@ fun <T> OptionPicker(title: String, options: List<Pair<String, T>>, selected: T?
                         colors = androidx.tv.material3.ButtonDefaults.colors(
                             containerColor = if (isSel) androidx.compose.ui.graphics.Color(0xFF3A3A3A) else androidx.compose.ui.graphics.Color.Transparent,
                             contentColor = androidx.compose.ui.graphics.Color.White,
-                            focusedContainerColor = androidx.compose.ui.graphics.Color.White,
-                            focusedContentColor = androidx.compose.ui.graphics.Color.Black,
+                            focusedContainerColor = JetflixColors.SurfaceLight.copy(alpha = 0.7f),
+                            focusedContentColor = Color.White,
                         ),
+                        border = buttonFocusOutline(RoundedCornerShape(percent = 50)),
                     ) { Text(label, style = JetflixType.body, maxLines = 1) }
                 }
             }
