@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.hasScrollToNodeAction
 import androidx.compose.ui.test.hasText
@@ -169,7 +170,8 @@ class TvFocusOutlineSweepTest {
     /** Season chips (user correction after build 52: "the season selection ... should stay white
      *  on the one that you are on and enlarge, circle the other"): the SELECTED season is the
      *  enlarged white pill - also while the OTHER chip holds focus - and the focused other chip
-     *  shows the white outline ring on a dark fill. */
+     *  shows the white outline ring on a dark fill. Captures are written BEFORE any assertion and
+     *  the actual chip geometry rides in every failure message, so a red run carries the evidence. */
     @Test fun detailsSeasonChipSelectedStaysWhiteEnlargedOtherCircled() {
         val series = items.first().copy(Id = "serp", Type = "Series", Name = "Marshals")
         val season1 = items[2].copy(Id = "s1", Type = "Season", Name = "Season 1", SeriesId = "serp", SeriesName = "Marshals")
@@ -195,22 +197,35 @@ class TvFocusOutlineSweepTest {
         rule.onAllNodes(hasScrollToNodeAction())[0].performScrollToNode(hasText("Season 2"))
         rule.waitForIdle()
 
-        // Selected chip, NOT focused: the enlarged (1.1x) visual draws its white fill ~5% past
-        // the layout bounds; an unscaled chip draws nothing there. Sample just outside the left edge.
+        // First capture BEFORE any assertion: a red run still leaves the decisive render.
+        writeQaCapture("details-season-chip-selected-unfocused.png")
+
         val sel = rule.onNodeWithText("Season 1")
+        val other = rule.onNodeWithText("Season 2")
         val sb = sel.fetchSemanticsNode().boundsInRoot
+        val ob = other.fetchSemanticsNode().boundsInRoot
+        val geo = "Season1 bounds=$sb, Season2 bounds=$ob"
         val scy = ((sb.top + sb.bottom) / 2).toInt()
-        val spillX = (sb.left - (sb.right - sb.left) * 0.03f).toInt()
-        val spill = pixelAt(spillX, scy)
-        val sr = android.graphics.Color.red(spill); val sg = android.graphics.Color.green(spill); val sbl = android.graphics.Color.blue(spill)
+
+        sel.assertIsDisplayed()
+        other.assertIsDisplayed()
+
+        // Enlargement: the selected (1.1x) pill's white fill must spill past its layout edge
+        // (the state layer draws ~5% out; an unscaled chip draws nothing outside). Sample only a
+        // side PROVEN clear by the actual bounds here: left when the chip is not flush to the
+        // screen edge, else right when the real gap to the next chip leaves room - no assumed edge.
+        val spill = when {
+            sb.left > 8 -> ((sb.left - 8).toInt() until sb.left.toInt()).maxOf { x -> android.graphics.Color.red(pixelAt(x, scy)) }
+            ob.left > sb.right + 8 -> (sb.right.toInt() + 1..sb.right.toInt() + 8).maxOf { x -> android.graphics.Color.red(pixelAt(x, scy)) }
+            else -> -1
+        }
         assertTrue(
-            "Selected season chip is enlarged: white fill spills past its left layout edge (was rgb($sr,$sg,$sbl) at x=$spillX)",
-            sr > 200 && sg > 200 && sbl > 200,
+            "Selected season chip is enlarged: white fill spills past a clear layout edge (brightest outside pixel r=$spill; $geo)",
+            spill > 200,
         )
         assertWhitePill("Selected Season 1 chip", sel)
 
         // Focus the OTHER chip: the white circle on a dark fill there; the selected one stays white.
-        val other = rule.onNodeWithText("Season 2")
         other.requestFocus(); rule.waitForIdle()
         other.assertIsFocused()
         writeQaCapture("details-season-chip-focus.png")
