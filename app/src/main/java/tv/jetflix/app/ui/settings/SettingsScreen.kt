@@ -15,8 +15,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -31,7 +31,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.composed
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -291,15 +290,13 @@ fun SettingsContent(
             Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
                 // Category rail: moving onto a group swaps the pane, like the top menu switching tabs.
                 val railScroll = rememberScrollState()
-                val railViewport = remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
-                val railChrome = Modifier.outlineRevealRoom(railViewport, railScroll)
+                val railChrome = Modifier.outlineRevealRoom()
                 Column(
                     Modifier.width(252.dp).fillMaxHeight()
                         .background(Color(0xFF191919), RoundedCornerShape(12.dp)).padding(horizontal = 8.dp)
                         // Some TVs overscan or render taller text; the rail scrolls so the last
                         // group (Account) is never cut off, and focus auto-reveals it.
                         .verticalScroll(railScroll)
-                        .onGloballyPositioned { railViewport.value = it.boundsInRoot() }
                         // Inside the scroll content: the focused row's white outline is drawn past the
                         // row's bounds, so the first/last groups need room at the viewport extremes or
                         // the viewport clips the outline's top/bottom edge.
@@ -328,13 +325,11 @@ fun SettingsContent(
                     Text(category.subtitle, style = JetflixType.caption, color = JetflixColors.TextSecondary)
                     Spacer(Modifier.height(10.dp))
                     val paneScroll = rememberScrollState()
-                    val paneViewport = remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
-                    val paneChrome = Modifier.outlineRevealRoom(paneViewport, paneScroll)
+                    val paneChrome = Modifier.outlineRevealRoom()
                     Column(
                         // Vertical room inside the scroll content: the focused row's white outline is
                         // drawn past the row's bounds and must not clip at the viewport extremes.
                         Modifier.weight(1f).fillMaxWidth().verticalScroll(paneScroll)
-                            .onGloballyPositioned { paneViewport.value = it.boundsInRoot() }
                             .padding(vertical = 6.dp),
                         verticalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
@@ -712,40 +707,23 @@ internal fun ShownNameDialog(initial: String, onDone: (String) -> Unit, onCancel
 }
 
 
-/** A focused row's white outline is drawn past the row's bounds. When a scroll reveal leaves a row
- *  flush with a viewport edge, that edge clips the outline (the top of a row revealed scrolling up,
- *  the bottom of a row revealed scrolling down). After the reveal settles, nudge the content a few
- *  dp so the focused row always rests off the edge; the first/last rows already have room from the
- *  scroll content's vertical padding. */
-private fun Modifier.outlineRevealRoom(
-    viewport: androidx.compose.runtime.State<androidx.compose.ui.geometry.Rect?>,
-    scrollState: androidx.compose.foundation.ScrollState,
-): Modifier = composed {
+/** A focused row's white outline is drawn a few dp past the row's bounds. The system's focus reveal
+ *  leaves the row flush with the viewport edge, which clips the outline - and at the scroll extremes
+ *  (first/last row) it can clip a slice of the row itself (run-19: Skip Intro's outline and bottom
+ *  6px cut at the pane edge). Bring the row into view together with its outline room, immediately on
+ *  focus - no settle delay that may never elapse; the request lands in the same focus pump, after the
+ *  system's own flush reveal, so the outline-inclusive rect decides the final resting place. The
+ *  scroll content's vertical padding supplies the room for the first and last rows. */
+private fun Modifier.outlineRevealRoom(): Modifier = composed {
     val scope = rememberCoroutineScope()
     val density = androidx.compose.ui.platform.LocalDensity.current
-    var row by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
-    var focusedSelf by remember { mutableStateOf(false) }
-    onGloballyPositioned { row = it.boundsInRoot() }.onFocusChanged { st ->
-        focusedSelf = st.isFocused
-        if (!st.isFocused) return@onFocusChanged
-        scope.launch {
-            // The reveal scroll triggered by the focus change must settle first; the row's bounds
-            // update through onGloballyPositioned as the content moves.
-            kotlinx.coroutines.delay(100)
-            if (!focusedSelf) return@launch
-            val r = row ?: return@launch
-            val v = viewport.value ?: return@launch
-            val room = with(density) { 8.dp.toPx() }
-            val dy = when {
-                // Fully revealed and resting at the bottom edge: push the content up a little.
-                r.top >= v.top && r.bottom > v.bottom - room && r.bottom <= v.bottom + room && scrollState.value < scrollState.maxValue ->
-                    r.bottom - (v.bottom - room)
-                // Fully revealed and resting at the top edge: pull the content down a little.
-                r.bottom <= v.bottom && r.top < v.top + room && r.top >= v.top - room && scrollState.value > 0 ->
-                    r.top - (v.top + room)
-                else -> 0f
-            }
-            if (dy != 0f) scrollState.scrollBy(dy)
-        }
+    val requester = remember { androidx.compose.foundation.relocation.BringIntoViewRequester() }
+    var size by remember { mutableStateOf(androidx.compose.ui.unit.IntSize.Zero) }
+    onGloballyPositioned { size = it.size }.bringIntoViewRequester(requester).onFocusChanged { st ->
+        if (!st.isFocused || size == androidx.compose.ui.unit.IntSize.Zero) return@onFocusChanged
+        val room = with(density) { 6.dp.toPx() }
+        val w = size.width.toFloat()
+        val h = size.height.toFloat()
+        scope.launch { requester.bringIntoView(androidx.compose.ui.geometry.Rect(-room, -room, w + room, h + room)) }
     }
 }
