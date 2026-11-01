@@ -30,7 +30,7 @@ import java.util.concurrent.CopyOnWriteArrayList
  * Owner report (10/31-11/1, phone build-6 confirmed installed): from an INITIALLY EMPTY Search -
  * "I didn't even type anything" - selecting OTHER tabs "just releases and stays on the search";
  * "it's reloading the search". No keyboard/config event is injected: these tests do exactly what
- * the owner described - open empty Search, tap another bottom tab, require the app goes and stays.
+ * was reported - open empty Search, tap another bottom tab, require the app goes and stays.
  *
  * v5 fixes two harness confounds found with the verifier's measured v3 run:
  *  - The What's New AlertDialog shows on EVERY fresh install (last_seen_build defaults to 0),
@@ -182,7 +182,7 @@ class PhoneSearchOtherTabTest {
 
     @Test fun focusedEmptySearchFieldOtherTabStillNavigates() {
         // The on-device sequence that opens the keyboard: open Search, tap the BOX (no typing -
-        // the owner reported typing nothing), then pick another tab. Robolectric has no IME
+        // no typing in the report), then pick another tab. Robolectric has no IME
         // window, so this covers focus/nav/state only, not keyboard geometry.
         openEmptySearch()
         compose.onNodeWithText("Search movies, shows and actors").performClick()
@@ -194,7 +194,7 @@ class PhoneSearchOtherTabTest {
     }
 
     @Test fun otherTabTapWhileRecommendedFetchInFlight() {
-        // The owner's "sometimes" window: leave Search WHILE its recommended fetch is still running.
+        // The intermittent window: leave Search WHILE its recommended fetch is still running.
         launchMain()
         awaitReal(30_000) { compose.onAllNodesWithText("Search").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithText("Search").performClick()
@@ -237,7 +237,7 @@ class PhoneSearchOtherTabTest {
     }
 
     @Test fun rapidAlternatingTabTapsSettleOnLastTap() {
-        // The owner's "stuck, then releases": alternating tabs, each click re-fetched and each
+        // The stuck-then-releases pattern: alternating tabs, each click re-fetched and each
         // landing asserted. The mid-sequence Search tap's reload is by-design; the LAST tap must win.
         openEmptySearch()
         compose.onNodeWithText("My stuff").performClick()

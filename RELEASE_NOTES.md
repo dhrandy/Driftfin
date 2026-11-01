@@ -4,6 +4,21 @@ Each build lists its real changes here. The CI release workflow copies the secti
 matching the build tag onto the GitHub release page and appends the standard
 automated-build footer.
 
+## build-52
+
+Changes:
+- Driftfin now shows its own banner on the TV home screen (new launcher banner).
+- The Play button is solid white with dark text, and the selected tab in the top bar highlights white when the cursor is on it.
+- Home: Continue Watching and Next Up quietly refresh while Home is open and when you come back to the app. New Settings toggle "Keep Continue Watching up to date" to turn that off.
+- Search: suggestions no longer offer titles you have already watched, and pressing Down from the search field lands on the first result.
+- Sign-in: focus moves sensibly while the Quick Connect code is on screen, and the login card scrolls on short screens and large fonts so the buttons stay reachable.
+- On Android versions before 12, the pause-effect settings (black-and-white, blur) are grayed out - those effects need Android 12's RenderEffect.
+- The player reacts to pause right away: the paused look, cast strip, and screensaver respond to the pause event itself instead of waiting up to a second for the progress poll.
+- Sort picker: the option grid sizes itself to the real rows - no empty space at the bottom, and long lists scroll instead of overflowing.
+- Settings: the focus ring on the focused row is fully visible again - it no longer clips or disappears on large fonts or smaller screens, the focused row scrolls into view with room for its ring, and opening Settings lands the cursor on the right row.
+- Actor pages: guest-star episode credits collapse into their series entry, failures show an error with a Try again button, and episode cast matching is more reliable.
+- The in-app updater recognizes the renamed download file, so update checks keep working.
+
 ## build-50
 
 Changes:

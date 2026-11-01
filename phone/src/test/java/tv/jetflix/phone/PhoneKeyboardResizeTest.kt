@@ -10,7 +10,7 @@ import org.robolectric.annotation.Config
 
 /** The keyboard must not overlay the app: with edge-to-edge, adjustResize delivers the IME as insets
  *  so the shell's imePadding can lift the content and bottom nav above it. Without this, the keyboard
- *  covers the nav bar on Search and taps meant for a tab land on the keyboard (reported by the owner). */
+ *  covers the nav bar on Search and taps meant for a tab land on the keyboard (seen in the field). */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
 class PhoneKeyboardResizeTest {
