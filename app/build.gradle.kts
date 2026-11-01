@@ -12,7 +12,7 @@ android {
 
     defaultConfig {
         applicationId = "tv.jetflix.app"
-        minSdk = 26
+        minSdk = 25
         targetSdk = 35
         // CI sets BUILD_NUMBER (the next published release number) so every release has a higher versionCode than the last
         versionCode = System.getenv("BUILD_NUMBER")?.toIntOrNull() ?: System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 1

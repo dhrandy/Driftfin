@@ -1,0 +1,114 @@
+name: Build Driftfin TEST
+
+# Clearly marked test builds (e.g. Fire TV API 25 compatibility). Dispatch-only, never tag-triggered.
+# Same numbering and signing as the regular workflow: a published test consumes its build number
+# (release + tag), a failed run consumes nothing. Published as a GitHub PRERELEASE so it never
+# becomes /releases/latest and the regular update feed is untouched.
+
+on:
+  workflow_dispatch
+
+permissions:
+  contents: write   # lets the job attach the APK to a release with the built-in token
+
+# Same group as the regular build: test and regular builds can never pick the same build number.
+concurrency:
+  group: release-build
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest   # standard runner: free for public repositories
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0   # full tag history: build numbers must survive release deletions
+
+      - name: Pick the next build number
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Same rule as the regular build: max of build-N releases and tags, plus one.
+          REL=$(gh release list --limit 300 --json tagName --jq '[.[].tagName | select(test("^build-[0-9]+$")) | ltrimstr("build-") | tonumber] | max // 0')
+          TAGS=$(git tag -l 'build-*' | sed 's/^build-//' | sort -n | tail -1); TAGS=${TAGS:-0}
+          LAST=$(( REL > TAGS ? REL : TAGS ))
+          echo "BUILD_NUMBER=$((LAST + 1))" >> "$GITHUB_ENV"
+          echo "Next build number: $((LAST + 1)) (releases max $REL, tags max $TAGS)"
+
+      - name: Embed test What's New notes
+        run: |
+          # Test builds do not touch RELEASE_NOTES.md; the in-app card says what this build is.
+          mkdir -p app/src/main/assets
+          echo "Test build: Fire TV compatibility check for older devices (Android 7.1 / API 25). Not the regular update." > app/src/main/assets/whatsnew.txt
+          cat app/src/main/assets/whatsnew.txt
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: gradle/actions/setup-gradle@v6
+        with:
+          gradle-version: "8.10.2"
+
+      - name: Android SDK packages
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Require signing secrets
+        env:
+          B64: ${{ secrets.JETFLIX_KEYSTORE_B64 }}
+        run: |
+          if [ -z "$B64" ]; then echo "JETFLIX_KEYSTORE_B64 is not set; refusing to build with a throwaway key." >&2; exit 1; fi
+          echo "$B64" | base64 -d > "$RUNNER_TEMP/jetflix-release.jks"
+
+      - name: Unit tests (all API levels, incl. API 25 compat regressions)
+        run: gradle --no-daemon :app:testDebugUnitTest
+
+      - name: Lint (NewApi guards API 25 safety)
+        run: gradle --no-daemon :app:lintDebug
+
+      - name: Build signed release APK
+        env:
+          JETFLIX_KEYSTORE_FILE: ${{ runner.temp }}/jetflix-release.jks
+          JETFLIX_KEYSTORE_PASSWORD: ${{ secrets.JETFLIX_KEYSTORE_PASSWORD }}
+          JETFLIX_KEY_ALIAS: ${{ secrets.JETFLIX_KEY_ALIAS }}
+          JETFLIX_KEY_PASSWORD: ${{ secrets.JETFLIX_KEY_PASSWORD }}
+        run: gradle --no-daemon assembleRelease
+
+      - name: Verify merged manifest minSdk
+        run: |
+          MANIFEST=$(ls app/build/intermediates/merged_manifests/release/*/AndroidManifest.xml 2>/dev/null | head -1)
+          [ -z "$MANIFEST" ] && MANIFEST=$(find app/build/intermediates -path '*release*' -name AndroidManifest.xml | head -1)
+          grep -o 'minSdkVersion="[0-9]*"' "$MANIFEST"
+          grep -q 'minSdkVersion="25"' "$MANIFEST" || { echo "Merged manifest minSdk is not 25; a dependency forced it higher - refusing to publish." >&2; exit 1; }
+
+      - name: Show APK hash and signer
+        run: |
+          APK=$(ls app/build/outputs/apk/release/*.apk | head -1)
+          cp "$APK" jetflix-release.apk
+          sha256sum jetflix-release.apk | tee jetflix-release.apk.sha256
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs jetflix-release.apk
+
+      - name: Signer certificate must match build-50
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download build-50 --pattern jetflix-release.apk --dir "$RUNNER_TEMP/base"
+          NEW=$("$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs jetflix-release.apk | grep 'SHA-256 digest' | head -1)
+          OLD=$("$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs "$RUNNER_TEMP/base/jetflix-release.apk" | grep 'SHA-256 digest' | head -1)
+          echo "build-50 signer: $OLD"
+          echo "this APK signer: $NEW"
+          [ -n "$OLD" ] && [ "$NEW" = "$OLD" ] || { echo "Signer certificate differs from build-50 - refusing to publish." >&2; exit 1; }
+
+      - name: Publish TEST prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="build-${BUILD_NUMBER}"
+          gh release create "$TAG" jetflix-release.apk jetflix-release.apk.sha256 \
+            --target "${GITHUB_SHA}" \
+            --prerelease \
+            --title "Driftfin $TAG TEST - Fire TV API 25 compatibility" \
+            --notes "TEST build, not the regular update: checks Driftfin on older Fire TV devices (Android 7.1 / API 25). CI unit tests and lint passed; not yet verified on hardware. Regular updates are unaffected: this is a prerelease and never becomes the latest release. Install only if asked to test."
