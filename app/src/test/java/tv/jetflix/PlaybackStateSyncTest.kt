@@ -40,6 +40,19 @@ class PlaybackStateSyncTest {
     /** Flush the queue until [cond] or the virtual [budgetMs] runs out; returns the virtual ms used.
      *  The fake pipeline's media loading is timer-driven in Robolectric, so reaching READY needs a
      *  little virtual time; keeping the budget under the old 1s poll period is the point. */
+    /** The fake pipeline loads on a real background thread: only real time plus draining the main
+     *  looper moves it to READY. A virtual-time flush can burn its budget faster than the loader's
+     *  real work runs on a shared CI host, so the setup waits in REAL time. The measured event
+     *  phases below keep their virtual budgets - that is what the test actually times. */
+    private fun awaitReady(player: ExoPlayer) {
+        val deadline = System.nanoTime() + 10_000_000_000L
+        while (player.playbackState != Player.STATE_READY && System.nanoTime() < deadline) {
+            shadowOf(android.os.Looper.getMainLooper()).idle()
+            Thread.sleep(5)
+        }
+        assertTrue("fake pipeline reaches READY", player.playbackState == Player.STATE_READY)
+    }
+
     private fun flushUntil(budgetMs: Long, cond: () -> Boolean): Long {
         var used = 0L
         while (used < budgetMs) {
@@ -54,9 +67,9 @@ class PlaybackStateSyncTest {
 
     @Test fun pauseEventReportsPausedWellUnderTheOldPollPeriod() {
         val player = pipelinePlayer()
-        // Loading to READY is not what this test measures; give it a generous budget so the
-        // 900ms phase below times only the pause event path, on any host speed.
-        assertTrue("fake pipeline reaches READY", flushUntil(10_000) { player.playbackState == Player.STATE_READY } < 10_000)
+        // Loading to READY is not what this test measures; it waits in real time so the
+        // 900ms virtual phase below times only the pause event path.
+        awaitReady(player)
         val syncs = mutableListOf<Sync>()
         val listener = PlaybackStateSync.listener(player) { p, a, paused -> syncs += Sync(p, a, paused) }
         player.addListener(listener)
@@ -71,7 +84,7 @@ class PlaybackStateSyncTest {
 
     @Test fun resumeEventReportsUnpausedOnTheEventPath() {
         val player = pipelinePlayer()
-        assertTrue("fake pipeline reaches READY", flushUntil(10_000) { player.playbackState == Player.STATE_READY } < 10_000)
+        awaitReady(player)
         PlayerKeys.togglePlayback(player) // pause
         flushUntil(900) { !player.playWhenReady }
         val syncs = mutableListOf<Sync>()

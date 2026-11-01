@@ -93,9 +93,13 @@ class TvFocusOutlineSweepTest {
         val b = node.fetchSemanticsNode().boundsInRoot
         val cy = ((b.top + b.bottom) / 2).toInt()
         for (frac in listOf(0.10f, 0.90f)) {
-            val px = pixelAt((b.left + (b.right - b.left) * frac).toInt(), cy)
-            val r = android.graphics.Color.red(px); val g = android.graphics.Color.green(px); val bl = android.graphics.Color.blue(px)
-            assertTrue("$tag keeps the white fill when focused at ${(frac * 100).toInt()}% width (was rgb($r,$g,$bl))", r > 200 && g > 200 && bl > 200)
+            // A long label's dark glyphs can reach the 10%/90% column on the center row, so scan
+            // the whole column inside the pill: the white fill must show somewhere along it.
+            val x = (b.left + (b.right - b.left) * frac).toInt()
+            val y0 = (b.top + (b.bottom - b.top) * 0.12f).toInt()
+            val y1 = (b.bottom - (b.bottom - b.top) * 0.12f).toInt()
+            val best = (y0..y1 step 2).maxOf { y -> android.graphics.Color.red(pixelAt(x, y)) }
+            assertTrue("$tag keeps the white fill when focused at ${(frac * 100).toInt()}% width (brightest column pixel r=$best)", best > 200)
         }
         val dark = (0..40).map { pixelAt((b.left + (b.right - b.left) * (0.3f + it * 0.01f)).toInt(), cy) }
             .count { android.graphics.Color.red(it) < 120 && android.graphics.Color.green(it) < 120 && android.graphics.Color.blue(it) < 120 }

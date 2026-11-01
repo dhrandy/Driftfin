@@ -60,7 +60,7 @@ class TvActionFocusTest {
     /** tv-material scales a focused button's VISUAL up ~1.1x while the semantics bounds stay at
      *  the layout size, so the white outline lands a few px OUTSIDE the bounds (probe-verified).
      *  Scan a short strip across each edge and require a white pixel; the interior keeps its fill. */
-    private fun assertFocusOutline(tag: String, node: androidx.compose.ui.test.SemanticsNodeInteraction) {
+    private fun assertFocusOutline(tag: String, node: androidx.compose.ui.test.SemanticsNodeInteraction, whitePill: Boolean = false) {
         val b = node.fetchSemanticsNode().boundsInRoot
         val cx = ((b.left + b.right) / 2).toInt()
         val cy = ((b.top + b.bottom) / 2).toInt()
@@ -80,12 +80,25 @@ class TvActionFocusTest {
             val best = pts.maxOf { pt -> android.graphics.Color.red(pixelAt(pt.first, pt.second)) }
             assertTrue("$tag focused outline is white at $name edge (brightest strip pixel r=$best)", best > 200)
         }
-        // The focused body must be DARK (fill), not a white block: sample the fill zone between
-        // the outline and the glyphs on the center row.
-        for (frac in listOf(0.10f, 0.90f)) {
-            val px = pixelAt((b.left + (b.right - b.left) * frac).toInt(), cy)
-            val r = android.graphics.Color.red(px); val g = android.graphics.Color.green(px); val bl = android.graphics.Color.blue(px)
-            assertTrue("$tag focused body is dark at ${(frac * 100).toInt()}% width (was rgb($r,$g,$bl))", r < 120 && g < 120 && bl < 120)
+        if (whitePill) {
+            // Primary actions (Play/Resume) KEEP the white pill while focused; the outline ring is
+            // the focus cue. Glyphs can reach the 10%/90% column on the center row, so scan the
+            // column inside the pill: white fill must show somewhere along it.
+            for (frac in listOf(0.10f, 0.90f)) {
+                val x = (b.left + (b.right - b.left) * frac).toInt()
+                val y0 = (b.top + (b.bottom - b.top) * 0.12f).toInt()
+                val y1 = (b.bottom - (b.bottom - b.top) * 0.12f).toInt()
+                val best = (y0..y1 step 2).maxOf { y -> android.graphics.Color.red(pixelAt(x, y)) }
+                assertTrue("$tag focused body keeps the white fill at ${(frac * 100).toInt()}% width (brightest column pixel r=$best)", best > 200)
+            }
+        } else {
+            // Secondary actions keep the DARK fill, not a white block: sample the fill zone between
+            // the outline and the glyphs on the center row.
+            for (frac in listOf(0.10f, 0.90f)) {
+                val px = pixelAt((b.left + (b.right - b.left) * frac).toInt(), cy)
+                val r = android.graphics.Color.red(px); val g = android.graphics.Color.green(px); val bl = android.graphics.Color.blue(px)
+                assertTrue("$tag focused body is dark at ${(frac * 100).toInt()}% width (was rgb($r,$g,$bl))", r < 120 && g < 120 && bl < 120)
+            }
         }
     }
 
@@ -94,7 +107,7 @@ class TvActionFocusTest {
         val play = rule.onNodeWithText("Play")
         play.requestFocus(); rule.waitForIdle()
         play.assertIsFocused()
-        assertFocusOutline("Play", play)
+        assertFocusOutline("Play", play, whitePill = true)
     }
 
     @Test fun renderFocusedPlayOutlineWithUnchangedChrome() {

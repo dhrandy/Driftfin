@@ -90,14 +90,24 @@ class SettingsFocusOutlineTest {
         fun brightest(pts: List<Pair<Int, Int>>) = pts.maxOf { android.graphics.Color.red(bmp.getPixel(it.first, it.second)) }
         val midX = (b.left + w / 3).toInt()..(b.right - w / 3).toInt() step 2
         val midY = (b.top + h / 3).toInt()..(b.bottom - h / 3).toInt() step 2
-        val top = brightest(midX.flatMap { x -> ((b.top - outY).toInt()..(b.top + 2).toInt()).map { x to it } })
-        val bottom = brightest(midX.flatMap { x -> ((b.bottom - 2).toInt()..(b.bottom + outY).toInt()).map { x to it } })
-        val left = brightest(midY.flatMap { y -> ((b.left - outX).toInt()..(b.left + 2).toInt()).map { it to y } })
-        val right = brightest(midY.flatMap { y -> ((b.right - 2).toInt()..(b.right + outX).toInt()).map { it to y } })
-        assertTrue("$tag: top edge of the focus outline must be visible (brightest r=$top)", top > 200)
-        assertTrue("$tag: bottom edge of the focus outline must be visible (brightest r=$bottom)", bottom > 200)
-        assertTrue("$tag: left edge of the focus outline must be visible (brightest r=$left)", left > 200)
-        assertTrue("$tag: right edge of the focus outline must be visible (brightest r=$right)", right > 200)
+        // Scan bands are clamped to the bitmap: a band past the window edge is a geometry fact to
+        // report, not a crash. Each edge reports WHERE its brightest pixel sits, so a failure tells
+        // a missing ring from a misplaced band.
+        fun scan(pts: List<Pair<Int, Int>>): Pair<Int, Pair<Int, Int>?> {
+            val inBounds = pts.filter { it.first in 0 until bmp.width && it.second in 0 until bmp.height }
+            if (inBounds.isEmpty()) return -1 to null
+            val bestPt = inBounds.maxByOrNull { android.graphics.Color.red(bmp.getPixel(it.first, it.second)) }!!
+            return android.graphics.Color.red(bmp.getPixel(bestPt.first, bestPt.second)) to bestPt
+        }
+        val (top, topAt) = scan(midX.flatMap { x -> ((b.top - outY).toInt()..(b.top + 2).toInt()).map { x to it } })
+        val (bottom, bottomAt) = scan(midX.flatMap { x -> ((b.bottom - 2).toInt()..(b.bottom + outY).toInt()).map { x to it } })
+        val (left, leftAt) = scan(midY.flatMap { y -> ((b.left - outX).toInt()..(b.left + 2).toInt()).map { it to y } })
+        val (right, rightAt) = scan(midY.flatMap { y -> ((b.right - 2).toInt()..(b.right + outX).toInt()).map { it to y } })
+        val where = "row=$b bmp=${bmp.width}x${bmp.height}"
+        assertTrue("$tag: top edge of the focus outline must be visible (brightest r=$top at $topAt, $where)", top > 200)
+        assertTrue("$tag: bottom edge of the focus outline must be visible (brightest r=$bottom at $bottomAt, $where)", bottom > 200)
+        assertTrue("$tag: left edge of the focus outline must be visible (brightest r=$left at $leftAt, $where)", left > 200)
+        assertTrue("$tag: right edge of the focus outline must be visible (brightest r=$right at $rightAt, $where)", right > 200)
     }
 
     private fun checkPaneFirstRow(capture: String) {
