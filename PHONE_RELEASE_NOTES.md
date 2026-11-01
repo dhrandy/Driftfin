@@ -3,6 +3,11 @@
 The phone app has its own release line: `phone-build-N` prereleases, separate from the TV app's
 `build-N` releases. The phone's Check for updates reads these; the TV app never sees them.
 
+## phone-build-9
+
+Changes:
+- Watchlist protection: your saved titles are never removed when the server answers with only part of the list. If the watchlist load fails, My Stuff now shows an error with a Retry instead of an empty list, and it tells you your saved titles are kept. This guards titles you still have; it does not bring back ones already gone.
+
 ## phone-build-8
 
 Changes:

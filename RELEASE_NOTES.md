@@ -4,6 +4,12 @@ Each build lists its real changes here. The CI release workflow copies the secti
 matching the build tag onto the GitHub release page and appends the standard
 automated-build footer.
 
+## build-53
+
+Changes:
+- Details: the selected season's chip now stays white and enlarged even while the remote cursor is on it, and the other season chip gets the white focus ring, so you can always tell which season you are looking at.
+- Player: skipping back while paused no longer flashes the pause button and the black-and-white effect for a moment. The paused look now follows the settled pause state, and real pauses still respond right away.
+
 ## build-52
 
 Changes:
