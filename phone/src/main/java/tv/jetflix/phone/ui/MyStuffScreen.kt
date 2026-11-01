@@ -159,6 +159,15 @@ fun ActorScreen(personId: String, name: String, onBack: () -> Unit, onOpen: (Bas
     }
     val movies = items.orEmpty().filter { it.Type == "Movie" }
     val shows = items.orEmpty().filter { it.Type == "Series" }
+    // One fixed view of everything that decides how many items the grid has. The grid's content block must not read
+    // state that can change mid-measure (LazyGrid IndexOutOfBounds race; BrowseScreen and My Stuff take the same snapshot).
+    val personNow = person
+    val lifeDates = personNow?.let { tv.jetflix.phone.data.lifeDatesLabel(it.PremiereDate, it.EndDate) }
+    // Bio: first paragraph only, with More for the rest, so the filmography stays near the top (reported 10/29).
+    val bioParagraphs = personNow?.Overview?.replace(Regex("[ \t]+\n"), "\n")?.trim()?.takeIf { it.isNotEmpty() }
+        ?.split(Regex("\\r?\\n\\s*\\r?\\n"))?.filter { it.isNotBlank() }.orEmpty()
+    val titlesFailedNow = titlesFailed
+    val nothingElse = items?.isEmpty() == true
     LazyVerticalGrid(
         columns = GridCells.Fixed(tv.jetflix.phone.data.PhoneSettings.posterSize.collectAsState().value.gridColumns), modifier = Modifier.fillMaxSize().statusBarsPadding(),
         contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
@@ -169,20 +178,17 @@ fun ActorScreen(personId: String, name: String, onBack: () -> Unit, onOpen: (Bas
                 BackIconButton(onBack)
                 Column(Modifier.padding(start = 12.dp)) {
                     Text(name, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                    person?.let { tv.jetflix.phone.data.lifeDatesLabel(it.PremiereDate, it.EndDate) }?.let {
+                    lifeDates?.let {
                         Text(it, color = DriftfinColors.TextMuted, fontSize = 13.sp)
                     }
                 }
             }
         }
-        // Bio: first paragraph only, with More for the rest, so the filmography stays near the top (reported 10/29).
-        val bio = person?.Overview?.replace(Regex("[ \t]+\n"), "\n")?.trim()?.takeIf { it.isNotEmpty() }
-        val paragraphs = bio?.split(Regex("\\r?\\n\\s*\\r?\\n"))?.filter { it.isNotBlank() }.orEmpty()
-        if (paragraphs.isNotEmpty()) {
+        if (bioParagraphs.isNotEmpty()) {
             item(span = { GridItemSpan(maxLineSpan) }) {
                 Column {
-                    Text(if (bioOpen) paragraphs.joinToString("\n\n") else paragraphs.first(), color = DriftfinColors.TextSecondary, fontSize = 14.sp)
-                    if (paragraphs.size > 1) {
+                    Text(if (bioOpen) bioParagraphs.joinToString("\n\n") else bioParagraphs.first(), color = DriftfinColors.TextSecondary, fontSize = 14.sp)
+                    if (bioParagraphs.size > 1) {
                         Text(
                             if (bioOpen) "Show less" else "More",
                             color = DriftfinColors.Red, fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
@@ -192,7 +198,7 @@ fun ActorScreen(personId: String, name: String, onBack: () -> Unit, onOpen: (Bas
                 }
             }
         }
-        if (titlesFailed) item(span = { GridItemSpan(maxLineSpan) }) {
+        if (titlesFailedNow) item(span = { GridItemSpan(maxLineSpan) }) {
             Column {
                 Text("Couldn't load this actor's titles. Check the connection and try again.", color = DriftfinColors.TextSecondary, fontSize = 14.sp)
                 Text(
@@ -202,12 +208,12 @@ fun ActorScreen(personId: String, name: String, onBack: () -> Unit, onOpen: (Bas
                 )
             }
         }
-        if (!titlesFailed && items?.isEmpty() == true) item(span = { GridItemSpan(maxLineSpan) }) { Text("Nothing else on this server.", color = DriftfinColors.TextSecondary, fontSize = 14.sp) }
-        if (!titlesFailed && movies.isNotEmpty()) {
+        if (!titlesFailedNow && nothingElse) item(span = { GridItemSpan(maxLineSpan) }) { Text("Nothing else on this server.", color = DriftfinColors.TextSecondary, fontSize = 14.sp) }
+        if (!titlesFailedNow && movies.isNotEmpty()) {
             item(span = { GridItemSpan(maxLineSpan) }) { Text("Movies", fontSize = 18.sp, fontWeight = FontWeight.Bold) }
             items(movies, key = { it.Id }) { PosterCard(it, Modifier.fillMaxWidth()) { onOpen(it) } }
         }
-        if (!titlesFailed && shows.isNotEmpty()) {
+        if (!titlesFailedNow && shows.isNotEmpty()) {
             item(span = { GridItemSpan(maxLineSpan) }) { Text("Shows", fontSize = 18.sp, fontWeight = FontWeight.Bold) }
             items(shows, key = { it.Id }) { PosterCard(it, Modifier.fillMaxWidth()) { onOpen(it) } }
         }

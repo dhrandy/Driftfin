@@ -194,5 +194,29 @@ class PhoneActorTest {
         java.io.File("build/render-check", "actor-life-dates.png").outputStream().use { bmp.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
     }
 
+    @Test fun sectionsSurviveBioToggleOnPopulatedGrid() {
+        // Open and close the bio after the Movies/Shows sections are on screen. The grid content mutates while
+        // populated; the sections must stay put (locks the snapshot-hardened ActorScreen content path).
+        multiBio = true
+        rule.setContent { DriftfinTheme { ActorScreen("p1", "Synthetic Actor", onBack = {}, onOpen = {}) } }
+        val end = System.currentTimeMillis() + 10_000
+        while (System.currentTimeMillis() < end) {
+            rule.waitForIdle(); org.robolectric.shadows.ShadowLooper.idleMainLooper()
+            if (rule.onAllNodes(androidx.compose.ui.test.hasText("Shows")).fetchSemanticsNodes().isNotEmpty()) break
+            Thread.sleep(80)
+        }
+        rule.onNodeWithText("More").performClick()
+        rule.waitForIdle(); org.robolectric.shadows.ShadowLooper.idleMainLooper()
+        rule.onNodeWithText("Second paragraph with the rest of the story.", substring = true).assertIsDisplayed()
+        rule.onNodeWithText("Show less").assertIsDisplayed()
+        rule.onNodeWithText("Movies").assertIsDisplayed()
+        rule.onNodeWithText("Shows").assertIsDisplayed()
+        rule.onNodeWithText("Show less").performClick()
+        rule.waitForIdle(); org.robolectric.shadows.ShadowLooper.idleMainLooper()
+        rule.onNodeWithText("More").assertIsDisplayed()
+        rule.onNodeWithText("Movies").assertIsDisplayed()
+        rule.onNodeWithText("Shows").assertIsDisplayed()
+    }
+
     @org.junit.After fun tearDown() { server.shutdown(); Graph.signOut() }
 }
