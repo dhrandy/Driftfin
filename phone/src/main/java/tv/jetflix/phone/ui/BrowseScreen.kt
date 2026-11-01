@@ -111,6 +111,7 @@ fun BrowseScreen(type: String, title: String, onOpen: (BaseItemDto) -> Unit, ini
     // fixed list instead of state that can change mid-measure (LazyGrid IndexOutOfBounds race).
     val rowsLoaded = items != null
     val rows = items.orEmpty()
+    KeepGridPosition(grid, rowsLoaded && rows.isNotEmpty())
     LazyVerticalGrid(
         columns = GridCells.Fixed(tv.jetflix.phone.data.PhoneSettings.posterSize.collectAsState().value.gridColumns), state = grid,
         modifier = Modifier.fillMaxSize().statusBarsPadding(),
@@ -152,5 +153,24 @@ fun BrowseScreen(type: String, title: String, onOpen: (BaseItemDto) -> Unit, ini
         }
         if (rowsLoaded && rows.isEmpty()) item(span = { GridItemSpan(maxLineSpan) }) { Text("Nothing here.", color = DriftfinColors.TextSecondary) }
         items(rows, key = { it.Id }) { PosterCard(it, Modifier.fillMaxWidth()) { onOpen(it) } }
+    }
+}
+
+/** Back from a title returns to the same place. The rows are fetched again when the screen comes back, so the
+ *  restored scroll index meets a header-only grid and is clamped to the top. This keeps the last position in saved
+ *  state and applies it once, when the rows are on screen again. */
+@Composable
+private fun KeepGridPosition(grid: androidx.compose.foundation.lazy.grid.LazyGridState, ready: Boolean) {
+    var index by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf(0) }
+    var offset by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf(0) }
+    var applied by remember { androidx.compose.runtime.mutableStateOf(false) }
+    LaunchedEffect(grid, ready) {
+        if (!ready) return@LaunchedEffect
+        if (!applied) {
+            applied = true
+            if (index > 0 || offset > 0) grid.scrollToItem(index, offset)
+        }
+        androidx.compose.runtime.snapshotFlow { grid.firstVisibleItemIndex to grid.firstVisibleItemScrollOffset }
+            .collect { (i, o) -> index = i; offset = o }
     }
 }
