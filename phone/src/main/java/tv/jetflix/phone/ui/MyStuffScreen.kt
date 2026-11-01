@@ -67,6 +67,12 @@ fun MyStuffScreen(onOpen: (BaseItemDto) -> Unit, onOpenCollection: (BaseItemDto)
             MySection.Collections -> Content.collections()
         }
     }
+    // One fixed view of everything that decides how many items the grid has. The grid's content block must not read
+    // state that can change mid-measure (LazyGrid IndexOutOfBounds race; BrowseScreen takes the same snapshot).
+    val rows = items.orEmpty()
+    val showFailed = section == MySection.Watchlist && watchlistFailed
+    val showEmpty = items?.isEmpty() == true && !showFailed
+    val savedIdsKept = starred.isNotEmpty()
     LazyVerticalGrid(
         columns = GridCells.Fixed(tv.jetflix.phone.data.PhoneSettings.posterSize.collectAsState().value.gridColumns), modifier = Modifier.fillMaxSize().statusBarsPadding(),
         contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
@@ -93,7 +99,7 @@ fun MyStuffScreen(onOpen: (BaseItemDto) -> Unit, onOpenCollection: (BaseItemDto)
                     colors = androidx.compose.material3.FilterChipDefaults.filterChipColors(selectedContainerColor = DriftfinColors.Red, selectedLabelColor = androidx.compose.ui.graphics.Color.White)) }
             }
         }
-        if (section == MySection.Watchlist && watchlistFailed) item(span = { GridItemSpan(maxLineSpan) }) {
+        if (showFailed) item(span = { GridItemSpan(maxLineSpan) }) {
             Column {
                 Text("Couldn't load your watchlist. Your saved titles are kept. Check the connection and try again.", color = DriftfinColors.TextSecondary, fontSize = 14.sp)
                 Text(
@@ -103,14 +109,14 @@ fun MyStuffScreen(onOpen: (BaseItemDto) -> Unit, onOpenCollection: (BaseItemDto)
                 )
             }
         }
-        if (items?.isEmpty() == true && !(section == MySection.Watchlist && watchlistFailed)) item(span = { GridItemSpan(maxLineSpan) }) {
+        if (showEmpty) item(span = { GridItemSpan(maxLineSpan) }) {
             Text(when (section) {
                 MySection.Favorites -> "Nothing starred yet. Tap the heart on a title."
-                MySection.Watchlist -> if (starred.isNotEmpty()) "Your saved titles aren't available from the server right now. They are kept." else "Your watchlist is empty. Tap Watchlist on a title to save it for later."
+                MySection.Watchlist -> if (savedIdsKept) "Your saved titles aren't available from the server right now. They are kept." else "Your watchlist is empty. Tap Watchlist on a title to save it for later."
                 MySection.Collections -> "No collections on this server."
             }, color = DriftfinColors.TextSecondary, fontSize = 14.sp)
         }
-        items(items.orEmpty(), key = { it.Id }) { PosterCard(it, Modifier.fillMaxWidth()) { if (it.Type == "BoxSet") onOpenCollection(it) else onOpen(it) } }
+        items(rows, key = { it.Id }) { PosterCard(it, Modifier.fillMaxWidth()) { if (it.Type == "BoxSet") onOpenCollection(it) else onOpen(it) } }
     }
 }
 
