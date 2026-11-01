@@ -5,6 +5,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
@@ -750,35 +752,38 @@ fun <T> OptionPicker(title: String, options: List<Pair<String, T>>, selected: T?
             // Density alone does not change the layout - only the text scale does.
             val effectiveColumns = if (androidx.compose.ui.platform.LocalConfiguration.current.fontScale > 1.3f)
                 (columns / 2).coerceAtLeast(2) else columns
-            // Fit the grid to its content: short pickers (Sort by, Show, Filter) no longer sit over a
-            // large empty block; long lists (Genre, Year) still cap and scroll. The content padding
-            // gives the focused option's white outline room at the top and bottom edges.
-            val rows = (all.size + effectiveColumns - 1) / effectiveColumns
-            // Option rows measure ~40dp at normal text scale (16sp single-line label plus the tv
-            // Button's vertical padding), not 60: the old constant left an empty block under short
-            // pickers (run-17 sort-picker-fit.png: 179px tail). Long lists still cap and scroll.
-            val gridHeight = (rows * 40 + (rows - 1) * 8 + 12).dp.coerceAtMost(if (allLabel == null) 300.dp else 320.dp)
-            androidx.compose.foundation.lazy.grid.LazyVerticalGrid(
-                columns = androidx.compose.foundation.lazy.grid.GridCells.Fixed(effectiveColumns),
-                modifier = Modifier.height(gridHeight),
-                contentPadding = androidx.compose.foundation.layout.PaddingValues(vertical = 6.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            // Measure the options instead of predicting their height: any fixed rows*height constant
+            // is wrong at some text scale (60dp left a 179px empty tail under Sort; 40dp pushed
+            // Descending below the fixed viewport at 1.5x, run-19). A plain grid of weighted rows
+            // wraps to its real content; long lists (Genre, Year) still cap and scroll. The content
+            // padding gives the focused option's white outline room at the top and bottom edges.
+            androidx.compose.foundation.layout.Column(
+                modifier = Modifier
+                    .heightIn(max = if (allLabel == null) 300.dp else 320.dp)
+                    .verticalScroll(androidx.compose.foundation.rememberScrollState())
+                    .padding(vertical = 6.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                items(all.size) { i ->
-                    val (label, value) = all[i]
-                    val isSel = value == selected
-                    androidx.tv.material3.Button(
-                        onClick = { onPick(value) },
-                        modifier = if (isSel || (i == 0 && all.none { it.second == selected })) Modifier.focusRequester(focus) else Modifier,
-                        colors = androidx.tv.material3.ButtonDefaults.colors(
-                            containerColor = if (isSel) androidx.compose.ui.graphics.Color(0xFF3A3A3A) else androidx.compose.ui.graphics.Color.Transparent,
-                            contentColor = androidx.compose.ui.graphics.Color.White,
-                            focusedContainerColor = JetflixColors.SurfaceLight.copy(alpha = 0.7f),
-                            focusedContentColor = Color.White,
-                        ),
-                        border = buttonFocusOutline(RoundedCornerShape(percent = 50)),
-                    ) { Text(label, style = JetflixType.body, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis) }
+                all.chunked(effectiveColumns).forEachIndexed { rowIndex, row ->
+                    androidx.compose.foundation.layout.Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        row.forEachIndexed { colIndex, cell ->
+                            val (label, value) = cell
+                            val i = rowIndex * effectiveColumns + colIndex
+                            val isSel = value == selected
+                            androidx.tv.material3.Button(
+                                onClick = { onPick(value) },
+                                modifier = Modifier.weight(1f).then(if (isSel || (i == 0 && all.none { it.second == selected })) Modifier.focusRequester(focus) else Modifier),
+                                colors = androidx.tv.material3.ButtonDefaults.colors(
+                                    containerColor = if (isSel) androidx.compose.ui.graphics.Color(0xFF3A3A3A) else androidx.compose.ui.graphics.Color.Transparent,
+                                    contentColor = androidx.compose.ui.graphics.Color.White,
+                                    focusedContainerColor = JetflixColors.SurfaceLight.copy(alpha = 0.7f),
+                                    focusedContentColor = Color.White,
+                                ),
+                                border = buttonFocusOutline(RoundedCornerShape(percent = 50)),
+                            ) { Text(label, style = JetflixType.body, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis) }
+                        }
+                        repeat(effectiveColumns - row.size) { androidx.compose.foundation.layout.Spacer(Modifier.weight(1f)) }
+                    }
                 }
             }
         }
