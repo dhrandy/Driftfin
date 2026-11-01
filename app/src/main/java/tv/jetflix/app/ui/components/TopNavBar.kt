@@ -191,16 +191,21 @@ fun TopNavBar(
                 }
                 val avatarId by tv.jetflix.app.data.AppSettings.avatarId.collectAsState()
                 val avatarDisplay by tv.jetflix.app.data.AppSettings.avatarDisplay.collectAsState()
+                // Local shown-name override for this profile (Settings > Account); blank = server username.
+                val nameOverride by tv.jetflix.app.data.AppSettings.displayName.collectAsState()
+                val shownName = nameOverride.ifBlank { userName }
                 val avatar = tv.jetflix.app.data.Avatars.byId(avatarId)
                 val showAvatar = avatar != null && avatarDisplay != tv.jetflix.app.data.AvatarDisplay.UsernameOnly
                 val avatarOnly = showAvatar && avatarDisplay == tv.jetflix.app.data.AvatarDisplay.AvatarOnly
                 NavTab(
-                    label = if (avatarOnly) "" else userName,
+                    label = if (avatarOnly) "" else shownName,
                     selected = false,
                     onClick = onUserClick,
                     // Avatar-only keeps the name as the accessible label.
-                    contentDescription = if (avatarOnly) userName else null,
-                    leading = if (showAvatar && avatar != null) { { AvatarImage(avatar, 22.dp) } } else null,
+                    contentDescription = if (avatarOnly) shownName else null,
+                    // Avatar-only can be larger than the with-username size: no label shares the
+                    // pill (user ask on build 48: the 22.dp avatar read tiny from the couch).
+                    leading = if (showAvatar && avatar != null) { { f -> AvatarImage(avatar, if (avatarOnly) 32.dp else 26.dp, focused = f) } } else null,
                 )
             }
         }
@@ -250,7 +255,7 @@ private fun SearchIconTab(selected: Boolean, onClick: () -> Unit, modifier: Modi
 }
 
 @Composable
-private fun NavTab(label: String, selected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier, onFocusLost: () -> Unit = {}, onFocusGained: () -> Boolean = { false }, onDwell: () -> Unit = {}, leading: (@Composable () -> Unit)? = null, contentDescription: String? = null) {
+private fun NavTab(label: String, selected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier, onFocusLost: () -> Unit = {}, onFocusGained: () -> Boolean = { false }, onDwell: () -> Unit = {}, leading: (@Composable (Boolean) -> Unit)? = null, contentDescription: String? = null) {
     var focused by remember { mutableStateOf(false) }
     FocusActivation(focused, onFocusGained, onDwell)
     Surface(
@@ -282,7 +287,7 @@ private fun NavTab(label: String, selected: Boolean, onClick: () -> Unit, modifi
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
             ) {
-                leading()
+                leading(focused)
                 if (label.isNotEmpty()) {
                     Spacer(Modifier.width(6.dp))
                     Text(

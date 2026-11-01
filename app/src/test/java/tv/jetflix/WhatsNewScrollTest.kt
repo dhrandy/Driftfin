@@ -44,10 +44,21 @@ class WhatsNewScrollTest {
         "Focus fixes: pressing Down on the last row of a settings pane stays put, and sweeping right from Search to Home no longer drops the cursor on Play.",
     )
 
+    // Draw the real DIALOG window, not the activity behind it: the activity decorView never
+    // contains the dialog, so activity captures of a dialog come out blank (they hid the
+    // build-48 narrow-window bug). The window is MATCH_PARENT now, so this is exactly what a
+    // TV shows at the harness resolution (960dp x 540dp, xhdpi = 1920x1080 px).
     private fun capture(name: String) {
         rule.waitForIdle()
-        val view = rule.activity.window.decorView
-        val bmp = Bitmap.createBitmap(view.width, view.height, Bitmap.Config.ARGB_8888)
+        val view = org.robolectric.shadows.ShadowDialog.getLatestDialog()?.window?.decorView
+            ?: error("expected a shown dialog")
+        val dm = rule.activity.resources.displayMetrics
+        view.measure(
+            android.view.View.MeasureSpec.makeMeasureSpec(dm.widthPixels, android.view.View.MeasureSpec.EXACTLY),
+            android.view.View.MeasureSpec.makeMeasureSpec(dm.heightPixels, android.view.View.MeasureSpec.EXACTLY),
+        )
+        view.layout(0, 0, dm.widthPixels, dm.heightPixels)
+        val bmp = Bitmap.createBitmap(dm.widthPixels, dm.heightPixels, Bitmap.Config.ARGB_8888)
         view.draw(android.graphics.Canvas(bmp))
         val out = File("build/outputs/qa/$name.png").apply { parentFile?.mkdirs() }
         out.outputStream().use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }

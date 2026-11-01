@@ -55,7 +55,7 @@ fun AvatarPickerContent(
                             focusedContainerColor = JetflixColors.SurfaceLight,
                         ),
                         border = ClickableSurfaceDefaults.border(
-                            focusedBorder = Border(androidx.compose.foundation.BorderStroke(3.dp, JetflixColors.FocusBorder), shape = CircleShape),
+                            focusedBorder = Border(androidx.compose.foundation.BorderStroke(3.dp, JetflixColors.Red), shape = CircleShape),
                         ),
                     ) {
                         AvatarImage(entry, 72.dp, Modifier.padding(4.dp))
@@ -73,7 +73,13 @@ fun AvatarPickerDialog(
     onDismiss: () -> Unit,
 ) {
     val initialFocus = remember { FocusRequester() }
-    Dialog(onDismissRequest = onDismiss) {
+    // usePlatformDefaultWidth = false: the platform dialog theme narrows the window on TV,
+    // which clipped the 5th avatar column on build 48 (only 16 of 20 visible). Full-width
+    // window; the grid sizes itself and stays centred.
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
+    ) {
         AvatarPickerContent(selectedId, onSelect, initialFocus = initialFocus)
     }
     // requestFocus returns false before the window has focus, so retry until it takes (same pattern as ProfilePickerDialog).

@@ -99,6 +99,17 @@ object AppSettings {
     val avatarId: StateFlow<Int> = _avatarId
     fun setAvatarId(v: Int) { _avatarId.value = v; prefs?.edit()?.putInt(avatarScoped("avatar_id"), v)?.apply() }
 
+    /** Local shown name for the active profile: overrides only what the top bar displays on this
+     *  TV. Blank (the default) shows the real server username. Never sent to the server; sign-in,
+     *  account and auth identity are untouched. */
+    private val _displayName = MutableStateFlow("")
+    val displayName: StateFlow<String> = _displayName
+    fun setDisplayName(v: String) {
+        val t = v.trim()
+        _displayName.value = t
+        prefs?.edit()?.apply { val k = avatarScoped("display_name"); if (t.isEmpty()) remove(k) else putString(k, t) }?.apply()
+    }
+
     /** Top-bar profile display: username only (the original look, default), avatar + username, or avatar only. */
     private val _avatarDisplay = MutableStateFlow(AvatarDisplay.UsernameOnly)
     val avatarDisplay: StateFlow<AvatarDisplay> = _avatarDisplay
@@ -107,6 +118,7 @@ object AppSettings {
     private fun loadAvatars(p: android.content.SharedPreferences) {
         _avatarId.value = p.getInt(avatarScoped("avatar_id"), 0)
         _avatarDisplay.value = AvatarDisplay.values().firstOrNull { it.name == p.getString(avatarScoped("avatar_display"), null) } ?: AvatarDisplay.UsernameOnly
+        _displayName.value = p.getString(avatarScoped("display_name"), null).orEmpty()
     }
 
     /** Rereads the avatar choice for the active profile. Called on sign-in, profile switch and sign-out. */

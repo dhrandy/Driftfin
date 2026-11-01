@@ -174,6 +174,7 @@ fun SettingsScreen(
         avatarId = AppSettings.avatarId.collectAsState().value,
         onAvatarSelected = { AppSettings.setAvatarId(it) },
         avatarDisplay = AppSettings.avatarDisplay.collectAsState().value,
+        displayName = AppSettings.displayName.collectAsState().value,
         onCycleAvatarDisplay = { AppSettings.setAvatarDisplay(AppSettings.avatarDisplay.value.next()) },
         buttonSound = AppSettings.buttonSound.collectAsState().value,
         onCycleButtonSound = {
@@ -250,6 +251,7 @@ fun SettingsContent(
     avatarId: Int = 0,
     onAvatarSelected: (Int) -> Unit = {},
     avatarDisplay: tv.jetflix.app.data.AvatarDisplay = tv.jetflix.app.data.AvatarDisplay.UsernameOnly,
+    displayName: String = "",
     onCycleAvatarDisplay: () -> Unit = {},
 ) {
     var showAvatarPicker by remember { mutableStateOf(false) }
@@ -261,6 +263,8 @@ fun SettingsContent(
     // Account pane: Down from "Profile display" must land on "Switch profile", not whichever side-by-side
     // button the direction search happens to pick from a full-width row.
     val accountFirstAction = remember { FocusRequester() }
+    val shownNameRow = remember { FocusRequester() }
+    var showNameDialog by remember { mutableStateOf(false) }
     var category by remember { mutableStateOf(initialCategory) }
     // Captured at composition: arriving by a tab sweep keeps focus on the tab until Down or OK (NavSweep is
     // cleared by the handoff, so reading it live here races and either steals focus or defers it forever).
@@ -375,7 +379,8 @@ fun SettingsContent(
                                     }
                                 }
                                 SettingRow("Profile avatar", "Pick one of the 20 built-in avatars for the top bar. Press OK to choose.", true, { showAvatarPicker = true }, firstRow(), valueText = tv.jetflix.app.data.Avatars.byId(avatarId)?.label ?: "None")
-                                SettingRow("Profile display", "How you appear in the top bar: username only (the original look), avatar + username, or avatar only. Press OK to change.", true, onCycleAvatarDisplay, Modifier.focusProperties { left = railFocus; down = accountFirstAction }, valueText = avatarDisplay.label)
+                                SettingRow("Profile display", "How you appear in the top bar: username only (the original look), avatar + username, or avatar only. Press OK to change.", true, onCycleAvatarDisplay, Modifier.focusProperties { left = railFocus; down = shownNameRow }, valueText = avatarDisplay.label)
+                                SettingRow("Shown name", "The name the top bar shows for this profile, on this TV only. Your server username and sign-in are untouched. Save it empty to go back to the server name.", true, { showNameDialog = true }, Modifier.focusRequester(shownNameRow).focusProperties { left = railFocus; down = accountFirstAction }, valueText = displayName.ifBlank { "Server name" })
                                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                                     Button(
                                         onClick = onSignOut,
@@ -422,6 +427,16 @@ fun SettingsContent(
             modifier = Modifier.align(Alignment.TopCenter),
         )
 
+        if (showNameDialog) {
+            ShownNameDialog(
+                initial = displayName,
+                onDone = { entered ->
+                    tv.jetflix.app.data.AppSettings.setDisplayName(entered)
+                    showNameDialog = false
+                },
+                onCancel = { showNameDialog = false },
+            )
+        }
         if (showAvatarPicker) {
             tv.jetflix.app.ui.components.AvatarPickerDialog(
                 selectedId = avatarId,
@@ -592,4 +607,51 @@ fun updateTexts(u: tv.jetflix.app.update.UpdateUi): Pair<String, String> {
         is tv.jetflix.app.update.UpdateUi.ReadyToInstall -> "Installer open" to "Build ${u.build} was verified and passed to Android's installer. Confirm there to finish, or press OK to reopen it."
         is tv.jetflix.app.update.UpdateUi.Error -> "Retry" to u.message
     }
+}
+
+/** Centered name-entry dialog for the local shown name. IME Done saves; Back cancels. Empty = server name. */
+@Composable
+internal fun ShownNameDialog(initial: String, onDone: (String) -> Unit, onCancel: () -> Unit) {
+    var value by remember { mutableStateOf(initial) }
+    val focus = remember { androidx.compose.ui.focus.FocusRequester() }
+    Box(
+        Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.7f))
+            .onKeyEvent { ev ->
+                if (ev.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_BACK && ev.nativeKeyEvent.action == android.view.KeyEvent.ACTION_UP) { onCancel(); true } else false
+            },
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(
+            Modifier
+                .width(520.dp)
+                .background(JetflixColors.Surface, RoundedCornerShape(10.dp))
+                .padding(24.dp),
+        ) {
+            Text("Shown name", color = Color.White, style = JetflixType.sectionTitle)
+            Text(
+                "The name the top bar shows for this profile, on this TV only. It does not change your server username or sign-in. Save it empty to show the server name again.",
+                style = JetflixType.caption, color = JetflixColors.TextSecondary,
+            )
+            Spacer(Modifier.height(16.dp))
+            androidx.compose.foundation.text.BasicTextField(
+                value = value,
+                onValueChange = { value = it },
+                singleLine = true,
+                textStyle = JetflixType.body.copy(color = Color.White),
+                cursorBrush = androidx.compose.ui.graphics.SolidColor(Color.White),
+                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Done),
+                keyboardActions = androidx.compose.foundation.text.KeyboardActions(onDone = { onDone(value) }),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .focusRequester(focus)
+                    .background(JetflixColors.SurfaceLight, RoundedCornerShape(6.dp))
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
+            )
+            Spacer(Modifier.height(8.dp))
+            Text("Done on the keyboard saves. Back cancels.", style = JetflixType.caption, color = JetflixColors.TextMuted)
+        }
+    }
+    androidx.compose.runtime.LaunchedEffect(Unit) { focus.requestFocus() }
 }

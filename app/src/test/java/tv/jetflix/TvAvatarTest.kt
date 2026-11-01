@@ -193,6 +193,75 @@ class TvAvatarTest {
         rule.onNodeWithText(longName).assertExists()
     }
 
+    @Test fun shownNameOverridesTopBarAndBlankResetsToServerName() {
+        resetPrefs()
+        signIn("user-n", "Tester Server")
+        AppSettings.setDisplayName("Captain Demo")
+        rule.setContent {
+            JetflixTheme {
+                androidx.compose.foundation.layout.Box(
+                    androidx.compose.ui.Modifier.fillMaxSize().background(JetflixColors.Background),
+                ) { TopNavBar(selected = JetflixTab.HOME, userName = "Tester Server", onTabSelected = {}, onUserClick = {}) }
+            }
+        }
+        rule.waitForIdle()
+        // Override replaces the server name in the bar...
+        rule.onNodeWithText("Captain Demo").assertIsDisplayed()
+        rule.onAllNodesWithText("Tester Server").assertCountEquals(0)
+        // ...and saving it empty falls straight back to the server username.
+        AppSettings.setDisplayName("")
+        rule.waitForIdle()
+        rule.onNodeWithText("Tester Server").assertIsDisplayed()
+        SessionManager.signOut()
+        AppSettings.setDisplayName("")
+    }
+
+    @Test fun shownNameIsIsolatedPerProfile() {
+        resetPrefs()
+        signIn("user-a", "Tester A")
+        AppSettings.setDisplayName("Demo Name A")
+        signIn("user-b", "Tester B") // a different profile on the same TV must not inherit it
+        assertEquals("", AppSettings.displayName.value)
+        signIn("user-a", "Tester A")
+        assertEquals("Demo Name A", AppSettings.displayName.value)
+        SessionManager.signOut()
+        AppSettings.setDisplayName("")
+    }
+
+    /** The Settings > Account "Shown name" editor over the app's dark background. */
+    @Test fun captureShownNameDialog() {
+        resetPrefs()
+        rule.setContent {
+            JetflixTheme {
+                androidx.compose.foundation.layout.Box(
+                    androidx.compose.ui.Modifier.fillMaxSize().background(JetflixColors.Background),
+                ) { tv.jetflix.app.ui.settings.ShownNameDialog(initial = "Captain Demo", onDone = {}, onCancel = {}) }
+            }
+        }
+        rule.waitForIdle()
+        capture("settings-shown-name-dialog")
+    }
+
+    /** Focused profile tab: the header avatar ring turns red (idle ring is thin neutral grey). */
+    @Test fun captureHeaderAvatarFocusedRedRing() {
+        header("focus-ring", AvatarDisplay.AvatarAndUsername, 5, "Tester", "avatar-header-focused-red-ring")
+        // Nothing is focused on first composition in this harness; Right lands on the first
+        // tab, then keeps walking the bar until the profile tab holds focus (bounded).
+        fun profileFocused() =
+            rule.onAllNodes(androidx.compose.ui.test.hasText("Tester") and isFocused()).fetchSemanticsNodes().isNotEmpty()
+        var steps = 0
+        while (!profileFocused() && steps < 12) {
+            rule.onRoot().performKeyInput { pressKey(Key.DirectionRight) }
+            rule.waitForIdle()
+            steps++
+        }
+        assertTrue(
+            "profile tab focused after walking the bar",
+            rule.onAllNodes(androidx.compose.ui.test.hasText("Tester") and isFocused()).fetchSemanticsNodes().isNotEmpty(),
+        )
+        capture("avatar-header-focused-red-ring")
+    }
+
     @Test fun captureAvatarPickerShowsAllTwenty() {
         resetPrefs()
         // The Dialog wrapper lives in its own window that the harness capture cannot see, so the

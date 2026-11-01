@@ -4,6 +4,14 @@ Each build lists its real changes here. The CI release workflow copies the secti
 matching the build tag onto the GitHub release page and appends the standard
 automated-build footer.
 
+## build-49
+
+Changes:
+- The What's new card and the avatar picker opened too narrowly on TV: the card now uses the screen's real width, the OK label is readable again, and all 20 avatars show in the picker.
+- Avatars get a thin ring so dark pictures don't disappear into the top bar, and the ring turns red when the remote cursor is on the avatar.
+- Avatar-only mode shows a larger picture, since there's no username next to it.
+- New "Shown name" in Settings > Account: change the name the top bar shows for this profile, on this TV only. Your server username and sign-in are unchanged; save it empty to show the server name again.
+
 ## build-48
 
 Changes:

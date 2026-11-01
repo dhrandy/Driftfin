@@ -59,7 +59,13 @@ object WhatsNew {
  */
 @Composable
 fun WhatsNewDialog(notes: List<String>, onDismiss: () -> Unit) {
-    androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
+    // usePlatformDefaultWidth = false: the platform dialog theme hands the window a narrow
+    // fixed width on TV (build 48 rendered the card at ~a quarter of the screen), so size the
+    // window to the display and let the card's own fillMaxWidth(0.6f) do the sizing.
+    androidx.compose.ui.window.Dialog(
+        onDismissRequest = onDismiss,
+        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
+    ) {
         WhatsNewCard(notes, onDismiss)
     }
 }
@@ -94,7 +100,18 @@ internal fun WhatsNewCard(
             notes.forEach { Text("\u2022  " + it, style = JetflixType.body, color = Color(0xFFE5E5E5), modifier = Modifier.focusable()) }
         }
         Spacer(Modifier.height(14.dp))
-        Button(onClick = onDismiss, modifier = Modifier.focusRequester(okFocus)) { Text("OK") }
+        // Explicit colors like the library chips: the tv-material defaults rendered the
+        // focused label unreadable on the white pill on real TVs (build 48).
+        Button(
+            onClick = onDismiss,
+            modifier = Modifier.focusRequester(okFocus),
+            colors = androidx.tv.material3.ButtonDefaults.colors(
+                containerColor = Color(0xFF3A3A3A),
+                contentColor = Color.White,
+                focusedContainerColor = Color.White,
+                focusedContentColor = Color.Black,
+            ),
+        ) { Text("OK") }
     }
     LaunchedEffect(Unit) { repeat(10) { try { okFocus.requestFocus(); return@LaunchedEffect } catch (_: Exception) { kotlinx.coroutines.delay(60) } } }
 }
