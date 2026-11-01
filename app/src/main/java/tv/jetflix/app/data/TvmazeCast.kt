@@ -89,12 +89,19 @@ class TvmazeCastResolver private constructor(private val api: TvmazeApi) {
         creditsCache[episodeId]?.let { return it }
         val credits = call { api.episodeGuestCast(episodeId) } ?: return null
         // Guest cast deduped by TVMaze person id. Show-level regulars are never fetched.
+        // A credit with a missing or non-positive person id is rejected before any identity is
+        // built from it: the model's default 0 must never materialize a bogus "person 0" or
+        // collapse two id-less credits into one.
         val seen = HashSet<Long>()
-        val people = credits.filter { it.person?.name != null && seen.add(it.person.id) }.map {
+        val people = credits.filter {
+            val person = it.person
+            person != null && person.id > 0 && !person.name.isNullOrBlank() && seen.add(person.id)
+        }.map {
+            val person = it.person!!
             BaseItemPerson(
-                Name = it.person?.name, Id = null, Role = it.character?.name, Type = "Actor",
-                PrimaryImageTag = null, RemoteImageUrl = it.person?.image?.medium,
-                ProviderIds = mapOf("Tvmaze" to (it.person?.id ?: 0).toString()),
+                Name = person.name, Id = null, Role = it.character?.name, Type = "Actor",
+                PrimaryImageTag = null, RemoteImageUrl = person.image?.medium,
+                ProviderIds = mapOf("Tvmaze" to person.id.toString()),
             )
         }
         if (people.isEmpty()) return null

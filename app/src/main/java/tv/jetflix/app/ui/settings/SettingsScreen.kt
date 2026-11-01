@@ -2,6 +2,7 @@ package tv.jetflix.app.ui.settings
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -368,10 +369,18 @@ fun SettingsContent(
                                 SettingRow("Autoplay next episode", "Starts the next episode after a 5 second countdown.", autoplay, onToggleAutoplay, firstRow())
                                 SettingRow("Cast while paused", "Shows the cast along the bottom when you pause. Press Down to pick an actor and OK to see their movies on your server.", pauseCast, onTogglePauseCast, nextRow())
                                 SettingRow("Episode cast from TVMaze", "Adds available guest credits from TVMaze for a verified matching episode. Coverage varies. Free, no account or key needed.", tvmazeEpisodeCast, onToggleTvmazeEpisodeCast, nextRow())
+                                // TVMaze's API terms ask for a link back, not just a name: the full URL is
+                                // shown, and OK opens it when this TV has a browser (quiet no-op otherwise).
+                                val tvmazeCreditContext = androidx.compose.ui.platform.LocalContext.current
                                 Text(
-                                    "Episode cast and guest stars come from TVMaze (tvmaze.com), used under CC BY-SA 4.0 (creativecommons.org/licenses/by-sa/4.0) and combined with your server data.",
+                                    "Episode cast and guest stars come from TVMaze (https://www.tvmaze.com), used under CC BY-SA 4.0 (https://creativecommons.org/licenses/by-sa/4.0) and combined with your server data. OK opens tvmaze.com.",
                                     style = JetflixType.caption, color = JetflixColors.TextMuted,
-                                    modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 4.dp, bottom = 8.dp),
+                                    modifier = Modifier
+                                        .padding(start = 20.dp, end = 20.dp, top = 4.dp, bottom = 8.dp)
+                                        .then(nextRow())
+                                        .clickable {
+                                            runCatching { tvmazeCreditContext.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://www.tvmaze.com/"))) }
+                                        },
                                 )
                                 SettingRow("Episode and movie info while paused", "Shows the story summary and the Up next line when you pause. The title and player controls always stay.", pauseInfo, onTogglePauseInfo, nextRow())
                                 SettingRow("Black and white while paused", if (pauseEffectsSupported) "Turns the paused video frame black and white. Off by default." else "Needs Android 12 or newer.", pauseBw, onTogglePauseBw, nextRow(), enabled = pauseEffectsSupported)

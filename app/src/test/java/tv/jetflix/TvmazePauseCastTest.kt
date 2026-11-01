@@ -81,6 +81,24 @@ class TvmazePauseCastTest {
         assertEquals(2, jellyfin.requestCount)
     }
 
+    @Test fun idlessGuestCreditsNeverMaterializeABogusPersonOrCollapseTogether() = runTest {
+        // Credits with a missing/0 TVMaze person id are dropped before identity mapping: no
+        // bogus "person 0", and two id-less credits must not deduplicate into one.
+        jellyfin.enqueue(MockResponse().setBody("""{"People":[{"Name":"Crew Only","Id":"w1","Type":"Writer"}]}"""))
+        jellyfin.enqueue(MockResponse().setBody(jellyfinSeason()))
+        tvmaze.enqueue(MockResponse().setBody(tvmazeSearch()))
+        tvmaze.enqueue(MockResponse().setBody(tvmazeEpisodes("2026-03-20","2026-03-21")))
+        tvmaze.enqueue(MockResponse().setBody(tvmazeEpisodes("2026-03-20","2026-03-20")))
+        tvmaze.enqueue(MockResponse().setBody("""[
+            {"person":{"name":"No Id One"},"character":{"name":"A"}},
+            {"person":{"id":0,"name":"No Id Two"},"character":{"name":"B"}},
+            {"person":{"id":2,"name":"Demo Guest","image":{"medium":"https://img/b.jpg"}},"character":{"name":"Christine"}}
+        ]""".replace("\n","")))
+        val cast = loadPauseCast(jellyfinApi(), "u", episode(), resolver())
+        assertEquals(listOf("Demo Guest"), cast.map { it.Name })
+        assertEquals("2", cast[0].ProviderIds?.get("Tvmaze"))
+    }
+
     @Test fun splitOffShowNumberedFromSeason1StillResolves() = runTest {
         // Provider-split season shape: the server's season 2 exists at the provider as a separate
         // show whose episodes are numbered from SEASON 1. The season label must not block the
