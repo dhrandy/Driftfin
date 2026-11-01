@@ -127,11 +127,11 @@ services:
       # Host interface, NOT 127.0.0.1, so the reverse proxy can reach it.
       - "${DRIFTFIN_PORT:-8740}:8740"
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8740/api/health || exit 1"]
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8740/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 30s
-      timeout: 5s
+      timeout: 10s
       retries: 3
-      start_period: 120s
+      start_period: 180s
     command: >-
       sh -c 'set -e;
       export NPM_CONFIG_CACHE=/tmp/npm-cache;
