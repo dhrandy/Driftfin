@@ -29,6 +29,7 @@ jobs:
         run: gradle --no-daemon :app:testDebugUnitTest
 
       - name: Phone unit tests
+        if: always()
         run: gradle --no-daemon :phone:testDebugUnitTest
 
       - name: QA captures to log (diagnostic)
