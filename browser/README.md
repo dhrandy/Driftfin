@@ -162,8 +162,8 @@ a local source volume as the primary path.
 
 ## What is in this folder
 
-This folder maps 1:1 to the future `browser/` folder in the Driftfin
-repo (https://github.com/dhrandy/Driftfin).
+This folder is the `browser/` folder in the Driftfin repo
+(https://github.com/dhrandy/Driftfin).
 
 - `src/server.js` — Node stdlib only, no build step. Serves the
   frontend, proxies Jellyfin server-side, holds the Jellyfin token
@@ -175,6 +175,8 @@ repo (https://github.com/dhrandy/Driftfin).
   v1, so `npm ci --omit=dev` is fast. The lockfile exists so `npm ci`
   works in the container.
 - `docker-compose.yml` — the Dockhand stack above.
+- `public/vendor/hls.min.js` — hls.js v1.7.4 for HLS playback in
+  browsers without native HLS. License: `THIRD_PARTY_NOTICES.md`.
 
 ## How it works
 
@@ -193,7 +195,12 @@ Playback: the frontend asks Jellyfin for `PlaybackInfo` with a
 browser DeviceProfile, then plays through this server. Direct
 stream through `/api/direct/...` when the server says the source
 supports direct play/stream, otherwise HLS through
-`/api/hls/.../master.m3u8`. Audio and subtitle lists come from
+`/api/hls/.../master.m3u8`. Browsers without native HLS (desktop
+Chrome, Firefox, Edge) use the bundled hls.js player
+(`public/vendor/hls.min.js`, Apache-2.0, see THIRD_PARTY_NOTICES.md).
+Leaving the player stops the video and reports playback stopped to
+Jellyfin. Audio defaults to the remembered preference (English by
+default, like the TV apps) and audio/subtitle choices persist. Audio and subtitle lists come from
 `PlaybackInfo` media streams. Subtitle tracks load through the
 same-origin proxy, so no token is in the page. Skip Intro uses
 Jellyfin `MediaSegments/{itemId}?includeSegmentTypes=Intro` and
@@ -221,9 +228,6 @@ not hard-coded demo titles.
 - Quick Connect sign-in (username/password only in v1).
 - Cast while paused, trailers, downloads, kids PIN profiles.
   None of these appear in the app UI.
-- A bundled HLS player library: a transcode that needs HLS will
-  not play in a browser with no native HLS support. Direct streams
-  are unaffected.
 
 ## Not verified (no real Jellyfin server was available for testing)
 
@@ -241,10 +245,11 @@ not hard-coded demo titles.
   Dockhand deploy to prove it.
 - The responsive layout has not been checked on a real phone or
   tablet, only by breakpoint rules in `styles.css`.
-- Actual video rendering in a real browser was not tested: the
-  mock tests verified the stream, HLS playlist, and subtitle
-  endpoints the `<video>` element loads, but no browser played
-  a file here.
+- Playback was exercised in headless Chrome against a mock
+  Jellyfin: a direct stream plays, an HLS transcode plays through
+  the bundled hls.js and the playlist-rewriting proxy, and leaving
+  the player stops the video and reports Stopped. A real Jellyfin
+  server transcode still needs a live check.
 
 ## Open questions
 

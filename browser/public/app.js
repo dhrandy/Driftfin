@@ -3,7 +3,7 @@
    /api/jellyfin proxy. The Jellyfin token is never read here: it is
    held server-side and keyed by the HttpOnly session cookie.
    If the server is unreachable, views show an error state, not demo data.
-   API shapes follow the TV app in /tmp/driftfin-scope (JellyfinApi.kt,
+   API shapes follow the TV app (app/ module: JellyfinApi.kt,
    Models.kt, DetailsScreen.kt, BannerPicks.kt, PlaybackNegotiator.kt,
    MediaSegments.kt). No Jellyfin field is invented here.
 */
@@ -15,6 +15,8 @@ const state = {
   playTarget: null, introSegments: [], nextEpisode: null,
   mediaSourceId: null, playSessionId: null, progressTimer: null, upNextTimer: null,
   heroItem: null, subtitleTracks: [],
+  heroList: [], heroIndex: 0, heroTimer: null,
+  hls: null, playMethod: 'DirectPlay', playingItemId: null,
 };
 
 const $ = (id) => document.getElementById(id);
@@ -84,7 +86,7 @@ function pickNextEpisode(all, currentId) {
 /* TV BannerPicks: untouched = not played, no resume position, no last-played date.
    Prefer rating 7.0 or more, else best-rated unwatched; exclude animation if set;
    require a backdrop; fall back to started-but-unfinished (Played != true) only if strict is empty. */
-function pickHero(pool, excludeAnimation) {
+function pickHeroSet(pool, excludeAnimation) {
   let list = (pool || []).filter((i) => i.Type === 'Movie');
   if (excludeAnimation) list = list.filter((i) => !(i.Genres || []).some((g) => String(g).trim().toLowerCase() === 'animation'));
   const hasBackdrop = (i) => (i.BackdropImageTags && i.BackdropImageTags.length) || (i.ImageTags && i.ImageTags.Backdrop);
@@ -98,8 +100,13 @@ function pickHero(pool, excludeAnimation) {
     const relaxedHigh = relaxed.filter((i) => (i.CommunityRating || 0) >= 7.0);
     eligible = relaxedHigh.length ? relaxedHigh : relaxed;
   }
-  if (!eligible.length) return null;
-  return eligible[Math.floor(Math.random() * eligible.length)];
+  // TV HomeScreen.kt HeroRotation: random 6 of the top 50, rotated every 10s.
+  const top = eligible.slice(0, 50);
+  for (let i = top.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [top[i], top[j]] = [top[j], top[i]];
+  }
+  return top.slice(0, 6);
 }
 function isKidsLibrary(view) {
   const name = String(view.Name || '').trim().toLowerCase();
@@ -162,12 +169,19 @@ function cardImage(item) {
   }
   return img(item, 'Primary', 360);
 }
-function cardHtml(item) {
+function cardImageWide(item) {
+  if (item.BackdropImageTags && item.BackdropImageTags.length) return img(item, 'Backdrop', 640);
+  if (item.Type === 'Episode' && item.SeriesId) return `/api/jellyfin/Items/${item.SeriesId}/Images/Backdrop?maxWidth=640&quality=90`;
+  return img(item, 'Primary', 360);
+}
+function cardHtml(item, wide) {
   const pct = item.UserData && item.UserData.PlayedPercentage ? Math.round(item.UserData.PlayedPercentage) : 0;
+  const watched = item.UserData && item.UserData.Played === true;
   const title = item.SeriesName ? `${item.SeriesName} - ${item.Name}` : item.Name;
   const label = episodeLabel(item) ? episodeLabel(item) + ' ' : '';
-  return `<button class="card" data-id="${esc(item.Id)}" data-type="${esc(item.Type || '')}">
-    <img src="${cardImage(item)}" alt="" loading="lazy" onerror="this.style.display='none'">
+  return `<button class="card${wide ? ' wide' : ''}" data-id="${esc(item.Id)}" data-type="${esc(item.Type || '')}">
+    <img src="${wide ? cardImageWide(item) : cardImage(item)}" alt="" loading="lazy" onerror="this.style.display='none'">
+    ${watched ? '<span class="watched">&#10003;</span>' : ''}
     <div class="card-title">${esc(label + title)}</div>
     ${pct ? `<div class="progress"><div style="width:${pct}%"></div></div>` : ''}
   </button>`;
@@ -177,16 +191,17 @@ function bindCards(container) {
     el.addEventListener('click', () => goDetails(el.dataset.id));
   });
 }
-function rowHtml(title, items) {
+function rowHtml(title, items, wide) {
   if (!items || !items.length) return '';
-  return `<section class="row"><h2>${esc(title)}</h2><div class="row-scroll">${items.map(cardHtml).join('')}</div></section>`;
+  return `<section class="row"><h2>${esc(title)}</h2><div class="row-scroll">${items.map((i) => cardHtml(i, wide)).join('')}</div></section>`;
 }
-function showView(name) {
+function showView(name, navOverride) {
   document.querySelectorAll('.view').forEach((v) => { v.hidden = true; });
   const el = $('view-' + name);
   if (el) el.hidden = false;
+  const navName = navOverride || name;
   document.querySelectorAll('[data-nav]').forEach((a) => {
-    a.classList.toggle('active', a.dataset.nav === name || (name === 'library' && ['shows', 'movies'].includes(a.dataset.nav)));
+    a.classList.toggle('active', a.dataset.nav === navName);
   });
   window.scrollTo(0, 0);
 }
@@ -222,17 +237,18 @@ async function loadHome() {
     ]);
     state.views = (views.Items || []);
     const resume = (resumeRes.Items || []).filter(isResumeable);
-    // Banner: keep the previous hero if this banner request failed (TV row-82 rule).
+    // Banner: keep the previous hero set if this banner request failed (TV row-82 rule).
     if (heroRes && heroRes.Items) {
-      const picked = pickHero(heroRes.Items, state.settings && state.settings.excludeAnimatedFromBanner);
-      if (picked) state.heroItem = picked;
+      const picked = pickHeroSet(heroRes.Items, state.settings && state.settings.excludeAnimatedFromBanner);
+      if (picked.length) { state.heroList = picked; state.heroIndex = 0; state.heroItem = picked[0]; }
     }
     renderHero(state.heroItem);
+    startHeroRotation();
     let html = '';
-    html += rowHtml('Continue Watching', resume);
-    html += rowHtml('Next Up', nextUp.Items || []);
+    html += rowHtml('Continue Watching', resume, true);
+    html += rowHtml('Next Up', nextUp.Items || [], true);
     html += rowHtml('Recently Added Movies', latestMovies.Items || latestMovies || []);
-    html += rowHtml('Recently Added Episodes', latestEpisodes.Items || latestEpisodes || []);
+    html += rowHtml('Recently Added Episodes', latestEpisodes.Items || latestEpisodes || [], true);
     html += rowHtml('Favorites', favorites.Items || []);
     // More like the last played title, TV RelatedItems rule: same kind, shared genre, at least 4.
     try {
@@ -245,18 +261,25 @@ async function loadHome() {
         if (kept.length >= 4) html += rowHtml('More like ' + lastItem.Name, kept.slice(0, 16));
       }
     } catch {}
-    for (const view of state.views) {
-      if (!isVideoLibrary(view)) continue;
-      try {
-        const lib = await jf(`Items/Latest?userId=${uid}&parentId=${view.Id}&limit=12&fields=${fields}`);
-        html += rowHtml(view.Name, lib.Items || lib || []);
-      } catch {}
-    }
+    // No per-library Latest rows: the 10-31 trimmed Home design dropped them on TV and phone.
     wrap.innerHTML = html || '<p class="muted">No rows returned by Jellyfin for this user.</p>';
     bindCards(wrap);
   } catch (e) {
     wrap.innerHTML = `<p class="error">Could not load Home from Jellyfin: ${esc(e.message)}</p>`;
   }
+}
+function startHeroRotation() {
+  stopHeroRotation();
+  if (state.heroList.length < 2) return;
+  state.heroTimer = setInterval(() => {
+    state.heroIndex = (state.heroIndex + 1) % state.heroList.length;
+    state.heroItem = state.heroList[state.heroIndex];
+    renderHero(state.heroItem);
+  }, 10000);
+}
+function stopHeroRotation() {
+  if (state.heroTimer) clearInterval(state.heroTimer);
+  state.heroTimer = null;
 }
 function renderHero(item) {
   const hero = $('hero');
@@ -279,8 +302,10 @@ let libraryKind = 'shows';
 async function loadLibrary(kind) {
   libraryKind = kind;
   if (!(await ensureSignedIn())) return;
-  showView('library');
+  showView('library', kind);
   $('libraryTitle').textContent = kind === 'shows' ? 'Shows' : 'Movies';
+  $('librarySort').value = (state.settings && state.settings.librarySort) || 'SortName';
+  $('librarySortOrder').value = (state.settings && state.settings.librarySortOrder) || 'Ascending';
   const grid = $('libraryGrid');
   grid.innerHTML = '<p class="muted">Loading from Jellyfin…</p>';
   try {
@@ -296,10 +321,10 @@ async function loadLibrary(kind) {
     const type = kind === 'shows' ? 'Series' : 'Movie';
     let items = [];
     for (const view of viewsToUse) {
-      const res = await jf(`Items?userId=${uid}&ParentId=${view.Id}&IncludeItemTypes=${type}&Recursive=true&SortBy=SortName&SortOrder=Ascending&limit=200&fields=Overview,Genres,MediaStreams`);
+      const res = await jf(`Items?userId=${uid}&ParentId=${view.Id}&IncludeItemTypes=${type}&Recursive=true&SortBy=${encodeURIComponent($('librarySort').value)}&SortOrder=${encodeURIComponent($('librarySortOrder').value)}&limit=200&fields=Overview,Genres,MediaStreams`);
       items = items.concat(res.Items || []);
     }
-    grid.innerHTML = items.length ? items.map(cardHtml).join('') : '<p class="muted">No items returned for this filter.</p>';
+    grid.innerHTML = items.length ? items.map((i) => cardHtml(i)).join('') : '<p class="muted">No items returned for this filter.</p>';
     bindCards(grid);
   } catch (e) {
     grid.innerHTML = `<p class="error">Could not load library from Jellyfin: ${esc(e.message)}</p>`;
@@ -368,6 +393,16 @@ function renderDetails() {
     }).join('') || '<p class="muted">No episodes returned for this season.</p>';
     seasonsHtml = `<h2>Seasons and Episodes</h2><div class="season-chips">${chips}</div>${episodesHtml}`;
   }
+  // Cast follows the play-target episode on series (TV rule), else the item's own People.
+  const cast = (isSeries && target && target.Type === 'Episode' && (target.People || []).length ? target.People : item.People) || [];
+  const castHtml = cast.length
+    ? `<h2>Cast</h2><div class="cast-row">${cast.map((p) => `
+        <button type="button" class="cast-person" data-person="${esc(p.Id)}">
+          <img src="/api/jellyfin/Items/${esc(p.Id)}/Images/Primary?maxWidth=220&quality=90" alt="" loading="lazy" onerror="this.style.display='none'">
+          <div class="cast-name">${esc(p.Name || '')}</div>
+          ${p.Role ? `<div class="cast-role">${esc(p.Role)}</div>` : ''}
+        </button>`).join('')}</div>`
+    : '';
   el.innerHTML = `
     <img class="details-backdrop" src="${img(item, 'Backdrop', 1600)}" alt="" onerror="this.style.display='none'">
     ${titleHtml(item)}
@@ -377,7 +412,9 @@ function renderDetails() {
     ${isResumeable(target) ? `<button type="button" id="detailFromStart">Play from start</button>` : ''}
     <button type="button" id="detailFav">${isFav ? 'Remove from My List' : 'Add to My List'}</button>
     <button type="button" id="detailWatched">${watchedPlayed ? 'Mark unwatched' : 'Mark watched'}${isSeries && target.Type === 'Episode' ? ' (' + esc(episodeLabel(target) || target.Name) + ')' : ''}</button>
+    ${castHtml}
     ${seasonsHtml}`;
+  el.querySelectorAll('.cast-person').forEach((btn) => btn.addEventListener('click', () => { location.hash = '#/actor?id=' + encodeURIComponent(btn.dataset.person); }));
   $('detailPlay').addEventListener('click', () => goPlayer(target.Id));
   const fromStart = $('detailFromStart');
   if (fromStart) fromStart.addEventListener('click', () => goPlayer(target.Id, { fromStart: true }));
@@ -438,7 +475,7 @@ async function loadSearch(term) {
   try {
     const res = await jf(`Items?userId=${state.userId}&SearchTerm=${encodeURIComponent(term)}&IncludeItemTypes=Movie,Series,Episode&Recursive=true&limit=30&fields=Overview`);
     const items = res.Items || [];
-    grid.innerHTML = items.length ? items.map(cardHtml).join('') : '<p class="muted">No results from Jellyfin.</p>';
+    grid.innerHTML = items.length ? items.map((i) => cardHtml(i)).join('') : '<p class="muted">No results from Jellyfin.</p>';
     bindCards(grid);
   } catch (e) { grid.innerHTML = `<p class="error">Search failed: ${esc(e.message)}</p>`; }
 }
@@ -450,15 +487,45 @@ async function loadMyStuff() {
   try {
     const res = await jf(`Items?userId=${state.userId}&Filters=IsFavorite&Recursive=true&IncludeItemTypes=Movie,Series&SortBy=DateCreated&SortOrder=Descending&limit=100&fields=Overview`);
     const items = res.Items || [];
-    grid.innerHTML = items.length ? items.map(cardHtml).join('') : '<p class="muted">No favorites in Jellyfin yet.</p>';
+    grid.innerHTML = items.length ? items.map((i) => cardHtml(i)).join('') : '<p class="muted">No favorites in Jellyfin yet.</p>';
     bindCards(grid);
   } catch (e) { grid.innerHTML = `<p class="error">Could not load My Stuff: ${esc(e.message)}</p>`; }
+}
+
+// ---------- Actor page ----------
+async function goActor(personId) {
+  if (!(await ensureSignedIn())) return;
+  showView('actor');
+  const el = $('actor');
+  el.innerHTML = '<p class="muted">Loading from Jellyfin…</p>';
+  try {
+    const uid = state.userId;
+    const [person, works] = await Promise.all([
+      jf(`Items/${personId}?userId=${uid}`),
+      jf(`Items?userId=${uid}&PersonIds=${encodeURIComponent(personId)}&Recursive=true&IncludeItemTypes=Movie,Series&limit=60&fields=Overview`),
+    ]);
+    const items = works.Items || [];
+    el.innerHTML = `
+      <div class="actor-head">
+        <img src="/api/jellyfin/Items/${esc(personId)}/Images/Primary?maxWidth=320&quality=90" alt="" onerror="this.style.display='none'">
+        <div>
+          <h1>${esc(person.Name || '')}</h1>
+          ${person.Overview ? `<p>${esc(person.Overview.slice(0, 1200))}</p>` : ''}
+        </div>
+      </div>
+      <h2>On your server</h2>
+      ${items.length ? `<div class="grid">${items.map((i) => cardHtml(i)).join('')}</div>` : '<p class="muted">No titles with this person on this server.</p>'}`;
+    bindCards(el);
+  } catch (e) {
+    el.innerHTML = `<p class="error">Could not load this person from Jellyfin: ${esc(e.message)}</p>`;
+  }
 }
 
 // ---------- Player ----------
 async function goPlayer(id, opts) {
   opts = opts || {};
   if (!(await ensureSignedIn())) return;
+  stopPlayback(true); // end any previous session cleanly before starting a new one
   showView('player');
   const video = $('player');
   const note = $('playerNote');
@@ -499,9 +566,8 @@ async function goPlayer(id, opts) {
     const audioStreams = (source.MediaStreams || []).filter((s) => s.Type === 'Audio');
     const subStreams = (source.MediaStreams || []).filter((s) => s.Type === 'Subtitle');
     const audioSel = $('audioSelect');
-    audioSel.innerHTML = audioStreams.map((s) => `<option value="${s.Index}">${esc(s.DisplayTitle || s.Language || ('Audio ' + s.Index))}</option>`).join('')
+    audioSel.innerHTML = audioStreams.map((s) => `<option value="${s.Index}" data-lang="${esc(s.Language || '')}">${esc(s.DisplayTitle || s.Language || ('Audio ' + s.Index))}</option>`).join('')
       || '<option value="">Default audio</option>';
-    if (opts.audioStreamIndex != null) audioSel.value = String(opts.audioStreamIndex);
     const subSel = $('subtitleSelect');
     // Text subtitles only, TV TEXT_SUBTITLE_FORMATS. Track order matches the select order.
     const textSubs = subStreams.filter((s) => ['srt', 'subrip', 'vtt', 'webvtt', 'ass', 'ssa'].includes(String(s.Codec || '').toLowerCase()));
@@ -522,18 +588,34 @@ async function goPlayer(id, opts) {
       }
       video.appendChild(track);
     });
-    const chosenAudio = opts.audioStreamIndex != null ? opts.audioStreamIndex : (audioStreams[0] ? audioStreams[0].Index : null);
+    // Default audio: remembered preference (English by default, like the TV apps), else first stream.
+    const prefLang = String((state.settings && state.settings.audioLanguage) || 'eng').toLowerCase();
+    const prefStream = audioStreams.find((st) => String(st.Language || '').toLowerCase().slice(0, 3) === prefLang.slice(0, 3));
+    const chosenAudio = opts.audioStreamIndex != null ? opts.audioStreamIndex : ((prefStream || audioStreams[0]) ? (prefStream || audioStreams[0]).Index : null);
+    if (chosenAudio != null) audioSel.value = String(chosenAudio);
     const audioParam = chosenAudio != null ? `&AudioStreamIndex=${chosenAudio}` : '';
     // TV PlaybackNegotiator.choose: direct play/stream first, else a transcode (HLS here).
     if (source.SupportsDirectPlay === true || source.SupportsDirectStream === true) {
+      state.playMethod = 'DirectPlay';
       video.src = `/api/direct/${id}?MediaSourceId=${source.Id}${audioParam}`;
       note.textContent = 'Playing via direct stream through the server proxy.';
     } else if (source.SupportsTranscoding === true) {
-      video.src = `/api/hls/${id}/${source.Id}/master.m3u8?PlaySessionId=${state.playSessionId || ''}${audioParam}`;
-      note.textContent = 'Playing via HLS transcode through the server proxy. A browser with no native HLS support will not play this without an HLS player library, which v1 does not bundle.';
+      state.playMethod = 'Transcode';
+      const hlsUrl = `/api/hls/${id}/${source.Id}/master.m3u8?PlaySessionId=${state.playSessionId || ''}${audioParam}`;
+      if (video.canPlayType('application/vnd.apple.mpegurl')) {
+        video.src = hlsUrl;
+      } else if (window.Hls && window.Hls.isSupported()) {
+        state.hls = new window.Hls();
+        state.hls.loadSource(hlsUrl);
+        state.hls.attachMedia(video);
+      } else {
+        throw new Error('This browser cannot play HLS (no native support and hls.js failed to load).');
+      }
+      note.textContent = 'Playing via HLS transcode through the server proxy.';
     } else {
       throw new Error('This file cannot be played or converted for this browser.');
     }
+    applyPersistedSubtitle();
     video.playbackRate = parseFloat($('speedSelect').value || '1');
     if (startTicks > 0) {
       video.addEventListener('loadedmetadata', function once() {
@@ -569,11 +651,12 @@ function activeIntroSegment() {
 }
 function startProgress(itemId, mediaSourceId) {
   stopProgress();
+  state.playingItemId = itemId;
   const video = $('player');
   const report = (kind) => {
     const ticks = Math.round(video.currentTime * 10000000);
     const endpoint = kind === 'start' ? 'Sessions/Playing' : kind === 'stopped' ? 'Sessions/Playing/Stopped' : 'Sessions/Playing/Progress';
-    const body = { ItemId: itemId, MediaSourceId: mediaSourceId, PlaySessionId: state.playSessionId, PositionTicks: ticks, IsPaused: video.paused, PlayMethod: 'DirectPlay' };
+    const body = { ItemId: itemId, MediaSourceId: mediaSourceId, PlaySessionId: state.playSessionId, PositionTicks: ticks, IsPaused: video.paused, PlayMethod: state.playMethod };
     if (kind === 'stopped') body.Failed = false;
     jf(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).catch(() => {});
   };
@@ -582,6 +665,7 @@ function startProgress(itemId, mediaSourceId) {
   video.onpause = () => report('progress');
   video.onended = () => {
     report('stopped');
+    state.playingItemId = null;
     if (state.settings && state.settings.autoplay && state.nextEpisode) {
       const box = $('upNext');
       box.hidden = false;
@@ -597,6 +681,42 @@ function startProgress(itemId, mediaSourceId) {
     }
   };
 }
+// Leaving the player (nav, new title, sign-out) must actually end playback:
+// pause, report Stopped once, tear down hls.js, and release the element.
+function stopPlayback(reportStopped) {
+  const video = $('player');
+  if (reportStopped && state.playingItemId != null) {
+    const ticks = Math.round((video.currentTime || 0) * 10000000);
+    jf('Sessions/Playing/Stopped', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ItemId: state.playingItemId, MediaSourceId: state.mediaSourceId, PlaySessionId: state.playSessionId, PositionTicks: ticks, Failed: false }),
+    }).catch(() => {});
+  }
+  stopProgress();
+  if (state.hls) { try { state.hls.destroy(); } catch {} state.hls = null; }
+  if (video) { video.pause(); video.removeAttribute('src'); video.load(); }
+  state.playingItemId = null;
+}
+function applyPersistedSubtitle() {
+  const pref = state.settings && state.settings.subtitleLanguage;
+  if (!pref || !state.subtitleTracks.length) return;
+  const i = state.subtitleTracks.findIndex((st) => String(st.Language || '').toLowerCase().slice(0, 3) === String(pref).toLowerCase().slice(0, 3));
+  if (i < 0) return;
+  $('subtitleSelect').value = String(i);
+  const tracks = $('player').textTracks;
+  for (let t = 0; t < tracks.length; t++) tracks[t].mode = 'disabled';
+  if (tracks[i]) tracks[i].mode = 'showing';
+}
+function saveSettingPatch(patch) {
+  state.settings = { ...(state.settings || {}), ...patch };
+  api('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch) })
+    .then((merged) => { state.settings = merged; })
+    .catch(() => {});
+}
+function clearSearch() {
+  $('searchInput').value = '';
+  $('searchResults').innerHTML = '';
+}
 function stopProgress() {
   if (state.progressTimer) clearInterval(state.progressTimer);
   if (state.upNextTimer) clearInterval(state.upNextTimer);
@@ -610,6 +730,9 @@ function route() {
   const hash = location.hash || '#/home';
   const [pathPart, queryPart] = hash.slice(2).split('?');
   const params = new URLSearchParams(queryPart || '');
+  if (pathPart !== 'player') stopPlayback(true);
+  if (pathPart !== 'home') stopHeroRotation();
+  if (pathPart !== 'search') clearSearch();
   if (pathPart === 'home') loadHome();
   else if (pathPart === 'shows') loadLibrary('shows');
   else if (pathPart === 'movies') loadLibrary('movies');
@@ -617,6 +740,7 @@ function route() {
   else if (pathPart === 'search') { showView('search'); if (params.get('q')) { $('searchInput').value = params.get('q'); loadSearch(params.get('q')); } }
   else if (pathPart === 'settings') { ensureSignedIn().then((ok) => { if (ok) { showView('settings'); const f = $('settingsForm'); for (const key of Object.keys(state.settings || {})) { if (f.elements[key]) f.elements[key].checked = Boolean(state.settings[key]); } } }); }
   else if (pathPart === 'details' && params.get('id')) goDetails(params.get('id'));
+  else if (pathPart === 'actor' && params.get('id')) goActor(params.get('id'));
   else if (pathPart === 'player' && params.get('id')) goPlayer(params.get('id'));
   else if (pathPart === 'signin') showView('signin');
   else loadHome();
@@ -644,6 +768,7 @@ $('signinForm').addEventListener('submit', async (e) => {
   } catch (err) { $('signinError').textContent = err.message; }
 });
 $('signoutBtn').addEventListener('click', async () => {
+  stopPlayback(true);
   await fetch('/api/auth/logout', { method: 'POST' }).catch(() => {});
   state.userId = null; state.username = null;
   $('signoutBtn').hidden = true; $('userLabel').textContent = '';
@@ -651,6 +776,8 @@ $('signoutBtn').addEventListener('click', async () => {
 });
 $('searchForm').addEventListener('submit', (e) => { e.preventDefault(); location.hash = '#/search?q=' + encodeURIComponent($('searchInput').value.trim()); });
 $('kidsFilter').addEventListener('change', () => loadLibrary(libraryKind));
+$('librarySort').addEventListener('change', () => { saveSettingPatch({ librarySort: $('librarySort').value }); loadLibrary(libraryKind); });
+$('librarySortOrder').addEventListener('change', () => { saveSettingPatch({ librarySortOrder: $('librarySortOrder').value }); loadLibrary(libraryKind); });
 $('settingsForm').addEventListener('submit', async (e) => {
   e.preventDefault();
   const f = $('settingsForm'); const payload = {};
@@ -670,8 +797,12 @@ $('skipIntroBtn').addEventListener('click', () => {
 $('audioSelect').addEventListener('change', async () => {
   const video = $('player');
   const pos = video.currentTime;
+  const idx = parseInt($('audioSelect').value, 10);
+  const opt = $('audioSelect').selectedOptions[0];
+  const lang = opt && opt.dataset.lang;
+  if (lang) saveSettingPatch({ audioLanguage: lang });
   const id = new URLSearchParams(location.hash.split('?')[1] || '').get('id');
-  if (id) { await goPlayer(id, { audioStreamIndex: parseInt($('audioSelect').value, 10), mediaSourceId: state.mediaSourceId, preservePosition: pos }); }
+  if (id) { await goPlayer(id, { audioStreamIndex: idx, mediaSourceId: state.mediaSourceId, preservePosition: pos }); }
 });
 $('subtitleSelect').addEventListener('change', () => {
   const idx = $('subtitleSelect').value;
@@ -680,9 +811,22 @@ $('subtitleSelect').addEventListener('change', () => {
   if (idx !== '') {
     const track = tracks[parseInt(idx, 10)];
     if (track) track.mode = 'showing';
+    const st = state.subtitleTracks[parseInt(idx, 10)];
+    saveSettingPatch({ subtitleLanguage: (st && st.Language) || null });
+  } else {
+    saveSettingPatch({ subtitleLanguage: null });
   }
 });
 $('speedSelect').addEventListener('change', () => { $('player').playbackRate = parseFloat($('speedSelect').value); });
+
+window.addEventListener('beforeunload', () => {
+  if (state.playingItemId == null) return;
+  const ticks = Math.round((($('player') || {}).currentTime || 0) * 10000000);
+  fetch('/api/jellyfin/Sessions/Playing/Stopped', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, keepalive: true,
+    body: JSON.stringify({ ItemId: state.playingItemId, MediaSourceId: state.mediaSourceId, PlaySessionId: state.playSessionId, PositionTicks: ticks, Failed: false }),
+  }).catch(() => {});
+});
 
 (async () => {
   try { state.config = await api('/api/config'); if (state.config && state.config.jellyfinUrl) $('serverInput').value = state.config.jellyfinUrl; } catch {}

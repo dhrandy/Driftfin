@@ -59,6 +59,20 @@
         <option value="nokids">No kids</option>
       </select>
     </label>
+    <label class="filter">Sort
+      <select id="librarySort">
+        <option value="SortName">Name</option>
+        <option value="DateCreated">Date added</option>
+        <option value="CommunityRating">Rating</option>
+        <option value="ProductionYear">Year</option>
+      </select>
+    </label>
+    <label class="filter">Order
+      <select id="librarySortOrder">
+        <option value="Ascending">Ascending</option>
+        <option value="Descending">Descending</option>
+      </select>
+    </label>
     <div id="libraryGrid" class="grid"></div>
   </section>
 
@@ -73,6 +87,10 @@
       <button type="submit">Search</button>
     </form>
     <div id="searchResults" class="grid"></div>
+  </section>
+
+  <section id="view-actor" class="view" hidden>
+    <div id="actor"></div>
   </section>
 
   <section id="view-mystuff" class="view" hidden>
@@ -129,8 +147,10 @@
   <a href="#/shows" data-nav="shows">Shows</a>
   <a href="#/movies" data-nav="movies">Movies</a>
   <a href="#/mystuff" data-nav="mystuff">My Stuff</a>
+  <a href="#/settings" data-nav="settings">Settings</a>
 </nav>
 
+<script src="/vendor/hls.min.js"></script>
 <script src="/app.js"></script>
 </body>
 </html>

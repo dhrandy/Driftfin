@@ -36,7 +36,10 @@ main { padding: 0 24px 96px; max-width: 1400px; margin: 0 auto; }
 .row { margin-top: 28px; }
 .row h2 { margin: 0 0 12px; }
 .row-scroll { display: flex; gap: 12px; overflow-x: auto; padding-bottom: 8px; }
-.card { flex: 0 0 var(--card-w); background: var(--card); border-radius: 12px; overflow: hidden; cursor: pointer; text-align: left; padding: 0; }
+.card { flex: 0 0 var(--card-w); background: var(--card); border-radius: 12px; overflow: hidden; cursor: pointer; text-align: left; padding: 0; position: relative; }
+.card.wide { flex-basis: 300px; }
+.card.wide img { aspect-ratio: 16/9; }
+.card .watched { position: absolute; top: 6px; right: 6px; width: 22px; height: 22px; border-radius: 999px; background: var(--accent); color: #fff; font-size: 13px; display: flex; align-items: center; justify-content: center; }
 .card img { width: 100%; aspect-ratio: 2/3; object-fit: cover; display: block; background: #22222e; }
 .card .card-title { padding: 10px; font-size: 14px; }
 .progress { height: 4px; background: #333; }
@@ -56,6 +59,13 @@ main { padding: 0 24px 96px; max-width: 1400px; margin: 0 auto; }
 #player { width: 100%; aspect-ratio: 16/9; background: #000; border-radius: 12px; }
 .player-controls { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 12px; }
 .up-next { background: var(--card); border-radius: 10px; padding: 12px; margin-top: 12px; }
+.cast-row { display: flex; gap: 12px; overflow-x: auto; padding: 8px 0; }
+.cast-person { flex: 0 0 110px; text-align: center; cursor: pointer; background: none; border: 0; color: var(--text); padding: 0; }
+.cast-person img { width: 110px; height: 110px; border-radius: 12px; object-fit: cover; background: #22222e; display: block; }
+.cast-name { font-size: 13px; margin-top: 4px; }
+.cast-role { font-size: 12px; color: var(--muted); }
+.actor-head { display: flex; gap: 20px; align-items: flex-start; margin: 16px 0; }
+.actor-head img { width: 160px; border-radius: 12px; background: #22222e; }
 #skipIntroBtn { position: relative; margin-top: -56px; float: right; margin-right: 16px; z-index: 2; }
 .bottomnav { display: none; }
 .view[hidden] { display: none !important; }
