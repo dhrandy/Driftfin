@@ -281,7 +281,19 @@ fun SettingsContent(
     // Captured at composition: arriving by a tab sweep keeps focus on the tab until Down or OK (NavSweep is
     // cleared by the handoff, so reading it live here races and either steals focus or defers it forever).
     val openedBySweep = remember { tv.jetflix.app.ui.components.NavSweep.active }
-    LaunchedEffect(Unit) { if (!openedBySweep) try { paneFirst.requestFocus() } catch (_: Exception) { } }
+    // Each row's focus visuals (fill, outline) are driven by its interactionSource collector, which
+    // only starts collecting once composition applies; interaction events are not replayed. A focus
+    // request issued in this same apply pass can land BEFORE the target row's collector subscribes,
+    // leaving the row focus-system-focused with no fill and no outline until focus next changes
+    // (run-19: first-row capture had semantics focus but unfocused fill and no ring, settle included;
+    // every DPAD-acquired focus renders both). Wait one frame so the request lands after collectors
+    // are live - same flakiness the OptionPicker's retry loop guards against.
+    LaunchedEffect(Unit) {
+        if (!openedBySweep) {
+            androidx.compose.runtime.withFrameNanos { }
+            try { paneFirst.requestFocus() } catch (_: Exception) { }
+        }
+    }
     Box(Modifier.fillMaxSize().background(JetflixColors.Background)) {
         val (uValue, uDetail) = updateTexts(update)
         Column(Modifier.fillMaxSize().padding(start = 48.dp, end = 48.dp, top = 92.dp, bottom = 24.dp)) {
