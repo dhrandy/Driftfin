@@ -2,6 +2,11 @@ name: Tests
 
 on:
   workflow_dispatch:
+    inputs:
+      phone_filter:
+        description: "Optional --tests filter for the phone suite (diagnostic isolation; empty = full suite)"
+        default: ""
+        type: string
 
 # Verification-only counterpart to the two release workflows: runs every module's unit tests on
 # the exact dispatched tree and publishes nothing. Used to gate integrated trees before a release.
@@ -30,7 +35,22 @@ jobs:
 
       - name: Phone unit tests
         if: always()
-        run: gradle --no-daemon :phone:testDebugUnitTest
+        run: |
+          if [ -n "${{ inputs.phone_filter }}" ]; then
+            gradle --no-daemon :phone:testDebugUnitTest --tests "${{ inputs.phone_filter }}"
+          else
+            gradle --no-daemon :phone:testDebugUnitTest
+          fi
+
+      - name: Phone test XML to log (diagnostic)
+        if: always() && inputs.phone_filter != ''
+        run: |
+          shopt -s nullglob
+          for f in phone/build/test-results/testDebugUnitTest/*.xml; do
+            echo "===TESTXML $(basename "$f")==="
+            cat "$f"
+            echo "===END TESTXML==="
+          done
 
       - name: QA captures to log (diagnostic)
         if: always()
