@@ -24,7 +24,8 @@ import tv.jetflix.phone.ui.SettingsScreen
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [34], qualifiers = "w411dp-h891dp-xxhdpi")
 class PhoneSettingsOptionsTest {
-    @get:Rule val rule = createAndroidComposeRule<androidx.activity.ComponentActivity>()
+    val rule = createAndroidComposeRule<androidx.activity.ComponentActivity>()
+    @get:Rule val chain: org.junit.rules.RuleChain = org.junit.rules.RuleChain.outerRule(rule).around(NonIdleProbe { rule.mainClock })
     private val ctx get() = androidx.test.core.app.ApplicationProvider.getApplicationContext<android.content.Context>()
 
     @Before fun clean() {

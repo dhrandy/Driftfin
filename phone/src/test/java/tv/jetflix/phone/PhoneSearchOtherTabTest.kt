@@ -45,7 +45,8 @@ import java.util.concurrent.CopyOnWriteArrayList
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [34], qualifiers = "w411dp-h891dp-xxhdpi")
 class PhoneSearchOtherTabTest {
-    @get:Rule val compose = createEmptyComposeRule()
+    val compose = createEmptyComposeRule()
+    @get:Rule val chain: org.junit.rules.RuleChain = org.junit.rules.RuleChain.outerRule(compose).around(NonIdleProbe { compose.mainClock })
     private lateinit var server: MockWebServer
     private val requested = CopyOnWriteArrayList<String>()
     private val slowSuggestions = java.util.concurrent.atomic.AtomicBoolean(false)
