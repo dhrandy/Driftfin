@@ -754,7 +754,10 @@ fun <T> OptionPicker(title: String, options: List<Pair<String, T>>, selected: T?
             // large empty block; long lists (Genre, Year) still cap and scroll. The content padding
             // gives the focused option's white outline room at the top and bottom edges.
             val rows = (all.size + effectiveColumns - 1) / effectiveColumns
-            val gridHeight = (rows * 60 + (rows - 1) * 8 + 12).dp.coerceAtMost(if (allLabel == null) 300.dp else 320.dp)
+            // Option rows measure ~40dp at normal text scale (16sp single-line label plus the tv
+            // Button's vertical padding), not 60: the old constant left an empty block under short
+            // pickers (run-17 sort-picker-fit.png: 179px tail). Long lists still cap and scroll.
+            val gridHeight = (rows * 40 + (rows - 1) * 8 + 12).dp.coerceAtMost(if (allLabel == null) 300.dp else 320.dp)
             androidx.compose.foundation.lazy.grid.LazyVerticalGrid(
                 columns = androidx.compose.foundation.lazy.grid.GridCells.Fixed(effectiveColumns),
                 modifier = Modifier.height(gridHeight),

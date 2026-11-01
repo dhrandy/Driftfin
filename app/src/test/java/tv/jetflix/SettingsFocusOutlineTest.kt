@@ -103,11 +103,28 @@ class SettingsFocusOutlineTest {
         val (bottom, bottomAt) = scan(midX.flatMap { x -> ((b.bottom - 2).toInt()..(b.bottom + outY).toInt()).map { x to it } })
         val (left, leftAt) = scan(midY.flatMap { y -> ((b.left - outX).toInt()..(b.left + 2).toInt()).map { it to y } })
         val (right, rightAt) = scan(midY.flatMap { y -> ((b.right - 2).toInt()..(b.right + outX).toInt()).map { it to y } })
-        val where = "row=$b bmp=${bmp.width}x${bmp.height}"
-        assertTrue("$tag: top edge of the focus outline must be visible (brightest r=$top at $topAt, $where)", top > 200)
-        assertTrue("$tag: bottom edge of the focus outline must be visible (brightest r=$bottom at $bottomAt, $where)", bottom > 200)
-        assertTrue("$tag: left edge of the focus outline must be visible (brightest r=$left at $leftAt, $where)", left > 200)
-        assertTrue("$tag: right edge of the focus outline must be visible (brightest r=$right at $rightAt, $where)", right > 200)
+        // Diagnostics only: when an edge fails, also report every focused node and rescan after a
+        // settle advance, so the next failure message alone tells "no ring rendered / focus elsewhere"
+        // from "ring rendered late". The assertion itself still requires the ring in the FIRST frame.
+        val focusDump = rule.onAllNodes(isFocused()).fetchSemanticsNodes()
+            .joinToString("; ") { n ->
+                val t = n.config.getOrNull(SemanticsProperties.Text)?.joinToString(",") { it.text } ?: "?"
+                "'$t'@${n.boundsInRoot}"
+            }
+        fun settled(edge: Pair<Int, Pair<Int, Int>?>, band: (Int) -> List<Pair<Int, Int>>): String {
+            if (edge.first > 200) return ""
+            rule.mainClock.advanceTimeBy(400); rule.waitForIdle()
+            val bmp2 = screenBitmap()
+            val inBounds = band(0).filter { it.first in 0 until bmp2.width && it.second in 0 until bmp2.height }
+            val bestPt = inBounds.maxByOrNull { android.graphics.Color.red(bmp2.getPixel(it.first, it.second)) } ?: return ", settled band empty"
+            val v = android.graphics.Color.red(bmp2.getPixel(bestPt.first, bestPt.second))
+            return ", settled r=$v at $bestPt"
+        }
+        val where = "row=$b bmp=${bmp.width}x${bmp.height} focused=[$focusDump]"
+        assertTrue("$tag: top edge of the focus outline must be visible (brightest r=$top at $topAt${settled(top to topAt) { y -> midX.flatMap { x -> ((b.top - outY).toInt()..(b.top + 2).toInt()).map { x to it } } }}, $where)", top > 200)
+        assertTrue("$tag: bottom edge of the focus outline must be visible (brightest r=$bottom at $bottomAt${settled(bottom to bottomAt) { y -> midX.flatMap { x -> ((b.bottom - 2).toInt()..(b.bottom + outY).toInt()).map { x to it } } }}, $where)", bottom > 200)
+        assertTrue("$tag: left edge of the focus outline must be visible (brightest r=$left at $leftAt${settled(left to leftAt) { y -> midY.flatMap { yy -> ((b.left - outX).toInt()..(b.left + 2).toInt()).map { it to yy } } }}, $where)", left > 200)
+        assertTrue("$tag: right edge of the focus outline must be visible (brightest r=$right at $rightAt${settled(right to rightAt) { y -> midY.flatMap { yy -> ((b.right - 2).toInt()..(b.right + outX).toInt()).map { it to yy } } }}, $where)", right > 200)
     }
 
     private fun checkPaneFirstRow(capture: String) {
