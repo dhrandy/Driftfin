@@ -1,9 +1,11 @@
 package tv.jetflix.phone
 
+import android.graphics.Bitmap
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
+import java.io.File
 import okhttp3.mockwebserver.Dispatcher
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
@@ -97,6 +99,18 @@ class PhoneDetailsCastTest {
         tvmaze.shutdown()
     }
 
+    private fun capture(name: String) {
+        val decor = rule.activity.window.decorView
+        val dm = rule.activity.resources.displayMetrics
+        val w = dm.widthPixels; val h = dm.heightPixels
+        decor.measure(android.view.View.MeasureSpec.makeMeasureSpec(w, android.view.View.MeasureSpec.EXACTLY), android.view.View.MeasureSpec.makeMeasureSpec(h, android.view.View.MeasureSpec.EXACTLY))
+        decor.layout(0, 0, w, h)
+        val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+        decor.draw(android.graphics.Canvas(bmp))
+        File("build/render-check").mkdirs()
+        File("build/render-check", name).outputStream().use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
+    }
+
     private fun waitFor(text: String) {
         val end = System.currentTimeMillis() + 10_000
         while (System.currentTimeMillis() < end) {
@@ -113,6 +127,7 @@ class PhoneDetailsCastTest {
         rule.onNodeWithText("Christine").assertIsDisplayed()
         // The wrong-season series cast never appears, not even before the lookup finished.
         assertEquals(0, rule.onAllNodes(hasText("Season One Actor")).fetchSemanticsNodes().size)
+        capture("phone-episode-cast-verified-guests.png")
     }
 
     @Test fun unverifiedSeasonShowsNoCastRowInsteadOfSeason1Cast() {
@@ -122,5 +137,6 @@ class PhoneDetailsCastTest {
         rule.waitForIdle(); org.robolectric.shadows.ShadowLooper.idleMainLooper()
         assertEquals(0, rule.onAllNodes(hasText("Season One Actor")).fetchSemanticsNodes().size)
         assertEquals(0, rule.onAllNodes(hasText("Cast")).fetchSemanticsNodes().size)
+        capture("phone-episode-cast-none.png")
     }
 }

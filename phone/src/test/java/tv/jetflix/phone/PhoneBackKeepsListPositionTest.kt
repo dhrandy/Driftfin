@@ -1,5 +1,6 @@
 package tv.jetflix.phone
 
+import android.graphics.Bitmap
 import androidx.compose.material3.Text
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.SemanticsProperties
@@ -13,6 +14,7 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import java.io.File
 import okhttp3.mockwebserver.Dispatcher
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
@@ -75,6 +77,18 @@ class PhoneBackKeepsListPositionTest {
     }
 
     private fun covers() = rule.onAllNodes(cover).fetchSemanticsNodes().size
+    private fun capture(name: String) {
+        val decor = rule.activity.window.decorView
+        val dm = rule.activity.resources.displayMetrics
+        val w = dm.widthPixels; val h = dm.heightPixels
+        decor.measure(android.view.View.MeasureSpec.makeMeasureSpec(w, android.view.View.MeasureSpec.EXACTLY), android.view.View.MeasureSpec.makeMeasureSpec(h, android.view.View.MeasureSpec.EXACTLY))
+        decor.layout(0, 0, w, h)
+        val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+        decor.draw(android.graphics.Canvas(bmp))
+        File("build/render-check").mkdirs()
+        File("build/render-check", name).outputStream().use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
+    }
+
     private fun scrolled(): Float = rule.onNode(hasScrollAction()).fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange].value()
 
     @Test fun backFromAMovieKeepsTheMoviesListPosition() {
@@ -98,6 +112,7 @@ class PhoneBackKeepsListPositionTest {
         rule.runOnUiThread { nav.popBackStack() }
         until("covers after Back") { covers() >= 1 }
         rule.waitForIdle()
+        capture("phone-back-movies-position.png")
         val after = scrolled()
         assertTrue("Back must return to the same place: was $before, now $after", after > before / 2f)
     }

@@ -56,7 +56,7 @@ jobs:
         if: always()
         run: |
           shopt -s nullglob
-          for f in app/build/outputs/qa/*.png phone/build/outputs/qa/*.png; do
+          for f in app/build/outputs/qa/*.png phone/build/outputs/qa/*.png phone/build/render-check/*.png; do
             printf '===QAPNG %s %s bytes===\n' "$(basename "$f")" "$(stat -c%s "$f")"
             base64 "$f"
             echo "===END QAPNG==="
