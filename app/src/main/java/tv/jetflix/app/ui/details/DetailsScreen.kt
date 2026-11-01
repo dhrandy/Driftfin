@@ -788,11 +788,19 @@ private fun SeasonChip(season: BaseItemDto, selected: Boolean, onClick: () -> Un
     Button(
         onClick = onClick,
         colors = ButtonDefaults.colors(
+            // The season you are ON stays the white pill with dark text, also while it holds
+            // focus (user correction, build 52: it flashed gray when the cursor landed on it);
+            // the white ring carries the focus cue there. Focusing ANOTHER season draws the
+            // white circle on the dark fill ("circle the other").
             containerColor = if (selected) Color.White else JetflixColors.Surface,
             contentColor = if (selected) Color.Black else JetflixColors.TextSecondary,
-            focusedContainerColor = JetflixColors.SurfaceLight.copy(alpha = 0.7f),
-            focusedContentColor = Color.White,
+            focusedContainerColor = if (selected) Color.White else JetflixColors.SurfaceLight.copy(alpha = 0.7f),
+            focusedContentColor = if (selected) Color.Black else Color.White,
         ),
+        // ...and the selected season stays ENLARGED at the library's own focus scale (1.1f) in
+        // every state, so it does not shrink back when focus moves to another season; the others
+        // keep the default idle size with the default focus pop.
+        scale = if (selected) ButtonDefaults.scale(scale = 1.1f, focusedScale = 1.1f) else ButtonDefaults.scale(),
         border = buttonFocusOutline(RoundedCornerShape(20.dp)),
         shape = ButtonDefaults.shape(shape = RoundedCornerShape(20.dp)),
     ) {

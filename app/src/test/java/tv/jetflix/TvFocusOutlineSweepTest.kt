@@ -9,8 +9,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertIsFocused
+import androidx.compose.ui.test.hasScrollToNodeAction
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onAllNodes
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.requestFocus
 import kotlinx.serialization.json.Json
 import org.junit.Assert.assertTrue
@@ -161,6 +165,58 @@ class TvFocusOutlineSweepTest {
         play.assertIsFocused()
         writeQaCapture("details-resume-focus.png")
         assertWhitePill("Details Resume S1:E3", play)
+    }
+
+    /** Season chips (user correction after build 52: "the season selection ... should stay white
+     *  on the one that you are on and enlarge, circle the other"): the SELECTED season is the
+     *  enlarged white pill - also while the OTHER chip holds focus - and the focused other chip
+     *  shows the white outline ring on a dark fill. */
+    @Test fun detailsSeasonChipSelectedStaysWhiteEnlargedOtherCircled() {
+        val series = items.first().copy(Id = "serp", Type = "Series", Name = "Marshals")
+        val season1 = items[2].copy(Id = "s1", Type = "Season", Name = "Season 1", SeriesId = "serp", SeriesName = "Marshals")
+        val season2 = items[3].copy(Id = "s2", Type = "Season", Name = "Season 2", SeriesId = "serp", SeriesName = "Marshals")
+        val resumeEp = items[1].copy(Id = "ep1", Type = "Episode", Name = "Piya Wiconi", SeriesId = "serp",
+            SeriesName = "Marshals", ParentIndexNumber = 1, IndexNumber = 3,
+            UserData = tv.jetflix.app.data.UserItemDataDto(PlaybackPositionTicks = 123L * 10_000_000))
+        rule.setContent {
+            JetflixTheme {
+                tv.jetflix.app.ui.details.DetailsContent(
+                    tv.jetflix.app.ui.details.DetailsUiState(
+                        loading = false, item = series, playTarget = resumeEp,
+                        seasons = listOf(season1, season2), selectedSeasonId = "s1",
+                        episodes = listOf(resumeEp),
+                    ),
+                    repo, {}, { _, _ -> }, {}, {}, {},
+                )
+            }
+        }
+        rule.waitForIdle(); rule.mainClock.advanceTimeBy(1500); rule.waitForIdle()
+        // The chips row sits below the header/buttons; scroll the page list until it composes.
+        // The outer list is the FIRST scroll-to-node container, the seasons row is the inner one.
+        rule.onAllNodes(hasScrollToNodeAction())[0].performScrollToNode(hasText("Season 2"))
+        rule.waitForIdle()
+
+        // Selected chip, NOT focused: the enlarged (1.1x) visual draws its white fill ~5% past
+        // the layout bounds; an unscaled chip draws nothing there. Sample just outside the left edge.
+        val sel = rule.onNodeWithText("Season 1")
+        val sb = sel.fetchSemanticsNode().boundsInRoot
+        val scy = ((sb.top + sb.bottom) / 2).toInt()
+        val spillX = (sb.left - (sb.right - sb.left) * 0.03f).toInt()
+        val spill = pixelAt(spillX, scy)
+        val sr = android.graphics.Color.red(spill); val sg = android.graphics.Color.green(spill); val sbl = android.graphics.Color.blue(spill)
+        assertTrue(
+            "Selected season chip is enlarged: white fill spills past its left layout edge (was rgb($sr,$sg,$sbl) at x=$spillX)",
+            sr > 200 && sg > 200 && sbl > 200,
+        )
+        assertWhitePill("Selected Season 1 chip", sel)
+
+        // Focus the OTHER chip: the white circle on a dark fill there; the selected one stays white.
+        val other = rule.onNodeWithText("Season 2")
+        other.requestFocus(); rule.waitForIdle()
+        other.assertIsFocused()
+        writeQaCapture("details-season-chip-focus.png")
+        assertFocusOutline("Season 2 chip", other)
+        assertWhitePill("Selected Season 1 chip", sel)
     }
 
     @Test fun topNavTabFocusedShowsWhiteOutlineOnDarkFill() {
