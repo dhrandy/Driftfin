@@ -13,6 +13,7 @@ import tv.jetflix.app.data.*
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk=[34],qualifiers="w960dp-h540dp-xhdpi")
 class SwitchCancelNavigationTest {
+ companion object { init { MainActivity.updateNoticeChecksEnabled=false } }
  @get:Rule val rule=createAndroidComposeRule<MainActivity>()
  private val server=okhttp3.mockwebserver.MockWebServer()
  @Before fun start(){server.dispatcher=object:okhttp3.mockwebserver.Dispatcher(){override fun dispatch(r:okhttp3.mockwebserver.RecordedRequest)=okhttp3.mockwebserver.MockResponse().setBody(if(r.path!!.contains("Users/Public") || r.path!!.contains("Latest")) "[]" else "{\"Items\":[],\"TotalRecordCount\":0}")};server.start()}

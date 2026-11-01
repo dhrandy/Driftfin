@@ -52,6 +52,11 @@ private sealed class Screen {
 }
 
 class MainActivity : ComponentActivity() {
+    companion object {
+        /** UI tests set this false so launching MainActivity never fires the real update check (live network, shared UpdateNoticeState). */
+        @Volatile var updateNoticeChecksEnabled = true
+    }
+
     override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean {
         if (event.action == android.view.KeyEvent.ACTION_DOWN) {
             when (event.keyCode) {
@@ -276,7 +281,7 @@ fun JetflixRoot() {
         onEdge = { onTabSelected(JetflixTab.SEARCH) },
     )
     androidx.compose.foundation.layout.Box(leftOpensSearch) {
-    if (!showWhatsNew) {
+    if (!showWhatsNew && updateNoticeChecksEnabled) {
         tv.jetflix.app.update.StartupUpdateNotice(
             currentBuild = tv.jetflix.app.BuildConfig.VERSION_CODE,
             modifier = Modifier.align(androidx.compose.ui.Alignment.TopCenter).padding(top = 84.dp),

@@ -44,6 +44,7 @@ class UpdateCadenceTest {
     @After fun down() { server.shutdown(); UpdateNoticeState.available.value = null }
 
     private fun start() {
+        UpdateNoticeState.available.value = null
         server = MockWebServer().apply {
             dispatcher = object : Dispatcher() {
                 override fun dispatch(request: RecordedRequest): MockResponse {
