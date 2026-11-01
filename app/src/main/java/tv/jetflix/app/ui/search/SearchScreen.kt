@@ -207,6 +207,7 @@ fun SearchContent(
     val fieldFocus = remember { androidx.compose.ui.focus.FocusRequester() }
     val firstActorFocus = remember { androidx.compose.ui.focus.FocusRequester() }
     val firstRecFocus = remember { androidx.compose.ui.focus.FocusRequester() }
+    val firstResultFocus = remember { androidx.compose.ui.focus.FocusRequester() }
     // Idle page with recommended rows: Down from the menu or the field goes to them, not back into the text field (which reopens the keyboard).
     val idleRecs = state.query.isBlank() && state.results.isEmpty() && state.people.isEmpty() && state.recommendations.isNotEmpty()
     val hasActors = state.people.isNotEmpty()
@@ -228,7 +229,7 @@ fun SearchContent(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 48.dp)
-                    .focusProperties { up = menuBack.focus; if (hasActors) down = firstActorFocus else if (idleRecs) down = firstRecFocus }
+                    .focusProperties { up = menuBack.focus; if (hasActors) down = firstActorFocus else if (idleRecs) down = firstRecFocus else if (state.results.isNotEmpty()) down = firstResultFocus }
                     .focusRequester(fieldFocus)
                     .onFocusChanged { fieldFocused = it.isFocused }
                     .background(JetflixColors.SurfaceLight, RoundedCornerShape(4.dp))
@@ -274,6 +275,8 @@ fun SearchContent(
                                 item = item,
                                 imageUrl = repo.posterUrl(item),
                                 onClick = { onItemClick(item) },
+                                // Down from the field lands on the first result, not on whichever poster is nearest the field's center.
+                                modifier = if (item.Id == state.results.first().Id) Modifier.focusRequester(firstResultFocus) else Modifier,
                                 width = 160.dp,
                             )
                         }

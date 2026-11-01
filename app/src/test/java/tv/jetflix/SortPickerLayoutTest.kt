@@ -3,8 +3,11 @@ package tv.jetflix
 import android.graphics.Bitmap
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.requestFocus
+import androidx.compose.ui.test.pressKey
+import androidx.compose.ui.test.performKeyInput
+import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.test.onNodeWithText
-import androidx.compose.ui.test.performClick
 import kotlinx.serialization.json.Json
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -45,7 +48,10 @@ class SortPickerLayoutTest {
             JetflixTheme { LibraryContent(LibraryUiState(loading = false, items = items), repo, JetflixTab.MOVIES, "demo", {}, {}, {}) }
         }
         rule.waitForIdle(); rule.mainClock.advanceTimeBy(500); rule.waitForIdle()
-        rule.onNodeWithText("Sort: Name ↑").performClick()
+        // Real TV interaction (the MyJetflixAndExitTest pattern): focus the chip and press Enter.
+        // performClick uses touch injection, which fails on nodes outside the TV window geometry.
+        rule.onNodeWithText("Sort: Name ↑").requestFocus(); rule.waitForIdle()
+        rule.onNodeWithText("Sort: Name ↑").performKeyInput { pressKey(Key.Enter) }
         rule.waitForIdle(); rule.mainClock.advanceTimeBy(900); rule.waitForIdle()
         val dialog = ShadowDialog.getLatestDialog() ?: error("Sort by dialog did not open")
         val view = dialog.window!!.decorView
@@ -175,9 +181,12 @@ class GenrePickerLargeTextTest {
             }
         }
         rule.waitForIdle(); rule.mainClock.advanceTimeBy(500); rule.waitForIdle()
-        rule.onNodeWithText("Filter").performClick()
+        // Focus + Enter, not performClick (touch injection): see openSortDialog.
+        rule.onNodeWithText("Filter").requestFocus(); rule.waitForIdle()
+        rule.onNodeWithText("Filter").performKeyInput { pressKey(Key.Enter) }
         rule.waitForIdle(); rule.mainClock.advanceTimeBy(500); rule.waitForIdle()
-        rule.onNodeWithText("Genre: All").performClick()
+        rule.onNodeWithText("Genre: All").requestFocus(); rule.waitForIdle()
+        rule.onNodeWithText("Genre: All").performKeyInput { pressKey(Key.Enter) }
         rule.waitForIdle(); rule.mainClock.advanceTimeBy(900); rule.waitForIdle()
         val dialog = ShadowDialog.getLatestDialog() ?: error("Genre dialog did not open")
         val view = dialog.window!!.decorView

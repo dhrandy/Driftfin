@@ -2,6 +2,7 @@ package tv.jetflix.app.ui.login
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -317,6 +318,8 @@ fun LoginContent(
                 .align(Alignment.Center)
                 .width(420.dp)
                 .background(JetflixColors.Surface, RoundedCornerShape(8.dp))
+                // Same look when the card fits; on a short or large-font viewport it scrolls instead of running off screen.
+                .verticalScroll(androidx.compose.foundation.rememberScrollState())
                 .padding(32.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {

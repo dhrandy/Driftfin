@@ -479,9 +479,9 @@ fun DetailsContent(
                         val target = state.playTarget ?: item
                         // The episode's air date sits in the meta row and the premiere date leads the genre
                         // line below (the swap settled after the genre-line pick); the button names the episode.
-                        // Compact gap, as in the mock he approved - reserving the removed line's height here
-                        // pushed the title and meta row too high ("the title is way too high", "the air date
-                        // row shouldn't be so high"). The column is bottom-anchored, so the buttons stay put.
+                        // Compact gap matching the reviewed design: reserving the removed line's height here
+                        // pushed the title and meta row too high. The column is bottom-anchored, so the
+                        // buttons stay put.
                         Spacer(Modifier.height(14.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                             Button(

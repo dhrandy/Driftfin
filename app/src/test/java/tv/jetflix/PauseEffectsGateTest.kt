@@ -13,9 +13,9 @@ import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
-import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.pressKey
+import androidx.compose.ui.test.requestFocus
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -140,7 +140,10 @@ class PauseEffectsGateUiTest {
     @Test fun supportedDeviceRowsStayNormalToggles() {
         var bwClicks = 0
         open(supported = true, bwToggles = { bwClicks++ })
-        rule.onNodeWithText("Black and white while paused").assert(hasClickAction()).performClick()
+        rule.onNodeWithText("Black and white while paused").assert(hasClickAction())
+        // Focus + Enter, not performClick (touch injection can miss at TV window geometry).
+        rule.onNodeWithText("Black and white while paused").requestFocus(); rule.waitForIdle()
+        rule.onNodeWithText("Black and white while paused").performKeyInput { pressKey(Key.Enter) }
         rule.waitForIdle()
         assertEquals("supported device keeps the toggle working", 1, bwClicks)
         rule.onNodeWithText("Blur while paused").assert(hasClickAction())
