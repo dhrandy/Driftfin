@@ -59,6 +59,12 @@ const DEFAULT_SETTINGS = {
   skipIntro: true,
   autoplay: true,
   excludeAnimatedFromBanner: false,
+  // Player track preferences (TV AppSettings.kt: English audio, subtitles off).
+  audioLanguage: 'eng',
+  subtitleLanguage: null,
+  // Library grid sort, saved between sessions like the TV apps.
+  librarySort: 'SortName',
+  librarySortOrder: 'Ascending',
 };
 
 function ensureDir(dir) { fs.mkdirSync(dir, { recursive: true }); }
@@ -66,10 +72,11 @@ function readJsonFile(file, fallback) {
   try { const v = JSON.parse(fs.readFileSync(file, 'utf8')); return v && typeof v === 'object' ? v : fallback; }
   catch { return fallback; }
 }
-function writeJsonFile(file, data) {
+function writeJsonFile(file, data, mode) {
   ensureDir(path.dirname(file));
   const tmp = file + '.tmp';
   fs.writeFileSync(tmp, JSON.stringify(data, null, 2));
+  if (mode) fs.chmodSync(tmp, mode);
   fs.renameSync(tmp, file);
 }
 function sessionSecret() {
@@ -103,7 +110,7 @@ function saveSession(session) {
   const file = path.join(DATA_DIR, 'sessions.json');
   const all = readJsonFile(file, {});
   all[session.id] = session;
-  writeJsonFile(file, all);
+  writeJsonFile(file, all, 0o600);
 }
 function dropSession(req) {
   const raw = parseCookies(req).driftfin_session;
@@ -112,7 +119,7 @@ function dropSession(req) {
   const file = path.join(DATA_DIR, 'sessions.json');
   const all = readJsonFile(file, {});
   delete all[id];
-  writeJsonFile(file, all);
+  writeJsonFile(file, all, 0o600);
 }
 function cookieHeader(sessionId, maxAge) {
   let c = `driftfin_session=${sessionId}.${signSessionId(sessionId, sessionSecret())}; HttpOnly; SameSite=Lax; Path=/`;
@@ -146,8 +153,7 @@ function jellyfinRequest(session, targetPath, method, body, contentType) {
     const base = session.server.replace(/\/$/, '');
     const url = new URL(base + '/' + targetPath.replace(/^\//, ''));
     const lib = url.protocol === 'https:' ? https : http;
-    // TV Session.kt uses the standard Authorization header; Jellyfin 12 disables
-    // the legacy X-Emby-Authorization header by default and rejects it (400).
+    // TV Session.kt uses the standard Authorization header (Jellyfin 12 default).
     const headers = { 'Authorization': `${CLIENT}, Token="${session.token}"` };
     if (body && body.length) headers['Content-Type'] = contentType || 'application/json';
     const req = lib.request(url, { method, headers, timeout: 60000 }, (resp) => {
@@ -201,7 +207,8 @@ function serveStatic(req, res, pathname) {
 
 const server = http.createServer(async (req, res) => {
   try {
-    const url = new URL(req.url, 'http://localhost');
+    // Protocol-relative or malformed request paths (e.g. "//") must not 500.
+    const url = new URL(req.url.startsWith('/') && !req.url.startsWith('//') ? req.url : '/', 'http://localhost');
     const pathname = url.pathname;
 
     if (pathname === '/api/health' || pathname === '/health') {
@@ -229,7 +236,7 @@ const server = http.createServer(async (req, res) => {
       try { parsed = JSON.parse(result.body.toString('utf8')); } catch {}
       if (result.status >= 400 || !parsed.AccessToken || !parsed.User || !parsed.User.Id) {
         console.error('Driftfin login rejected', serverUrl, 'status', result.status, result.body.toString('utf8').slice(0, 300));
-        return sendJson(res, result.status >= 400 ? result.status : 502, { error: 'jellyfin_rejected_sign_in' });
+        return sendJson(res, result.status >= 400 ? result.status : 502, { error: 'jellyfin_rejected_sign_in', jellyfinStatus: result.status });
       }
       const session = {
         id: crypto.randomBytes(32).toString('hex'),
@@ -266,7 +273,12 @@ const server = http.createServer(async (req, res) => {
         const all = readJsonFile(file, {});
         const merged = { ...DEFAULT_SETTINGS, ...(all[session.userId] || {}) };
         for (const key of Object.keys(DEFAULT_SETTINGS)) {
-          if (key in payload) merged[key] = Boolean(payload[key]);
+          if (key in payload) {
+            const def = DEFAULT_SETTINGS[key];
+            if (typeof def === 'boolean') merged[key] = Boolean(payload[key]);
+            else if (def === null) merged[key] = payload[key] == null ? null : String(payload[key]);
+            else merged[key] = String(payload[key]);
+          }
         }
         // Drop any setting key from an older build that is no longer in v1.
         for (const key of Object.keys(merged)) {
