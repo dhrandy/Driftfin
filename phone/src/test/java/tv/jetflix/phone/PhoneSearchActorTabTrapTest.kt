@@ -92,7 +92,18 @@ class PhoneSearchActorTabTrapTest {
         tv.jetflix.phone.data.PhoneSettings.setLastSeenBuild(BuildConfig.VERSION_CODE)
     }
 
-    @After fun tearDown() { server.shutdown() }
+    // Every test starts MainActivity (Home refresh loop and all). Destroy it so its Compose root and loops do not outlive the test in the shared JVM.
+    private var mainController: org.robolectric.android.controller.ActivityController<MainActivity>? = null
+    private fun launchMain() { mainController = Robolectric.buildActivity(MainActivity::class.java).setup() }
+
+    @After fun tearDown() {
+        try {
+            mainController?.destroy()
+        } finally {
+            mainController = null
+            server.shutdown()
+        }
+    }
 
     private fun assertSelectedTab(label: String) {
         awaitReal(30_000) {
@@ -102,7 +113,7 @@ class PhoneSearchActorTabTrapTest {
 
     /** Search tab -> type a term -> tap the person in the Actors row -> actor page over Search. */
     private fun openActorAboveSearch() {
-        Robolectric.buildActivity(MainActivity::class.java).setup()
+        launchMain()
         awaitReal(30_000) { compose.onAllNodesWithText("Search").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithText("Search").performClick()
         awaitReal(30_000) { compose.onAllNodes(hasSetTextAction()).fetchSemanticsNodes().isNotEmpty() }

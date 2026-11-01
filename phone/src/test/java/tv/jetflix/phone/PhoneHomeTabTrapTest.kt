@@ -86,7 +86,18 @@ class PhoneHomeTabTrapTest {
         tv.jetflix.phone.data.PhoneSettings.setLastSeenBuild(BuildConfig.VERSION_CODE)
     }
 
-    @After fun tearDown() { server.shutdown() }
+    // Every test starts MainActivity (Home refresh loop and all). Destroy it so its Compose root and loops do not outlive the test in the shared JVM.
+    private var mainController: org.robolectric.android.controller.ActivityController<MainActivity>? = null
+    private fun launchMain() { mainController = Robolectric.buildActivity(MainActivity::class.java).setup() }
+
+    @After fun tearDown() {
+        try {
+            mainController?.destroy()
+        } finally {
+            mainController = null
+            server.shutdown()
+        }
+    }
 
     private fun assertSelectedTab(label: String) {
         awaitReal(30_000) {
@@ -95,7 +106,7 @@ class PhoneHomeTabTrapTest {
     }
 
     @Test fun homeTabFromDetailsActorStackLandsOnHome() {
-        Robolectric.buildActivity(MainActivity::class.java).setup()
+        launchMain()
         // Home hero -> More info -> details page (bar hidden), then its cast -> actor page (bar visible).
         awaitReal(30_000) { compose.onAllNodesWithText("More info").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithText("More info").performClick()
