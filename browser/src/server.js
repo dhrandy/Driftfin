@@ -222,10 +222,11 @@ const server = http.createServer(async (req, res) => {
       }
       let result;
       try { result = await jellyfinUnauthenticated(serverUrl, 'Users/AuthenticateByName', { Username: username, Pw: password }); }
-      catch (e) { return sendJson(res, 502, { error: 'jellyfin_unreachable', detail: String(e.message || e).slice(0, 500) }); }
+      catch (e) { console.error('Driftfin login unreachable', serverUrl, String(e.message || e)); return sendJson(res, 502, { error: 'jellyfin_unreachable', detail: String(e.message || e).slice(0, 500) }); }
       let parsed = {};
       try { parsed = JSON.parse(result.body.toString('utf8')); } catch {}
       if (result.status >= 400 || !parsed.AccessToken || !parsed.User || !parsed.User.Id) {
+        console.error('Driftfin login rejected', serverUrl, 'status', result.status, result.body.toString('utf8').slice(0, 300));
         return sendJson(res, result.status >= 400 ? result.status : 502, { error: 'jellyfin_rejected_sign_in' });
       }
       const session = {
