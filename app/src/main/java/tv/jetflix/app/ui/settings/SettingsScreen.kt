@@ -2,7 +2,6 @@ package tv.jetflix.app.ui.settings
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -371,17 +370,30 @@ fun SettingsContent(
                                 SettingRow("Episode cast from TVMaze", "Adds available guest credits from TVMaze for a verified matching episode. Coverage varies. Free, no account or key needed.", tvmazeEpisodeCast, onToggleTvmazeEpisodeCast, nextRow())
                                 // TVMaze's API terms ask for a link back, not just a name: the full URL is
                                 // shown, and OK opens it when this TV has a browser (quiet no-op otherwise).
+                                // It is a real D-pad stop, so it carries the same focus ring as the rows.
                                 val tvmazeCreditContext = androidx.compose.ui.platform.LocalContext.current
-                                Text(
-                                    "Episode cast and guest stars come from TVMaze (https://www.tvmaze.com), used under CC BY-SA 4.0 (https://creativecommons.org/licenses/by-sa/4.0) and combined with your server data. OK opens tvmaze.com.",
-                                    style = JetflixType.caption, color = JetflixColors.TextMuted,
-                                    modifier = Modifier
-                                        .padding(start = 20.dp, end = 20.dp, top = 4.dp, bottom = 8.dp)
-                                        .then(nextRow())
-                                        .clickable {
-                                            runCatching { tvmazeCreditContext.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://www.tvmaze.com/"))) }
-                                        },
-                                )
+                                Button(
+                                    onClick = {
+                                        runCatching { tvmazeCreditContext.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://www.tvmaze.com/"))) }
+                                    },
+                                    modifier = Modifier.fillMaxWidth().then(nextRow()),
+                                    contentPadding = PaddingValues(horizontal = 20.dp, vertical = 4.dp),
+                                    shape = ButtonDefaults.shape(shape = RoundedCornerShape(6.dp)),
+                                    colors = ButtonDefaults.colors(
+                                        containerColor = Color.Transparent,
+                                        contentColor = JetflixColors.TextMuted,
+                                        focusedContainerColor = JetflixColors.SurfaceLight.copy(alpha = 0.7f),
+                                        focusedContentColor = Color.White,
+                                    ),
+                                    border = buttonFocusOutline(RoundedCornerShape(6.dp)),
+                                    // Same as the rows: the white ring is the focus cue, not a focused zoom.
+                                    scale = androidx.tv.material3.ButtonDefaults.scale(focusedScale = 1f),
+                                ) {
+                                    Text(
+                                        "Episode cast and guest stars come from TVMaze (https://www.tvmaze.com), used under CC BY-SA 4.0 (https://creativecommons.org/licenses/by-sa/4.0) and combined with your server data. OK opens tvmaze.com.",
+                                        style = JetflixType.caption, modifier = Modifier.fillMaxWidth(),
+                                    )
+                                }
                                 SettingRow("Episode and movie info while paused", "Shows the story summary and the Up next line when you pause. The title and player controls always stay.", pauseInfo, onTogglePauseInfo, nextRow())
                                 SettingRow("Black and white while paused", if (pauseEffectsSupported) "Turns the paused video frame black and white. Off by default." else "Needs Android 12 or newer.", pauseBw, onTogglePauseBw, nextRow(), enabled = pauseEffectsSupported)
                                 SettingRow("Blur while paused", if (pauseEffectsSupported) "Blurs the paused video frame. Off by default." else "Needs Android 12 or newer.", pauseBlur, onTogglePauseBlur, nextRow(), enabled = pauseEffectsSupported)

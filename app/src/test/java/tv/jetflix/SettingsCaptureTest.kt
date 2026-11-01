@@ -7,6 +7,7 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performKeyInput
@@ -57,6 +58,23 @@ class SettingsCaptureTest {
         // The pane grew a row ("Cast while paused"): scroll the toggle into view before asserting.
         rule.onNodeWithText("Episode and movie info while paused").performScrollTo().assertIsDisplayed()
         capture("settings-playback-pane")
+    }
+
+    @Test fun playbackPaneTvmazeCreditShowsFocusRing() {
+        // The TVMaze credit is a real D-pad stop carrying the row focus ring: walk the Playback
+        // pane onto it and the capture must show the ring around the credit text.
+        rule.setContent {
+            JetflixTheme { SettingsContent(true, true, true, "Demo", "http://demo.test", {}, {}, {}, {}, {}, buildLabel = "Driftfin TV build 45") }
+        }
+        rule.waitForIdle()
+        key(Key.DirectionLeft)                 // rail: Updates
+        key(Key.DirectionDown)                 // Playback
+        key(Key.DirectionRight)                // enter pane: Autoplay next episode
+        key(Key.DirectionDown)                 // Cast while paused
+        key(Key.DirectionDown)                 // Episode cast from TVMaze
+        key(Key.DirectionDown)                 // the TVMaze credit link
+        rule.onNodeWithText("Episode cast and guest stars come from TVMaze", substring = true).assertIsFocused()
+        capture("settings-tvmaze-credit-focused")
     }
 
     @Test fun railBottomAccountFullyVisible() {
