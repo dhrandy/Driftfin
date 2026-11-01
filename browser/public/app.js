@@ -123,7 +123,7 @@ function logoUrlFor(item) {
 function titleHtml(item) {
   if (state.settings && state.settings.titleLogos) {
     const hasLogo = (item.ImageTags && item.ImageTags.Logo) || item.Type === 'Episode';
-    if (hasLogo) return `<img src="${logoUrlFor(item)}" alt="" style="max-height:90px;max-width:60%" onerror="this.style.display='none'">`;
+    if (hasLogo) return `<img src="${logoUrlFor(item)}" alt="" style="max-height:90px;max-width:60%" onerror="this.src='data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=='">`;
   }
   return `<h1>${esc(item.Name)}</h1>`;
 }
@@ -180,7 +180,7 @@ function cardHtml(item, wide) {
   const title = item.SeriesName ? `${item.SeriesName} - ${item.Name}` : item.Name;
   const label = episodeLabel(item) ? episodeLabel(item) + ' ' : '';
   return `<button class="card${wide ? ' wide' : ''}" data-id="${esc(item.Id)}" data-type="${esc(item.Type || '')}">
-    <img src="${wide ? cardImageWide(item) : cardImage(item)}" alt="" loading="lazy" onerror="this.style.display='none'">
+    <img src="${wide ? cardImageWide(item) : cardImage(item)}" alt="" loading="lazy" onerror="this.src='data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=='">
     ${watched ? '<span class="watched">&#10003;</span>' : ''}
     <div class="card-title">${esc(label + title)}</div>
     ${pct ? `<div class="progress"><div style="width:${pct}%"></div></div>` : ''}
@@ -285,7 +285,7 @@ function renderHero(item) {
   const hero = $('hero');
   if (!item) { hero.innerHTML = '<div class="hero-empty">No unwatched movie found for the home banner.</div>'; return; }
   hero.innerHTML = `
-    <img class="hero-backdrop" src="${img(item, 'Backdrop', 1600)}" alt="" onerror="this.style.display='none'">
+    <img class="hero-backdrop" src="${img(item, 'Backdrop', 1600)}" alt="" onerror="this.src='data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=='">
     <div class="hero-body">
       ${titleHtml(item)}
       <div class="hero-meta">${metaLine(item)} ${formatBadges(item)}</div>
@@ -398,13 +398,13 @@ function renderDetails() {
   const castHtml = cast.length
     ? `<h2>Cast</h2><div class="cast-row">${cast.map((p) => `
         <button type="button" class="cast-person" data-person="${esc(p.Id)}">
-          <img src="/api/jellyfin/Items/${esc(p.Id)}/Images/Primary?maxWidth=220&quality=90" alt="" loading="lazy" onerror="this.style.display='none'">
+          <img src="/api/jellyfin/Items/${esc(p.Id)}/Images/Primary?maxWidth=220&quality=90" alt="" loading="lazy" onerror="this.src='data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=='">
           <div class="cast-name">${esc(p.Name || '')}</div>
           ${p.Role ? `<div class="cast-role">${esc(p.Role)}</div>` : ''}
         </button>`).join('')}</div>`
     : '';
   el.innerHTML = `
-    <img class="details-backdrop" src="${img(item, 'Backdrop', 1600)}" alt="" onerror="this.style.display='none'">
+    <img class="details-backdrop" src="${img(item, 'Backdrop', 1600)}" alt="" onerror="this.src='data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=='">
     ${titleHtml(item)}
     <div class="hero-meta">${metaLine(item)} ${formatBadges(item)}</div>
     <p>${esc(item.Overview || '')}</p>
@@ -507,7 +507,7 @@ async function goActor(personId) {
     const items = works.Items || [];
     el.innerHTML = `
       <div class="actor-head">
-        <img src="/api/jellyfin/Items/${esc(personId)}/Images/Primary?maxWidth=320&quality=90" alt="" onerror="this.style.display='none'">
+        <img src="/api/jellyfin/Items/${esc(personId)}/Images/Primary?maxWidth=320&quality=90" alt="" onerror="this.src='data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=='">
         <div>
           <h1>${esc(person.Name || '')}</h1>
           ${person.Overview ? `<p>${esc(person.Overview.slice(0, 1200))}</p>` : ''}
@@ -817,6 +817,7 @@ $('subtitleSelect').addEventListener('change', () => {
     saveSettingPatch({ subtitleLanguage: null });
   }
 });
+$('playerBack').addEventListener('click', () => { if (history.length > 1) history.back(); else location.hash = '#/home'; });
 $('speedSelect').addEventListener('change', () => { $('player').playbackRate = parseFloat($('speedSelect').value); });
 
 window.addEventListener('beforeunload', () => {

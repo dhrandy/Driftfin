@@ -102,9 +102,13 @@ function getSession(req) {
   const raw = parseCookies(req).driftfin_session;
   if (!raw) return null;
   const [id, sig] = raw.split('.');
-  if (!id || !sig || sig !== signSessionId(id, sessionSecret())) return null;
+  const expected = id ? signSessionId(id, sessionSecret()) : '';
+  if (!id || !sig || sig.length !== expected.length || !crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) return null;
   const sessions = readJsonFile(path.join(DATA_DIR, 'sessions.json'), {});
-  return sessions[id] || null;
+  const sess = sessions[id] || null;
+  // Sessions expire after 30 days; the Jellyfin token inside dies with them.
+  if (sess && Date.parse(sess.createdAt || '') + 30 * 86400000 < Date.now()) { delete sessions[id]; writeJsonFile(path.join(DATA_DIR, 'sessions.json'), sessions, 0o600); return null; }
+  return sess;
 }
 function saveSession(session) {
   const file = path.join(DATA_DIR, 'sessions.json');
@@ -129,15 +133,23 @@ function cookieHeader(sessionId, maxAge) {
 }
 function sendJson(res, status, obj, extraHeaders) {
   const body = Buffer.from(JSON.stringify(obj), 'utf8');
-  res.writeHead(status, { 'Content-Type': 'application/json', 'Content-Length': body.length, ...(extraHeaders || {}) });
+  res.writeHead(status, { 'Content-Type': 'application/json', 'Content-Length': body.length, 'X-Content-Type-Options': 'nosniff', ...(extraHeaders || {}) });
   res.end(body);
 }
+const MAX_BODY = 1024 * 1024; // 1 MB - API payloads are small; no unbounded buffering.
 function readBody(req) {
   return new Promise((resolve, reject) => {
     const chunks = [];
-    req.on('data', (c) => chunks.push(c));
-    req.on('end', () => resolve(Buffer.concat(chunks)));
-    req.on('error', reject);
+    let size = 0;
+    let over = false;
+    req.on('data', (c) => {
+      if (over) return; // keep draining so the 413 response can be written.
+      size += c.length;
+      if (size > MAX_BODY) { over = true; reject(new Error('payload_too_large')); return; }
+      chunks.push(c);
+    });
+    req.on('end', () => { if (!over) resolve(Buffer.concat(chunks)); });
+    req.on('error', (e) => { if (!over) reject(e); });
   });
 }
 function readJsonBody(req) {
@@ -200,7 +212,7 @@ function serveStatic(req, res, pathname) {
   fs.readFile(filePath, (err, data) => {
     if (err) { res.writeHead(404, { 'Content-Type': 'text/plain' }); return res.end('not found'); }
     const ext = path.extname(filePath).toLowerCase();
-    res.writeHead(200, { 'Content-Type': MIME[ext] || 'application/octet-stream', 'Content-Length': data.length });
+    res.writeHead(200, { 'Content-Type': MIME[ext] || 'application/octet-stream', 'Content-Length': data.length, 'X-Content-Type-Options': 'nosniff' });
     res.end(data);
   });
 }
@@ -351,6 +363,7 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'GET') return serveStatic(req, res, pathname);
     return sendJson(res, 405, { error: 'method_not_allowed' });
   } catch (e) {
+    if (String(e && e.message) === 'payload_too_large' && !res.headersSent) return sendJson(res, 413, { error: 'payload_too_large' });
     if (!res.headersSent) sendJson(res, 502, { error: 'upstream_error', detail: String(e.message || e).slice(0, 500) });
     else res.end();
   }

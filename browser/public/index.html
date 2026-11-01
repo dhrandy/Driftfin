@@ -115,8 +115,11 @@
 
   <section id="view-player" class="view" hidden>
     <div id="playerWrap">
-      <video id="player" controls playsinline></video>
-      <button id="skipIntroBtn" type="button" hidden>Skip Intro</button>
+      <button id="playerBack" type="button" class="back-btn">&larr; Back</button>
+      <div class="videowrap">
+        <video id="player" controls playsinline></video>
+        <button id="skipIntroBtn" type="button" hidden>Skip Intro</button>
+      </div>
       <div id="upNext" class="up-next" hidden></div>
       <div class="player-controls">
         <label>Audio
