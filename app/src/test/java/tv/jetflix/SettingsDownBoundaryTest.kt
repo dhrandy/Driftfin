@@ -63,6 +63,8 @@ class SettingsDownBoundaryTest {
         assertTrue("pane entry lands on Profile avatar, was: ${focusedLabel()}", focusedLabel().contains("Profile avatar"))
         press(Key.DirectionDown)                 // Profile display
         assertTrue("Down reaches Profile display, was: ${focusedLabel()}", focusedLabel().contains("Profile display"))
+        press(Key.DirectionDown)                 // Shown name
+        assertTrue("Down reaches Shown name, was: ${focusedLabel()}", focusedLabel().contains("Shown name"))
         press(Key.DirectionDown)                 // Switch profile
         assertTrue("Down reaches Switch profile, was: ${focusedLabel()}", focusedLabel().contains("Switch profile"))
         press(Key.DirectionDown)                 // boundary: must stay on the account actions

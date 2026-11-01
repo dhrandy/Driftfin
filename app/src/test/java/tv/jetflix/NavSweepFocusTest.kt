@@ -113,8 +113,10 @@ class NavSweepFocusTest {
         assertTrue("Down must walk every rail group; visited: $seen", seen.any { it.contains("Account") })
         press(Key.DirectionRight)
         assertTrue("Account pane opens on Profile avatar, was: ${focusedLabel()}", focusedLabel().contains("Profile avatar"))
-        press(Key.DirectionDown)
-        press(Key.DirectionDown)
+        press(Key.DirectionDown)                 // Profile display
+        press(Key.DirectionDown)                 // Shown name
+        assertTrue("Down reaches Shown name, was: ${focusedLabel()}", focusedLabel().contains("Shown name"))
+        press(Key.DirectionDown)                 // Switch profile
         assertTrue("Down reaches Switch profile, was: ${focusedLabel()}", focusedLabel().contains("Switch profile"))
         press(Key.DirectionRight)
         assertTrue("Sign out reachable in the Account pane, was: ${focusedLabel()}", focusedLabel().contains("Sign out and forget"))

@@ -57,6 +57,9 @@ class SettingsScrollReachTest {
         press(Key.DirectionRight)
         assertTrue("Account pane opens on Profile avatar, was: ${focusedLabel()}", focusedLabel().contains("Profile avatar"))
         press(Key.DirectionDown)                 // Profile display
+        press(Key.DirectionDown)                 // Shown name
+        assertTrue("Down reaches Shown name, was: ${focusedLabel()}", focusedLabel().contains("Shown name"))
+        assertTrue("Shown name on screen", focusedBottom() <= rootH + 1f)
         press(Key.DirectionDown)                 // Switch profile
         assertTrue("Down reaches Switch profile, was: ${focusedLabel()}", focusedLabel().contains("Switch profile"))
         assertTrue("Switch profile on screen", focusedBottom() <= rootH + 1f)
