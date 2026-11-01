@@ -281,7 +281,7 @@ fun JetflixRoot() {
         onEdge = { onTabSelected(JetflixTab.SEARCH) },
     )
     androidx.compose.foundation.layout.Box(leftOpensSearch) {
-    if (!showWhatsNew && updateNoticeChecksEnabled) {
+    if (!showWhatsNew && MainActivity.updateNoticeChecksEnabled) {
         tv.jetflix.app.update.StartupUpdateNotice(
             currentBuild = tv.jetflix.app.BuildConfig.VERSION_CODE,
             modifier = Modifier.align(androidx.compose.ui.Alignment.TopCenter).padding(top = 84.dp),
