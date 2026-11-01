@@ -4,13 +4,17 @@
 # the Driftfin repo. There is NO published image, NO Dockerfile, and
 # NO GitHub Actions build for this app.
 #
-# On every container start this stack:
+# First container start only, this stack:
 #   1. Downloads the current Driftfin main tarball from GitHub.
 #   2. Unpacks it and copies ONLY browser/ to /app.
 #   3. Runs npm ci --omit=dev (no dependencies in v1, so this is fast).
 #   4. Starts node src/server.js.
-# To update: recreate / restart the stack. A running app does not
-# update itself.
+# After that, restarts just start the server from the code already
+# saved in /app. It does NOT download or rebuild on every restart.
+# To update to a newer GitHub version: set FORCE_UPDATE=true in
+# the Dockhand Environment tab, then recreate the stack. After it
+# updates, set FORCE_UPDATE back to false, so later restarts do
+# not rebuild again. A running app does not update itself.
 #
 # IMPORTANT: this compose pulls browser/ from the Driftfin repo on
 # main. It will fail at startup with a copy error if browser/ is
@@ -34,7 +38,6 @@ services:
     cap_drop:
       - ALL
     tmpfs:
-      - /app
       - /tmp
     environment:
       - PORT=8740
@@ -42,10 +45,13 @@ services:
       - JELLYFIN_URL=${JELLYFIN_URL:-}
       - TZ=${TZ:-America/New_York}
       - COOKIE_SECURE=${COOKIE_SECURE:-false}
+      - FORCE_UPDATE=${FORCE_UPDATE:-false}
     volumes:
       # Settings, sessions, and the session secret persist here.
-      # Everything else in /app is tmpfs and is rebuilt on every start.
       - /DATA/AppData/driftfin-browser:/data
+      # App code persists here, so it is only downloaded and
+      # installed on the first start, not on every restart.
+      - /DATA/AppData/driftfin-browser-app:/app
     ports:
       # Host interface, NOT 127.0.0.1, so the reverse proxy can reach it.
       - "${DRIFTFIN_PORT:-8740}:8740"
@@ -59,12 +65,17 @@ services:
       sh -c 'set -e;
       export NPM_CONFIG_CACHE=/tmp/npm-cache;
       mkdir -p /tmp/npm-cache;
+      if [ "$FORCE_UPDATE" = "true" ] || [ ! -f /app/.driftfin-installed ] || [ ! -f /app/src/server.js ]; then
       rm -rf /tmp/driftfin-src /tmp/driftfin.tar.gz;
       wget -qO /tmp/driftfin.tar.gz https://codeload.github.com/dhrandy/Driftfin/tar.gz/refs/heads/main;
       mkdir -p /tmp/driftfin-src;
       tar -xzf /tmp/driftfin.tar.gz -C /tmp/driftfin-src --strip-components=1;
+      rm -rf /app/src /app/public /app/package.json /app/package-lock.json /app/.driftfin-installed;
       cp -a /tmp/driftfin-src/browser/. /app/;
       rm -rf /tmp/driftfin-src /tmp/driftfin.tar.gz;
       cd /app;
       npm ci --omit=dev;
+      touch /app/.driftfin-installed;
+      fi;
+      cd /app;
       exec node src/server.js'
