@@ -12,9 +12,9 @@
 # To update: recreate / restart the stack. A running app does not
 # update itself.
 #
-# IMPORTANT: this compose only works AFTER browser/ is merged into
-# the Driftfin repo on main. Until then it will fail at startup with
-# a copy error, because browser/ does not exist upstream yet.
+# IMPORTANT: this compose pulls browser/ from the Driftfin repo on
+# main. It will fail at startup with a copy error if browser/ is
+# ever removed from main upstream.
 #
 # Environment is set in the Dockhand Environment tab, not a .env file.
 #   DRIFTFIN_PORT   host port, default 8740.
