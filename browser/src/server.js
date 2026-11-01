@@ -146,7 +146,9 @@ function jellyfinRequest(session, targetPath, method, body, contentType) {
     const base = session.server.replace(/\/$/, '');
     const url = new URL(base + '/' + targetPath.replace(/^\//, ''));
     const lib = url.protocol === 'https:' ? https : http;
-    const headers = { 'X-Emby-Authorization': `${CLIENT}, Token="${session.token}"` };
+    // TV Session.kt uses the standard Authorization header; Jellyfin 12 disables
+    // the legacy X-Emby-Authorization header by default and rejects it (400).
+    const headers = { 'Authorization': `${CLIENT}, Token="${session.token}"` };
     if (body && body.length) headers['Content-Type'] = contentType || 'application/json';
     const req = lib.request(url, { method, headers, timeout: 60000 }, (resp) => {
       const chunks = [];
@@ -166,7 +168,7 @@ function jellyfinUnauthenticated(server, targetPath, body) {
     const payload = Buffer.from(JSON.stringify(body), 'utf8');
     const req = lib.request(url, {
       method: 'POST',
-      headers: { 'X-Emby-Authorization': CLIENT, 'Content-Type': 'application/json', 'Content-Length': payload.length },
+      headers: { 'Authorization': CLIENT, 'Content-Type': 'application/json', 'Content-Length': payload.length },
       timeout: 30000,
     }, (resp) => {
       const chunks = [];
@@ -296,7 +298,7 @@ const server = http.createServer(async (req, res) => {
       const base = session.server.replace(/\/$/, '');
       const upstream = new URL(base + '/' + target);
       const lib = upstream.protocol === 'https:' ? https : http;
-      const headers = { 'X-Emby-Authorization': `${CLIENT}, Token="${session.token}"` };
+      const headers = { 'Authorization': `${CLIENT}, Token="${session.token}"` };
       if (req.headers.range) headers.Range = req.headers.range;
       const up = lib.request(upstream, { method: 'GET', headers }, (resp) => {
         const out = {};
