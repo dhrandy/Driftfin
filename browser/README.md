@@ -29,27 +29,32 @@ build for this app.
 2. Paste the complete stack below as the stack file.
 3. In the Dockhand Environment tab (not a `.env` file), set the
    variables in the table below.
-4. Deploy. On start the container downloads the current Driftfin
-   main tarball from GitHub, unpacks it, copies ONLY `browser/`
-   to the tmpfs `/app`, runs `npm ci --omit=dev`, and starts the
-   server.
+4. Deploy. On the first start only, the container downloads the
+   current Driftfin main tarball from GitHub, unpacks it, copies
+   ONLY `browser/` to `/app`, runs `npm ci --omit=dev`, and starts
+   the server. Later restarts just start the server from the code
+   already saved in `/app`, they do NOT download or rebuild again.
 5. Point your reverse proxy at the host port (8740 by default).
    The container itself binds `0.0.0.0:8740` inside, and the compose
    port mapping has no `127.0.0.1` prefix, so the reverse proxy
    can reach it.
 
-To update: recreate / restart the stack. A running app does not
-update itself. Persistent state lives only in the bind volume:
+To update: set `FORCE_UPDATE=true` in the Dockhand Environment
+tab, then recreate the stack. After it updates, set
+`FORCE_UPDATE` back to `false`, so later restarts do not rebuild
+again. A running app does not update itself. Persistent state
+lives in these bind volumes:
 
 ```
 /DATA/AppData/driftfin-browser:/data
+/DATA/AppData/driftfin-browser-app:/app
 ```
 
-That volume holds `settings.json`, `sessions.json`, and
-`session-secret`. Everything in `/app` is tmpfs and is rebuilt on
-every start. The container is `read_only: true` with
-`cap_drop: ALL` and tmpfs `/app` and `/tmp`, and a healthcheck on
-`GET /api/health`.
+The first volume holds `settings.json`, `sessions.json`, and
+`session-secret`. The second holds the app code, so it is only
+downloaded and installed on the first start. The container is
+`read_only: true` with `cap_drop: ALL` and tmpfs `/tmp`, and a
+healthcheck on `GET /api/health`.
 
 ### Environment (Dockhand Environment tab)
 
@@ -59,10 +64,41 @@ every start. The container is `read_only: true` with
 | `JELLYFIN_URL` | (blank) | Optional server URL prefill on the sign-in page only. No username, password, or token goes here. |
 | `TZ` | `America/New_York` | Timezone. |
 | `COOKIE_SECURE` | `false` | `true` ONLY behind an HTTPS reverse proxy. Use `false` for plain LAN http, or the session cookie will not be sent and sign-in will loop. |
+| `FORCE_UPDATE` | `false` | Set to `true` only when you want to re-download and rebuild from GitHub, then set it back to `false`. |
 
 ### Paste-ready stack
 
 ```yaml
+# Driftfin Browser - Dockhand / CasaOS compose.
+#
+# Pull-on-startup, adapted for the browser/ folder in
+# the Driftfin repo. There is NO published image, NO Dockerfile, and
+# NO GitHub Actions build for this app.
+#
+# First container start only, this stack:
+#   1. Downloads the current Driftfin main tarball from GitHub.
+#   2. Unpacks it and copies ONLY browser/ to /app.
+#   3. Runs npm ci --omit=dev (no dependencies in v1, so this is fast).
+#   4. Starts node src/server.js.
+# After that, restarts just start the server from the code already
+# saved in /app. It does NOT download or rebuild on every restart.
+# To update to a newer GitHub version: set FORCE_UPDATE=true in
+# the Dockhand Environment tab, then recreate the stack. After it
+# updates, set FORCE_UPDATE back to false, so later restarts do
+# not rebuild again. A running app does not update itself.
+#
+# IMPORTANT: this compose pulls browser/ from the Driftfin repo on
+# main. It will fail at startup with a copy error if browser/ is
+# ever removed from main upstream.
+#
+# Environment is set in the Dockhand Environment tab, not a .env file.
+#   DRIFTFIN_PORT   host port, default 8740.
+#   JELLYFIN_URL    optional server URL prefill on the sign-in page.
+#                   No username, password, or token goes here.
+#   TZ              timezone, default America/New_York.
+#   COOKIE_SECURE   "true" ONLY behind an HTTPS reverse proxy.
+#                   Use "false" for plain LAN http, or the session
+#                   cookie will not be sent and sign-in will loop.
 services:
   driftfin-browser:
     image: node:22-alpine
@@ -73,7 +109,6 @@ services:
     cap_drop:
       - ALL
     tmpfs:
-      - /app
       - /tmp
     environment:
       - PORT=8740
@@ -81,10 +116,13 @@ services:
       - JELLYFIN_URL=${JELLYFIN_URL:-}
       - TZ=${TZ:-America/New_York}
       - COOKIE_SECURE=${COOKIE_SECURE:-false}
+      - FORCE_UPDATE=${FORCE_UPDATE:-false}
     volumes:
       # Settings, sessions, and the session secret persist here.
-      # Everything else in /app is tmpfs and is rebuilt on every start.
       - /DATA/AppData/driftfin-browser:/data
+      # App code persists here, so it is only downloaded and
+      # installed on the first start, not on every restart.
+      - /DATA/AppData/driftfin-browser-app:/app
     ports:
       # Host interface, NOT 127.0.0.1, so the reverse proxy can reach it.
       - "${DRIFTFIN_PORT:-8740}:8740"
@@ -98,14 +136,19 @@ services:
       sh -c 'set -e;
       export NPM_CONFIG_CACHE=/tmp/npm-cache;
       mkdir -p /tmp/npm-cache;
+      if [ "$FORCE_UPDATE" = "true" ] || [ ! -f /app/.driftfin-installed ] || [ ! -f /app/src/server.js ]; then
       rm -rf /tmp/driftfin-src /tmp/driftfin.tar.gz;
       wget -qO /tmp/driftfin.tar.gz https://codeload.github.com/dhrandy/Driftfin/tar.gz/refs/heads/main;
       mkdir -p /tmp/driftfin-src;
       tar -xzf /tmp/driftfin.tar.gz -C /tmp/driftfin-src --strip-components=1;
+      rm -rf /app/src /app/public /app/package.json /app/package-lock.json /app/.driftfin-installed;
       cp -a /tmp/driftfin-src/browser/. /app/;
       rm -rf /tmp/driftfin-src /tmp/driftfin.tar.gz;
       cd /app;
       npm ci --omit=dev;
+      touch /app/.driftfin-installed;
+      fi;
+      cd /app;
       exec node src/server.js'
 ```
 
