@@ -1,5 +1,6 @@
 package tv.jetflix.phone
 
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
@@ -161,7 +162,7 @@ class PhoneTvmazeCastTest {
         // The search hangs; leaving the page cancels the lookup mid-flight.
         tvmaze.enqueue(MockResponse().setHeadersDelay(5, java.util.concurrent.TimeUnit.SECONDS).setBody(searchBody()))
         var cancelled = false
-        val job = kotlinx.coroutines.launch(kotlinx.coroutines.Dispatchers.IO) {
+        val job = launch(kotlinx.coroutines.Dispatchers.IO) {
             try { detailsCast(episode(), season(), r) } catch (ce: kotlinx.coroutines.CancellationException) { cancelled = true }
         }
         kotlinx.coroutines.delay(500)
