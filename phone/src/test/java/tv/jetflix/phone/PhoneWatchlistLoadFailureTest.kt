@@ -84,6 +84,17 @@ class PhoneWatchlistLoadFailureTest {
         assertTrue("$what did not happen within 30s", cond())
     }
 
+    private fun writeQaCapture(name: String) {
+        val view = rule.activity.window.decorView
+        val bmp = android.graphics.Bitmap.createBitmap(view.width, view.height, android.graphics.Bitmap.Config.ARGB_8888)
+        view.draw(android.graphics.Canvas(bmp))
+        val out = java.io.File("build/outputs/qa/$name").apply { parentFile?.mkdirs() }
+        out.outputStream().use { bmp.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+        val colors = HashSet<Int>()
+        for (x in 0 until bmp.width step 8) for (y in 0 until bmp.height step 8) colors.add(bmp.getPixel(x, y))
+        assertTrue("$name is not a blank frame (${colors.size} colors)", colors.size > 3)
+    }
+
     private fun covers() = rule.onAllNodes(cover).fetchSemanticsNodes().size
     private fun shown(text: String) = rule.onAllNodes(hasText(text, substring = true)).fetchSemanticsNodes().isNotEmpty()
 
@@ -94,6 +105,7 @@ class PhoneWatchlistLoadFailureTest {
         rule.setContent { DriftfinTheme { MyStuffScreen(onOpen = {}) } }
         rule.onNodeWithText("Watchlist").performClick()
         until("the load-failure message") { shown("Couldn't load your watchlist") }
+        writeQaCapture("mystuff-watchlist-load-failure.png")
         rule.onNodeWithText("Retry").assertIsDisplayed()
         assertTrue("an HTTP error must not read as an empty watchlist", !shown("Your watchlist is empty"))
         assertEquals(0, covers())
@@ -103,6 +115,7 @@ class PhoneWatchlistLoadFailureTest {
         failing = false
         rule.onNodeWithText("Retry").performClick()
         until("two covers after Retry") { covers() == 2 }
+        writeQaCapture("mystuff-watchlist-retry-recovered.png")
         assertTrue(!shown("Couldn't load your watchlist"))
         assertEquals(before, stored())
     }
@@ -124,6 +137,7 @@ class PhoneWatchlistLoadFailureTest {
         rule.setContent { DriftfinTheme { MyStuffScreen(onOpen = {}) } }
         rule.onNodeWithText("Watchlist").performClick()
         until("the unavailable wording") { shown("saved titles aren't available") }
+        writeQaCapture("mystuff-watchlist-saved-unavailable.png")
         assertTrue("saved ids exist, so it must not say the watchlist is empty", !shown("Your watchlist is empty"))
         assertEquals(0, covers())
         assertEquals(listOf("b", "a"), Watchlist.ids.value)
