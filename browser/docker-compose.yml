@@ -1,0 +1,70 @@
+# Driftfin Browser - Dockhand / CasaOS compose.
+#
+# Pull-on-startup, adapted for the browser/ folder in
+# the Driftfin repo. There is NO published image, NO Dockerfile, and
+# NO GitHub Actions build for this app.
+#
+# On every container start this stack:
+#   1. Downloads the current Driftfin main tarball from GitHub.
+#   2. Unpacks it and copies ONLY browser/ to /app.
+#   3. Runs npm ci --omit=dev (no dependencies in v1, so this is fast).
+#   4. Starts node src/server.js.
+# To update: recreate / restart the stack. A running app does not
+# update itself.
+#
+# IMPORTANT: this compose only works AFTER browser/ is merged into
+# the Driftfin repo on main. Until then it will fail at startup with
+# a copy error, because browser/ does not exist upstream yet.
+#
+# Environment is set in the Dockhand Environment tab, not a .env file.
+#   DRIFTFIN_PORT   host port, default 8740.
+#   JELLYFIN_URL    optional server URL prefill on the sign-in page.
+#                   No username, password, or token goes here.
+#   TZ              timezone, default America/New_York.
+#   COOKIE_SECURE   "true" ONLY behind an HTTPS reverse proxy.
+#                   Use "false" for plain LAN http, or the session
+#                   cookie will not be sent and sign-in will loop.
+services:
+  driftfin-browser:
+    image: node:22-alpine
+    container_name: driftfin-browser
+    working_dir: /app
+    restart: unless-stopped
+    read_only: true
+    cap_drop:
+      - ALL
+    tmpfs:
+      - /app
+      - /tmp
+    environment:
+      - PORT=8740
+      - DATA_DIR=/data
+      - JELLYFIN_URL=${JELLYFIN_URL:-}
+      - TZ=${TZ:-America/New_York}
+      - COOKIE_SECURE=${COOKIE_SECURE:-false}
+    volumes:
+      # Settings, sessions, and the session secret persist here.
+      # Everything else in /app is tmpfs and is rebuilt on every start.
+      - /DATA/AppData/driftfin-browser:/data
+    ports:
+      # Host interface, NOT 127.0.0.1, so the reverse proxy can reach it.
+      - "${DRIFTFIN_PORT:-8740}:8740"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8740/api/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 120s
+    command: >-
+      sh -c 'set -e;
+      export NPM_CONFIG_CACHE=/tmp/npm-cache;
+      mkdir -p /tmp/npm-cache;
+      rm -rf /tmp/driftfin-src /tmp/driftfin.tar.gz;
+      wget -qO /tmp/driftfin.tar.gz https://codeload.github.com/dhrandy/Driftfin/tar.gz/refs/heads/main;
+      mkdir -p /tmp/driftfin-src;
+      tar -xzf /tmp/driftfin.tar.gz -C /tmp/driftfin-src --strip-components=1;
+      cp -a /tmp/driftfin-src/browser/. /app/;
+      rm -rf /tmp/driftfin-src /tmp/driftfin.tar.gz;
+      cd /app;
+      npm ci --omit=dev;
+      exec node src/server.js'
