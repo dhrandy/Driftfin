@@ -7,14 +7,15 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsFocused
-import androidx.compose.ui.test.hasScrollToNodeAction
-import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.hasScrollToIndexAction
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
-import androidx.compose.ui.test.performScrollToNode
+import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.requestFocus
 import kotlinx.serialization.json.Json
 import org.junit.Assert.assertTrue
@@ -192,9 +193,19 @@ class TvFocusOutlineSweepTest {
             }
         }
         rule.waitForIdle(); rule.mainClock.advanceTimeBy(1500); rule.waitForIdle()
-        // The chips row sits below the header/buttons; scroll the page list until it composes.
-        // The outer list is the FIRST scroll-to-node container, the seasons row is the inner one.
-        rule.onAllNodes(hasScrollToNodeAction())[0].performScrollToNode(hasText("Season 2"))
+        // The chips row sits below the header/buttons; scroll the page so it is ON SCREEN.
+        // Scrolling the CHIP (performScrollTo/performScrollToNode) reaches only its CLOSEST
+        // scrollable ancestor - the seasons row's HORIZONTAL ScrollBy - so the page never moves
+        // (Tests #33: capture unscrolled, Season 1 not displayed). Scroll the outer LazyColumn
+        // instead: select it by its vertical axis, resolve the "seasons" item index through the
+        // list's own IndexForKey semantics (no hardcoded position), and snap to it - one action,
+        // no scroll loop.
+        val pageList = rule.onNode(
+            hasScrollToIndexAction() and SemanticsMatcher.keyIsDefined(SemanticsProperties.VerticalScrollAxisRange),
+        )
+        val seasonsIndex = pageList.fetchSemanticsNode().config[SemanticsProperties.IndexForKey].invoke("seasons")
+        assertTrue("seasons item is keyed in the details list (index=$seasonsIndex)", seasonsIndex >= 0)
+        pageList.performScrollToIndex(seasonsIndex)
         rule.waitForIdle()
 
         // First capture BEFORE any assertion: a red run still leaves the decisive render.
