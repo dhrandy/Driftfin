@@ -4,6 +4,13 @@ Each build lists its real changes here. The CI release workflow copies the secti
 matching the build tag onto the GitHub release page and appends the standard
 automated-build footer.
 
+## build-54
+
+Changes:
+- Pause: pressing OK on a guest star who comes only from TVMaze opens a panel with their photo, character, the episode they appear in, and their bio, with the required TVMaze credit line. OK or Back closes it.
+- Pause cast: TVMaze guest credits without a person id no longer appear as a bogus blank person or merge two different guests into one entry.
+- Settings: the TVMaze credit under Playback now shows the full link, OK opens tvmaze.com when the TV has a browser, and the credit line shows the same white focus ring as every other row.
+
 ## build-53
 
 Changes:
