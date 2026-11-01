@@ -122,9 +122,7 @@ class PhoneHomeCompositionTest {
         similarJson = """{"Items":[{"Id":"w1","Name":"Similar One","Type":"Movie","Genres":["Drama"],"ImageTags":{"Primary":"x"}}],"TotalRecordCount":1}"""
         showHome()
         awaitReal(30_000) { rule.onAllNodesWithText("Recently Added Movies").fetchSemanticsNodes().isNotEmpty() }
-        rule.onNode(homeList()).performScrollToNode(hasText("Favorites"))
-        rule.onNodeWithText("Favorites").assertIsDisplayed()
-        rule.onNode(homeList()).performScrollToNode(hasText("Favorites"))
+        scrollToAndAssertDisplayed("Favorites")
         assertTrue(rule.onAllNodesWithText("More like Drama Film", substring = true).fetchSemanticsNodes().isEmpty())
     }
 
@@ -132,10 +130,23 @@ class PhoneHomeCompositionTest {
         playedJson = """{"Items":[],"TotalRecordCount":0}"""
         showHome()
         awaitReal(30_000) { rule.onAllNodesWithText("Recently Added Movies").fetchSemanticsNodes().isNotEmpty() }
-        rule.onNode(homeList()).performScrollToNode(hasText("Favorites"))
-        rule.onNodeWithText("Favorites").assertIsDisplayed()
-        rule.onNode(homeList()).performScrollToNode(hasText("Favorites"))
+        scrollToAndAssertDisplayed("Favorites")
         assertTrue(rule.onAllNodesWithText("More like", substring = true).fetchSemanticsNodes().isEmpty())
+    }
+
+    /** Scroll-and-display proof that never reads a disposed node: each attempt re-fetches fresh
+     *  handles, and only the known lazy-list detach race (poster art finishing mid-scroll disposes
+     *  the LayoutNode the framework was about to measure) retries; anything else fails loudly. */
+    private fun scrollToAndAssertDisplayed(name: String) {
+        awaitReal(30_000) {
+            try {
+                rule.onNode(homeList()).performScrollToNode(hasText(name))
+                rule.onNodeWithText(name).assertIsDisplayed()
+                true
+            } catch (e: IllegalStateException) {
+                if (e.message?.contains("attached to an owner") == true) false else throw e
+            }
+        }
     }
 
     /** Strict positional proof that never reads a disposed node: walk the expected order, scrolling
