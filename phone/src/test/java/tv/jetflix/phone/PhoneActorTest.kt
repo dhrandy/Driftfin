@@ -31,6 +31,8 @@ class PhoneActorTest {
     @Volatile private var withBio = true
     @Volatile private var multiBio = false
     @Volatile private var withDates = false
+    @Volatile private var guestOnly = false
+    @Volatile private var collapseCode = 200
 
     @Before fun setup() {
         val ctx = androidx.test.core.app.ApplicationProvider.getApplicationContext<android.content.Context>()
@@ -41,6 +43,8 @@ class PhoneActorTest {
         withBio = true
         multiBio = false
         withDates = false
+        guestOnly = false
+        collapseCode = 200
         server = MockWebServer()
         server.dispatcher = object : Dispatcher() {
             override fun dispatch(request: RecordedRequest): MockResponse {
@@ -52,7 +56,12 @@ class PhoneActorTest {
                         else if (multiBio) """{"Id":"p1","Name":"Synthetic Actor","Type":"Person","Overview":"First paragraph of the bio.\n\nSecond paragraph with the rest of the story."}"""
                         else if (withDates) """{"Id":"p1","Name":"Synthetic Actor","Type":"Person","PremiereDate":"1926-06-01T00:00:00.0000000Z","EndDate":"1962-08-04T00:00:00.0000000Z","Overview":"A made-up bio for the synthetic actor."}"""
                         else """{"Id":"p1","Name":"Synthetic Actor","Type":"Person","Overview":"A made-up bio for the synthetic actor."}""")
-                    p.contains("personIds=p1") -> json.setBody("""{"Items":[{"Id":"m1","Name":"Actor Movie","Type":"Movie","ImageTags":{"Primary":"a"}},{"Id":"s1","Name":"Actor Show","Type":"Series","ImageTags":{"Primary":"b"}}],"TotalRecordCount":2}""")
+                    p.contains("personIds=p1") -> json.setBody(if (guestOnly)
+                        // Guest star shape: only episode credits, each carrying its series id.
+                        """{"Items":[{"Id":"e1","Name":"Special Episode (1)","Type":"Episode","SeriesId":"s9"},{"Id":"e2","Name":"Special Episode (2)","Type":"Episode","SeriesId":"s9"}],"TotalRecordCount":2}"""
+                        else """{"Items":[{"Id":"m1","Name":"Actor Movie","Type":"Movie","ImageTags":{"Primary":"a"}},{"Id":"s1","Name":"Actor Show","Type":"Series","ImageTags":{"Primary":"b"}}],"TotalRecordCount":2}""")
+                    p.contains("ids=") -> if (collapseCode != 200) MockResponse().setResponseCode(collapseCode)
+                        else json.setBody("""{"Items":[{"Id":"s9","Name":"Guest Show","Type":"Series","ImageTags":{"Primary":"c"}}],"TotalRecordCount":1}""")
                     p.contains("/Items") -> json.setBody("""{"Items":[],"TotalRecordCount":0}""")
                     else -> json.setBody("""{}""")
                 }
@@ -96,6 +105,47 @@ class PhoneActorTest {
         rule.onNodeWithText("Movies").assertIsDisplayed()
         rule.onNodeWithText("Shows").assertIsDisplayed()
         assertEquals(0, rule.onAllNodes(androidx.compose.ui.test.hasText("A made-up bio for the synthetic actor.")).fetchSemanticsNodes().size)
+    }
+
+    @Test fun guestOnlyCreditsCollapseToTheirShow() {
+        guestOnly = true
+        rule.setContent { DriftfinTheme { ActorScreen("p1", "Synthetic Actor", onBack = {}, onOpen = {}) } }
+        val end = System.currentTimeMillis() + 10_000
+        while (System.currentTimeMillis() < end) {
+            rule.waitForIdle(); org.robolectric.shadows.ShadowLooper.idleMainLooper()
+            if (rule.onAllNodes(androidx.compose.ui.test.hasText("Shows")).fetchSemanticsNodes().isNotEmpty()) break
+            Thread.sleep(80)
+        }
+        // The episodes' show appears under Shows; the false "nothing here" and the error stay away.
+        rule.onNodeWithText("Shows").assertIsDisplayed()
+        assertEquals(0, rule.onAllNodes(androidx.compose.ui.test.hasText("Nothing else on this server.")).fetchSemanticsNodes().size)
+        assertEquals(0, rule.onAllNodes(androidx.compose.ui.test.hasText("Retry")).fetchSemanticsNodes().size)
+    }
+
+    @Test fun failedCollapseIsAnErrorWithRetryNeverTheFalseEmptyMessage() {
+        guestOnly = true
+        collapseCode = 500
+        rule.setContent { DriftfinTheme { ActorScreen("p1", "Synthetic Actor", onBack = {}, onOpen = {}) } }
+        val end = System.currentTimeMillis() + 10_000
+        while (System.currentTimeMillis() < end) {
+            rule.waitForIdle(); org.robolectric.shadows.ShadowLooper.idleMainLooper()
+            if (rule.onAllNodes(androidx.compose.ui.test.hasText("Retry")).fetchSemanticsNodes().isNotEmpty()) break
+            Thread.sleep(80)
+        }
+        rule.onNodeWithText("Couldn't load this actor's titles. Check the connection and try again.").assertIsDisplayed()
+        assertEquals(0, rule.onAllNodes(androidx.compose.ui.test.hasText("Nothing else on this server.")).fetchSemanticsNodes().size)
+        assertEquals(0, rule.onAllNodes(androidx.compose.ui.test.hasText("Shows")).fetchSemanticsNodes().size)
+        // Retry after the server recovers loads the collapsed show.
+        collapseCode = 200
+        rule.onNodeWithText("Retry").performClick()
+        val end2 = System.currentTimeMillis() + 10_000
+        while (System.currentTimeMillis() < end2) {
+            rule.waitForIdle(); org.robolectric.shadows.ShadowLooper.idleMainLooper()
+            if (rule.onAllNodes(androidx.compose.ui.test.hasText("Shows")).fetchSemanticsNodes().isNotEmpty()) break
+            Thread.sleep(80)
+        }
+        rule.onNodeWithText("Shows").assertIsDisplayed()
+        assertEquals(0, rule.onAllNodes(androidx.compose.ui.test.hasText("Retry")).fetchSemanticsNodes().size)
     }
 
     @Test fun bioCollapsesToFirstParagraphWithMore() {

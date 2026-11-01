@@ -122,7 +122,15 @@ fun ActorScreen(personId: String, name: String, onBack: () -> Unit, onOpen: (Bas
     var person by remember(personId) { mutableStateOf<BaseItemDto?>(null) }
     var items by remember(personId) { mutableStateOf<List<BaseItemDto>?>(null) }
     var bioOpen by remember(personId) { mutableStateOf(false) }
-    LaunchedEffect(personId) { person = Content.item(personId); items = Content.byPerson(personId) }
+    var titlesFailed by remember(personId) { mutableStateOf(false) }
+    var reloadTick by remember(personId) { mutableStateOf(0) }
+    LaunchedEffect(personId, reloadTick) {
+        items = null
+        titlesFailed = false
+        person = Content.item(personId)
+        // Null means titles are known to be missing (a request failed): error + retry, never the empty message.
+        Content.byPersonOrNull(personId)?.let { items = it } ?: run { titlesFailed = true }
+    }
     val movies = items.orEmpty().filter { it.Type == "Movie" }
     val shows = items.orEmpty().filter { it.Type == "Series" }
     LazyVerticalGrid(
@@ -158,12 +166,22 @@ fun ActorScreen(personId: String, name: String, onBack: () -> Unit, onOpen: (Bas
                 }
             }
         }
-        if (items?.isEmpty() == true) item(span = { GridItemSpan(maxLineSpan) }) { Text("Nothing else on this server.", color = DriftfinColors.TextSecondary, fontSize = 14.sp) }
-        if (movies.isNotEmpty()) {
+        if (titlesFailed) item(span = { GridItemSpan(maxLineSpan) }) {
+            Column {
+                Text("Couldn't load this actor's titles. Check the connection and try again.", color = DriftfinColors.TextSecondary, fontSize = 14.sp)
+                Text(
+                    "Retry",
+                    color = DriftfinColors.Red, fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.padding(top = 4.dp).clip(androidx.compose.foundation.shape.RoundedCornerShape(4.dp)).clickable { reloadTick++ }.padding(vertical = 4.dp),
+                )
+            }
+        }
+        if (!titlesFailed && items?.isEmpty() == true) item(span = { GridItemSpan(maxLineSpan) }) { Text("Nothing else on this server.", color = DriftfinColors.TextSecondary, fontSize = 14.sp) }
+        if (!titlesFailed && movies.isNotEmpty()) {
             item(span = { GridItemSpan(maxLineSpan) }) { Text("Movies", fontSize = 18.sp, fontWeight = FontWeight.Bold) }
             items(movies, key = { it.Id }) { PosterCard(it, Modifier.fillMaxWidth()) { onOpen(it) } }
         }
-        if (shows.isNotEmpty()) {
+        if (!titlesFailed && shows.isNotEmpty()) {
             item(span = { GridItemSpan(maxLineSpan) }) { Text("Shows", fontSize = 18.sp, fontWeight = FontWeight.Bold) }
             items(shows, key = { it.Id }) { PosterCard(it, Modifier.fillMaxWidth()) { onOpen(it) } }
         }

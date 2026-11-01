@@ -49,9 +49,9 @@ class TvmazePauseCastTest {
     ]}""".replace("\n","")
 
     private fun tvmazeSearch() = """[{"show":{"id":100,"name":"Jury Duty"}},{"show":{"id":200,"name":"Jury Duty Presents: Company Retreat"}}]"""
-    private fun tvmazeEpisodes(d1: String, d2: String) = """[
-        {"id":501,"name":"Onboarding","season":2,"number":1,"airdate":"$d1"},
-        {"id":502,"name":"Team Building","season":2,"number":2,"airdate":"$d2"}
+    private fun tvmazeEpisodes(d1: String, d2: String, season: Int = 2) = """[
+        {"id":501,"name":"Onboarding","season":$season,"number":1,"airdate":"$d1"},
+        {"id":502,"name":"Team Building","season":$season,"number":2,"airdate":"$d2"}
     ]""".replace("\n","")
     private fun tvmazeGuestCast() = """[
         {"person":{"id":1,"name":"Tester Actor","image":{"medium":"https://img/a.jpg"}},"character":{"name":"Self"}},
@@ -79,6 +79,37 @@ class TvmazePauseCastTest {
         assertEquals("https://img/a.jpg", cast[0].RemoteImageUrl)
         // the series item is never fetched: no off-episode substitution
         assertEquals(2, jellyfin.requestCount)
+    }
+
+    @Test fun splitOffShowNumberedFromSeason1StillResolves() = runTest {
+        // Provider-split season shape: the server's season 2 exists at the provider as a separate
+        // show whose episodes are numbered from SEASON 1. The season label must not block the
+        // fingerprint match (number + title + air date, 1:1).
+        jellyfin.enqueue(MockResponse().setBody("""{"People":[{"Name":"Crew Only","Id":"w1","Type":"Writer"}]}"""))
+        jellyfin.enqueue(MockResponse().setBody(jellyfinSeason()))
+        tvmaze.enqueue(MockResponse().setBody(tvmazeSearch()))
+        tvmaze.enqueue(MockResponse().setBody(tvmazeEpisodes("2026-03-20", "2026-03-21"))) // candidate 100: date mismatch
+        tvmaze.enqueue(MockResponse().setBody(tvmazeEpisodes("2026-03-20", "2026-03-20", season = 1))) // candidate 200 S1: strict match
+        tvmaze.enqueue(MockResponse().setBody(tvmazeGuestCast()))
+        val cast = loadPauseCast(jellyfinApi(), "u", episode(), resolver())
+        assertEquals(listOf("Tester Actor", "Demo Guest"), cast.map { it.Name })
+    }
+
+    @Test fun twoSeasonsOfOneCandidateBothMatchingIsAmbiguousStaysHidden() = runTest {
+        // A candidate whose episode list contains TWO seasons that both fingerprint-match the
+        // server season: ambiguous, no enrichment, no guestcast call.
+        jellyfin.enqueue(MockResponse().setBody("""{"People":[{"Name":"Crew Only","Id":"w1","Type":"Writer"}]}"""))
+        jellyfin.enqueue(MockResponse().setBody(jellyfinSeason()))
+        tvmaze.enqueue(MockResponse().setBody(tvmazeSearch()))
+        tvmaze.enqueue(MockResponse().setBody("""[
+            {"id":501,"name":"Onboarding","season":1,"number":1,"airdate":"2026-03-20"},
+            {"id":502,"name":"Team Building","season":1,"number":2,"airdate":"2026-03-20"},
+            {"id":503,"name":"Onboarding","season":2,"number":1,"airdate":"2026-03-20"},
+            {"id":504,"name":"Team Building","season":2,"number":2,"airdate":"2026-03-20"}
+        ]""".replace("\n","")))
+        val cast = loadPauseCast(jellyfinApi(), "u", episode(), resolver())
+        assertTrue(cast.isEmpty())
+        assertEquals(2, tvmaze.requestCount) // search + one episode list, zero guestcast calls
     }
 
     @Test fun localGuestStarsAreKeptAndEnrichedByVerifiedSeason() = runTest {

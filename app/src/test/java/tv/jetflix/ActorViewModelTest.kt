@@ -31,6 +31,8 @@ class ActorViewModelTest {
     private var personBody = """{"Id":"p1","Name":"Pat Example","Overview":"  Born somewhere.  ","ImageTags":{"Primary":"tg"}}"""
     private var itemsBody = """{"Items":[{"Id":"m1","Name":"First","Type":"Movie"},{"Id":"m2","Name":"Second","Type":"Movie"}],"TotalRecordCount":2}"""
     private var itemsCode = 200
+    private var seriesBody = """{"Items":[{"Id":"s9","Name":"Some Show","Type":"Series","ProductionYear":2021}],"TotalRecordCount":1}"""
+    private var seriesCode = 200
 
     @Before fun setUp() {
         Dispatchers.setMain(StandardTestDispatcher())
@@ -39,7 +41,10 @@ class ActorViewModelTest {
                 override fun dispatch(request: RecordedRequest): MockResponse {
                     requests += request
                     val path = request.path.orEmpty()
-                    return if (path.contains("/Items?") || path.startsWith("/Items?")) MockResponse().setResponseCode(itemsCode).setBody(itemsBody)
+                    // The by-ids series fetch (episode collapse) gets its own body; the personIds
+                    // credit query keeps itemsBody; anything else is the person lookup.
+                    return if ((path.contains("/Items?") || path.startsWith("/Items?")) && path.contains("ids=")) MockResponse().setResponseCode(seriesCode).setBody(seriesBody)
+                    else if (path.contains("/Items?") || path.startsWith("/Items?")) MockResponse().setResponseCode(itemsCode).setBody(itemsBody)
                     else MockResponse().setBody(personBody)
                 }
             }
@@ -102,12 +107,37 @@ class ActorViewModelTest {
         assertNull(vm.state.value.error); assertEquals(2, vm.state.value.titles.size)
     }
 
-    @Test fun moviesAndSeriesAreKeptButEpisodesAreDropped() = runTest {
-        itemsBody = """{"Items":[{"Id":"m1","Name":"Film","Type":"Movie"},{"Id":"s1","Name":"Serial","Type":"Series"},{"Id":"e1","Name":"Serial S1E1","Type":"Episode"}],"TotalRecordCount":3}"""
+    @Test fun episodesOfAnAlreadyListedSeriesAddNoDuplicateAndNoSecondFetch() = runTest {
+        itemsBody = """{"Items":[{"Id":"m1","Name":"Film","Type":"Movie"},{"Id":"s1","Name":"Serial","Type":"Series"},{"Id":"e1","Name":"Serial S1E1","Type":"Episode","SeriesId":"s1"}],"TotalRecordCount":3}"""
         signIn("u1", "tok1")
         val vm = ActorViewModel(JellyfinRepository()); vm.load("p1", "Pat"); settle(vm)
         // An episode of a matching series would duplicate the series itself on the page.
         assertEquals(listOf("m1", "s1"), vm.state.value.titles.map { it.Id })
+        assertTrue(requests.none { it.path!!.contains("ids=") })
+    }
+
+    @Test fun episodeOnlyGuestStarCollapsesToTheirSeries() = runTest {
+        // A guest star with no Movie/Series credits, only two episodes of one show. The old
+        // Movie/Series-only query showed "nothing on your server"; the collapse shows the show.
+        itemsBody = """{"Items":[{"Id":"e1","Name":"Special Episode (1)","Type":"Episode","SeriesId":"s9"},{"Id":"e2","Name":"Special Episode (2)","Type":"Episode","SeriesId":"s9"}],"TotalRecordCount":2}"""
+        signIn("u1", "tok1")
+        val vm = ActorViewModel(JellyfinRepository()); vm.load("p1", "Pat"); settle(vm)
+        assertEquals(listOf("s9"), vm.state.value.titles.map { it.Id })
+        assertEquals("Some Show", vm.state.value.titles[0].Name)
+        assertTrue(requests.any { it.path!!.contains("ids=") && it.path!!.contains("s9") })
+    }
+
+    @Test fun failedSeriesCollapseIsAnErrorNotASilentEmptyPage() = runTest {
+        itemsBody = """{"Items":[{"Id":"e1","Name":"Ep","Type":"Episode","SeriesId":"s9"}],"TotalRecordCount":1}"""
+        seriesCode = 500
+        signIn("u1", "tok1")
+        val vm = ActorViewModel(JellyfinRepository()); vm.load("p1", "Pat"); settle(vm)
+        // Known-missing titles must surface as an error with retry, never as "nothing on your server".
+        assertTrue(vm.state.value.error != null)
+        seriesCode = 200
+        vm.retry("p1", "Pat"); settle(vm)
+        assertNull(vm.state.value.error)
+        assertEquals(listOf("s9"), vm.state.value.titles.map { it.Id })
     }
 
     @Test fun answerForAPreviousProfileIsDroppedAfterASwitch() = runTest {

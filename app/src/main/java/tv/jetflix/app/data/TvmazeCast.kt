@@ -79,7 +79,7 @@ class TvmazeCastResolver private constructor(private val api: TvmazeApi) {
         val episodeNo = item.IndexNumber ?: return null
         if (jellyfinEpisodes.isEmpty()) return null
         val cacheKey = "$seriesId|$seasonNo"
-        val season = if (seasonCache.containsKey(cacheKey)) seasonCache[cacheKey] else resolveSeason(item.SeriesName, seasonNo, jellyfinEpisodes).also { seasonCache[cacheKey] = it }
+        val season = if (seasonCache.containsKey(cacheKey)) seasonCache[cacheKey] else resolveSeason(item.SeriesName, jellyfinEpisodes).also { seasonCache[cacheKey] = it }
         val (tvmazeShowId, seasonEpisodes) = season ?: return null
         // Target resolution is by absolute episode number inside the verified season. An extra
         // (E9+ extras on a real season) matches nothing, so no credits are fetched for it.
@@ -102,8 +102,8 @@ class TvmazeCastResolver private constructor(private val api: TvmazeApi) {
         return people
     }
 
-    /** The one candidate show whose season maps 1:1 onto the Jellyfin season, else null. */
-    private suspend fun resolveSeason(seriesName: String?, seasonNo: Int, jellyfinEpisodes: List<BaseItemDto>): Pair<Long, List<TvmazeEpisodeRef>>? {
+    /** The one candidate (show, season) whose episodes map 1:1 onto the Jellyfin season, else null. */
+    private suspend fun resolveSeason(seriesName: String?, jellyfinEpisodes: List<BaseItemDto>): Pair<Long, List<TvmazeEpisodeRef>>? {
         val query = seriesName?.takeIf { it.isNotBlank() } ?: return null
         val candidates = (call { api.searchShows(query) }.orEmpty()).mapNotNull { it.show }.distinctBy { it.id }.take(5)
         var match: Pair<Long, List<TvmazeEpisodeRef>>? = null
@@ -111,12 +111,18 @@ class TvmazeCastResolver private constructor(private val api: TvmazeApi) {
             val episodes = showEpisodesCache[candidate.id]
                 ?: call { api.showEpisodes(candidate.id) }?.also { showEpisodesCache[candidate.id] = it }
                 ?: continue
-            // Server may carry MORE items than the real season (extras); never fewer than the candidate.
-            val seasonEpisodes = episodes.filter { it.season == seasonNo && it.number >= 1 }
-            if (seasonEpisodes.isEmpty() || seasonEpisodes.size > jellyfinEpisodes.size) continue
-            if (!fingerprintMatches(jellyfinEpisodes, seasonEpisodes)) continue
-            if (match != null) return null // ambiguous: two candidate shows both match - stay hidden
-            match = candidate.id to seasonEpisodes
+            // EVERY season of the candidate is tried, not only the one carrying the server's own
+            // season number: a provider can split one aired season into its own show entry whose
+            // episodes it numbers from season 1. Identity comes from the
+            // fingerprint - every episode matching on number + title + air date - never from the
+            // season label, so a differently-numbered season cannot sneak through.
+            for (seasonEpisodes in episodes.filter { it.number >= 1 }.groupBy { it.season }.values) {
+                // Server may carry MORE items than the real season (extras); never fewer than the candidate.
+                if (seasonEpisodes.isEmpty() || seasonEpisodes.size > jellyfinEpisodes.size) continue
+                if (!fingerprintMatches(jellyfinEpisodes, seasonEpisodes)) continue
+                if (match != null) return null // ambiguous: two candidate seasons both match - stay hidden
+                match = candidate.id to seasonEpisodes
+            }
         }
         return match
     }

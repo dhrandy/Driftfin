@@ -80,9 +80,27 @@ object Content {
         api.getItems(userId, parentId = seriesId, includeItemTypes = "Season", sortBy = "SortName", limit = 100).body()?.Items.orEmpty()
     }
 
-    suspend fun byPerson(personId: String): List<BaseItemDto> = safe(emptyList()) {
-        api.getItems(userId, includeItemTypes = "Movie,Series", recursive = true, personIds = personId, sortBy = "SortName", limit = 200).body()?.Items.orEmpty()
-    }
+    /** Titles crediting the person, or null when titles are KNOWN to be missing (a request failed),
+     *  so the screen shows an error with retry instead of a false "nothing here" (same split as
+     *  [resumeOrNull]). Episode-level credits (guest stars) do not roll up to the series in
+     *  Jellyfin's person filter, so episodes are queried too and collapsed to their series -
+     *  otherwise a guest-only actor's page wrongly says the server has nothing. A failed collapse
+     *  fetch is null too: showing only the direct credits would hide episodes the server reported. */
+    suspend fun byPersonOrNull(personId: String): List<BaseItemDto>? = try {
+        val resp = api.getItems(userId, includeItemTypes = "Movie,Series,Episode", recursive = true, personIds = personId, sortBy = "SortName", limit = 200)
+        if (!resp.isSuccessful) null else {
+            val raw = resp.body()?.Items.orEmpty()
+            val direct = raw.filter { it.Type == "Movie" || it.Type == "Series" }
+            val missingSeriesIds = raw.asSequence().filter { it.Type == "Episode" }
+                .mapNotNull { it.SeriesId }.distinct()
+                .filter { sid -> direct.none { it.Id == sid } }.toList()
+            if (missingSeriesIds.isEmpty()) direct else {
+                val sresp = api.getItems(userId, ids = missingSeriesIds.joinToString(","), includeItemTypes = "Series", limit = 200)
+                if (!sresp.isSuccessful) null
+                else (direct + sresp.body()?.Items.orEmpty().filter { it.Type == "Series" }).distinctBy { it.Id }
+            }
+        }
+    } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (e: Exception) { null }
 
     /** Idle Search rows: the server's suggestions, else the best-rated unwatched titles. Only titles with a poster. */
     suspend fun recommended(type: String): List<BaseItemDto> = safe(emptyList()) {

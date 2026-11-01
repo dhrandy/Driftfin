@@ -80,10 +80,26 @@ class ActorViewModel(val repo: JellyfinRepository) : ViewModel() {
         loadJob = viewModelScope.launch {
             try {
                 val personDef = async { try { api.getItem(personId, session.userId).body() } catch (_: Exception) { null } }
-                val resp = api.getItems(userId = session.userId, includeItemTypes = "Movie,Series", recursive = true,
+                // Episodes are queried too: Jellyfin's person filter matches episode-level credits
+                // (guest stars), and those do NOT roll up to the series item. Asking only for
+                // Movie/Series reported "nothing on your server" for a guest star the server
+                // clearly has, when every credit they have is on episodes.
+                val resp = api.getItems(userId = session.userId, includeItemTypes = "Movie,Series,Episode", recursive = true,
                     sortBy = "ProductionYear,SortName", sortOrder = "Descending", personIds = personId)
                 if (!resp.isSuccessful) throw IllegalStateException("credits ${resp.code()}")
                 val person = personDef.await()
+                val raw = resp.body()?.Items.orEmpty()
+                val direct = raw.filter { it.Type == "Movie" || it.Type == "Series" }
+                // Episodes collapse to their series: top-level titles only on the grid, and a
+                // series the person guest-starred on still appears (once) instead of its episodes.
+                val missingSeriesIds = raw.asSequence().filter { it.Type == "Episode" }
+                    .mapNotNull { it.SeriesId }.distinct()
+                    .filter { sid -> direct.none { it.Id == sid } }.toList()
+                val episodeSeries = if (missingSeriesIds.isEmpty()) emptyList() else {
+                    val sresp = api.getItems(userId = session.userId, ids = missingSeriesIds.joinToString(","), includeItemTypes = "Series")
+                    if (!sresp.isSuccessful) throw IllegalStateException("credits-series ${sresp.code()}")
+                    sresp.body()?.Items.orEmpty().filter { it.Type == "Series" }
+                }
                 // A profile or server switch while this was loading: drop the answer, it is not for the current user.
                 if (!sameSession(session)) { loadedFor = null; return@launch }
                 _state.value = ActorUiState(
@@ -92,8 +108,8 @@ class ActorViewModel(val repo: JellyfinRepository) : ViewModel() {
                     bio = cleanBio(person?.Overview),
                     dates = tv.jetflix.app.data.lifeDatesLabel(person?.PremiereDate, person?.EndDate),
                     photoUrl = person?.ImageTags?.get("Primary")?.let { repo.imageUrl(personId, "Primary", 400, it) },
-                    // Top-level titles only: episodes of a matching series would duplicate the series itself.
-                    titles = resp.body()?.Items.orEmpty().filter { it.Type == "Movie" || it.Type == "Series" },
+                    titles = (direct + episodeSeries).distinctBy { it.Id }
+                        .sortedWith(compareByDescending<BaseItemDto> { it.ProductionYear ?: Int.MIN_VALUE }.thenBy { it.Name }),
                 )
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
