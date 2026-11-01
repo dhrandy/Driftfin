@@ -39,6 +39,10 @@ android {
     lint {
         // NullSafeMutableLiveData detector crashes on Kotlin 2.0.x (lint tool bug; app has no LiveData)
         disable += "NullSafeMutableLiveData"
+        // Only NewApi runs: the androidx.compose lint detectors crash on Kotlin 2.0.x the same way
+        // (IncompatibleClassChangeError inside FrequentlyChangingValue/RememberInComposition), and
+        // NewApi is the check the API-level test gate needs.
+        checkOnly += "NewApi"
     }
 
     buildTypes {
