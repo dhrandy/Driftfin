@@ -41,5 +41,6 @@ jobs:
           path: |
             app/build/reports/tests/
             app/build/test-results/
+            app/build/outputs/qa/
             phone/build/reports/tests/
             phone/build/test-results/
