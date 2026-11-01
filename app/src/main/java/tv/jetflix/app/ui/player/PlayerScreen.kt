@@ -7,11 +7,16 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.border
+import androidx.compose.foundation.gestures.scrollBy
+import androidx.compose.foundation.ScrollState
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -30,11 +35,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -57,6 +62,7 @@ import androidx.media3.ui.PlayerView
 import androidx.tv.material3.Icon
 import androidx.tv.material3.Text
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.isActive
 import okhttp3.OkHttpClient
 import tv.jetflix.app.data.ticksToMs
@@ -136,7 +142,22 @@ fun PlayerScreen(
             cast = tv.jetflix.app.data.loadPauseCast(api, session.userId, item, tv.jetflix.app.data.TvmazeCastResolver.resolver())
         }
     }
-    LaunchedEffect(isPausedNow, pauseCastOn) { if (!isPausedNow || !pauseCastOn) { castIndex = null; castKeys.reset() } }
+    // A display-only (TVMaze-enriched, no Jellyfin id) cast person whose guest panel is open.
+    var guestPanel by remember { mutableStateOf<tv.jetflix.app.data.BaseItemPerson?>(null) }
+    // The open guest's biography, when Wikidata's TV Maze person ID statement proves one (see GuestBio.kt).
+    var guestBio by remember { mutableStateOf<String?>(null) }
+    // The panel's scroll position, hoisted so the remote can scroll it (KeyCaptureBox owns the keys).
+    val guestScroll = rememberScrollState()
+    val guestScope = rememberCoroutineScope()
+    LaunchedEffect(guestPanel) {
+        guestBio = null
+        guestScroll.scrollTo(0)
+        val g = guestPanel ?: return@LaunchedEffect
+        val tvmazeId = g.ProviderIds?.get("Tvmaze") ?: return@LaunchedEffect
+        // Switching person cancels this lookup; a cancelled lookup is never cached (see GuestBio.kt).
+        guestBio = tv.jetflix.app.data.GuestBioResolver.resolver().bioFor(tvmazeId)
+    }
+    LaunchedEffect(isPausedNow, pauseCastOn) { if (!isPausedNow || !pauseCastOn) { castIndex = null; castKeys.reset(); guestPanel = null } }
     // "Up next" line while paused: the next episode is looked up once, the first time the video is paused
     // (the same server-order lookup the end-of-episode card uses, just earlier).
     var nextEp by remember { mutableStateOf<BaseItemDto?>(null) }
@@ -390,7 +411,9 @@ fun PlayerScreen(
                     // A release the cast strip started: an armed OK opens the actor here (one press, one page) and is swallowed.
                     return@run when (castKeys.onRelease(nativeEvent.keyCode)) {
                         PlayerKeys.CastStep.Open -> {
-                            castIndex?.let { idx -> cast.getOrNull(idx)?.let { p -> p.Id?.let { onOpenActor(it, p.Name.orEmpty()) } } }
+                            castIndex?.let { idx -> cast.getOrNull(idx)?.let { p ->
+                                if (p.Id != null) onOpenActor(p.Id, p.Name.orEmpty()) else guestPanel = p
+                            } }
                             true
                         }
                         PlayerKeys.CastStep.Consume -> true
@@ -407,6 +430,25 @@ fun PlayerScreen(
                         else -> return@run false
                     }
                     return@run true
+                }
+                if (guestPanel != null) {
+                    // The guest panel mirrors the full biography overlay: Up/Down scroll, OK/Back close.
+                    // Media keys keep their normal job (they are never swallowed): unpausing closes
+                    // the panel through the pause-state reset above.
+                    when (PlayerKeys.guestPanelKey(nativeEvent.keyCode)) {
+                        PlayerKeys.GuestPanelKey.ScrollDown -> { guestScope.launch { guestScroll.scrollBy(160f) }; return@run true }
+                        PlayerKeys.GuestPanelKey.ScrollUp -> { guestScope.launch { guestScroll.scrollBy(-160f) }; return@run true }
+                        PlayerKeys.GuestPanelKey.Close -> { guestPanel = null; return@run true }
+                        PlayerKeys.GuestPanelKey.Swallow -> return@run true
+                        PlayerKeys.GuestPanelKey.PassThrough -> {
+                            when (nativeEvent.keyCode) {
+                                KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE -> PlayerKeys.togglePlayback(player)
+                                KeyEvent.KEYCODE_MEDIA_PLAY -> player.play()
+                                KeyEvent.KEYCODE_MEDIA_PAUSE -> player.pause()
+                            }
+                            return@run true
+                        }
+                    }
                 }
                 castIndex?.let { idx ->
                     when (val step = castKeys.onPress(nativeEvent.keyCode, idx, cast.size)) {
@@ -530,6 +572,15 @@ fun PlayerScreen(
         }
         if (panelOpen) {
             AudioSubtitlePanel(panelOptions, panelIndex, Modifier.align(androidx.compose.ui.Alignment.CenterEnd).padding(end = 48.dp))
+        }
+        guestPanel?.let { g ->
+            GuestPersonPanel(
+                person = g,
+                episodeLabel = listOfNotNull(item.episodeLabel(), item.Name).joinToString(" \u00b7 "),
+                imageUrl = g.RemoteImageUrl ?: repo.personImageUrl(g),
+                bio = guestBio,
+                scroll = guestScroll,
+            )
         }
         trackToast?.let { msg ->
             LaunchedEffect(msg) { delay(2_500); if (trackToast == msg) trackToast = null }
@@ -955,6 +1006,60 @@ internal val PauseCastScrim = androidx.compose.ui.graphics.Brush.verticalGradien
     1f to Color.Black.copy(alpha = 0.9f),
 )
 
+/**
+ * The guest panel for a TVMaze-enriched (display-only) cast person: no Jellyfin person page exists
+ * for them, and name-matching one would be an unverified identity guess, so OK opens this instead.
+ * Only data from the verified episode's guest cast is shown: photo, name, character and the
+ * episode being watched, plus a biography when the person's identity is proven by the id chain in
+ * GuestBio.kt (never a name match). Up/Down scroll, OK/Back close; media keys keep working.
+ */
+@Composable
+fun GuestPersonPanel(
+    person: tv.jetflix.app.data.BaseItemPerson,
+    episodeLabel: String,
+    imageUrl: String?,
+    bio: String? = null,
+    scroll: ScrollState = rememberScrollState(),
+) {
+    Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.85f))) {
+        Column(
+            Modifier
+                .align(Alignment.Center)
+                .width(520.dp)
+                .fillMaxHeight(0.9f)
+                .background(JetflixColors.Surface, RoundedCornerShape(12.dp))
+                .padding(28.dp),
+        ) {
+            // The scroll state is hoisted: the player's remote handler scrolls it (Up/Down), like
+            // the full biography overlay on the actor page.
+            Column(
+                Modifier.verticalScroll(scroll),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                tv.jetflix.app.ui.actor.PersonPhoto(url = imageUrl, name = person.Name.orEmpty(), size = 120.dp)
+                Text(person.Name.orEmpty(), style = JetflixType.sectionTitle, color = JetflixColors.TextPrimary, maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                person.Role?.takeIf { it.isNotBlank() }?.let {
+                    Text("as $it", style = JetflixType.body, color = JetflixColors.TextSecondary, maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                }
+                if (episodeLabel.isNotBlank()) {
+                    Text("Guest in $episodeLabel", style = JetflixType.body, color = JetflixColors.TextSecondary, maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                }
+                bio?.let {
+                    Text(it, style = JetflixType.body.copy(fontSize = 15.sp, lineHeight = 22.sp), color = JetflixColors.TextSecondary)
+                }
+                // CC BY-SA credits for the guest-cast data, photo and bio; the app's full notice lives in Settings.
+                Text(
+                    if (bio != null) "Guest cast and photo: TVMaze (tvmaze.com) \u00b7 Bio: Wikipedia (en.wikipedia.org)"
+                    else "Guest cast and photo: TVMaze (tvmaze.com)",
+                    style = JetflixType.caption, color = JetflixColors.TextMuted,
+                )
+                Text("OK or Back closes", style = JetflixType.caption, color = JetflixColors.TextMuted)
+            }
+        }
+    }
+}
+
 /** Cast along the bottom while paused. Nothing is selected until Down is pressed, so the controls stay first. */
 @Composable
 fun PauseCastStrip(
@@ -964,13 +1069,13 @@ fun PauseCastStrip(
     modifier: Modifier = Modifier,
 ) {
     Column(modifier.fillMaxWidth().padding(horizontal = 48.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        // Display-only people (TVMaze-enriched, no Jellyfin id) can be browsed - that is how the
-        // row scrolls - but OK opens nothing for them, so the hint drops "OK movies" on those cards.
+        // Display-only people (TVMaze-enriched, no Jellyfin id) open the guest panel on OK; server
+        // people open their full actor page. The hint says which "OK" the selected card gets.
         val selectedOpenable = selected?.let { cast.getOrNull(it)?.Id != null } ?: false
         Text(
             if (selected == null) "Cast   \u25BC to browse"
             else if (selectedOpenable) "Cast   \u25C0 \u25B6 choose   OK movies   \u25B2 back"
-            else "Cast   \u25C0 \u25B6 choose   \u25B2 back",
+            else "Cast   \u25C0 \u25B6 choose   OK details   \u25B2 back",
             style = JetflixType.caption, color = Color.White,
         )
         val listState = androidx.compose.foundation.lazy.rememberLazyListState(initialFirstVisibleItemIndex = ((selected ?: 0) - 3).coerceAtLeast(0))
@@ -983,12 +1088,8 @@ fun PauseCastStrip(
         ) {
             itemsIndexed(cast, key = { _, p -> p.Id ?: p.Name ?: "" }) { i, p ->
                 val sel = selected == i
-                // Display-only people (TVMaze-enriched, no Jellyfin id) stay dimmed even when the
-                // selection rests on them: browse yes, open no - OK is guarded to a no-op for them.
-                val openable = p.Id != null
                 Column(
                     Modifier.width(96.dp)
-                        .then(if (openable) Modifier else Modifier.alpha(0.65f))
                         .then(Modifier.border(if (sel) 3.dp else 0.dp, if (sel) Color.White else Color.Transparent, RoundedCornerShape(12.dp)))
                         .background(if (sel) Color(0x55FFFFFF) else Color.Transparent, RoundedCornerShape(12.dp))
                         .padding(5.dp),

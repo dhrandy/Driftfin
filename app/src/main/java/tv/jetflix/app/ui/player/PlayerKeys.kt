@@ -75,6 +75,25 @@ object PlayerKeys {
         else -> CastStep.Consume
     }
 
+    /** What the open guest person panel does with a key press. */
+    enum class GuestPanelKey { ScrollDown, ScrollUp, Close, PassThrough, Swallow }
+
+    /**
+     * Keys while the guest person panel is open, mirroring the full biography overlay's
+     * conventions: Down/Up scroll the text (Up never closes - that would make the top of a long
+     * bio unreachable), OK or Back close, and media play/pause keys pass through so playback
+     * control keeps working behind the panel (unpausing then closes it). Everything else is
+     * swallowed so the paused controls underneath stay untouched.
+     */
+    fun guestPanelKey(keyCode: Int): GuestPanelKey = when (keyCode) {
+        KeyEvent.KEYCODE_DPAD_DOWN -> GuestPanelKey.ScrollDown
+        KeyEvent.KEYCODE_DPAD_UP -> GuestPanelKey.ScrollUp
+        KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER,
+        KeyEvent.KEYCODE_BACK, KeyEvent.KEYCODE_DPAD_LEFT -> GuestPanelKey.Close
+        KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, KeyEvent.KEYCODE_MEDIA_PLAY, KeyEvent.KEYCODE_MEDIA_PAUSE -> GuestPanelKey.PassThrough
+        else -> GuestPanelKey.Swallow
+    }
+
     /**
      * One OK press on a cast person opens exactly one page. The press only arms the open; the
      * release performs it and is swallowed. Navigating on the press instead let the same release

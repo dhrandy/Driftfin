@@ -88,6 +88,24 @@ class PauseCastKeysTest {
         assertEquals(null, keys.onRelease(KeyEvent.KEYCODE_DPAD_CENTER))
     }
 
+    @Test fun guestPanelKeysScrollClosePassMediaThroughAndSwallowTheRest() {
+        // Down/Up scroll the panel's text; Up must never close, or the top of a long bio is unreachable.
+        assertEquals(PlayerKeys.GuestPanelKey.ScrollDown, PlayerKeys.guestPanelKey(KeyEvent.KEYCODE_DPAD_DOWN))
+        assertEquals(PlayerKeys.GuestPanelKey.ScrollUp, PlayerKeys.guestPanelKey(KeyEvent.KEYCODE_DPAD_UP))
+        // OK and Back close; Left too, matching the audio/subtitle panel in the same screen.
+        assertEquals(PlayerKeys.GuestPanelKey.Close, PlayerKeys.guestPanelKey(KeyEvent.KEYCODE_DPAD_CENTER))
+        assertEquals(PlayerKeys.GuestPanelKey.Close, PlayerKeys.guestPanelKey(KeyEvent.KEYCODE_ENTER))
+        assertEquals(PlayerKeys.GuestPanelKey.Close, PlayerKeys.guestPanelKey(KeyEvent.KEYCODE_BACK))
+        assertEquals(PlayerKeys.GuestPanelKey.Close, PlayerKeys.guestPanelKey(KeyEvent.KEYCODE_DPAD_LEFT))
+        // Media keys are never swallowed: playback control keeps working behind the panel.
+        assertEquals(PlayerKeys.GuestPanelKey.PassThrough, PlayerKeys.guestPanelKey(KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE))
+        assertEquals(PlayerKeys.GuestPanelKey.PassThrough, PlayerKeys.guestPanelKey(KeyEvent.KEYCODE_MEDIA_PLAY))
+        assertEquals(PlayerKeys.GuestPanelKey.PassThrough, PlayerKeys.guestPanelKey(KeyEvent.KEYCODE_MEDIA_PAUSE))
+        // Right and anything else reach neither the panel nor the controls underneath.
+        assertEquals(PlayerKeys.GuestPanelKey.Swallow, PlayerKeys.guestPanelKey(KeyEvent.KEYCODE_DPAD_RIGHT))
+        assertEquals(PlayerKeys.GuestPanelKey.Swallow, PlayerKeys.guestPanelKey(KeyEvent.KEYCODE_MEDIA_REWIND))
+    }
+
     @Test fun resetDropsAnythingArmed() {
         val keys = PlayerKeys.CastKeySession()
         keys.onPress(KeyEvent.KEYCODE_DPAD_CENTER, 2, 4)
