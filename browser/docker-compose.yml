@@ -65,7 +65,7 @@ services:
       sh -c 'set -e;
       export NPM_CONFIG_CACHE=/tmp/npm-cache;
       mkdir -p /tmp/npm-cache;
-      if [ "$FORCE_UPDATE" = "true" ] || [ ! -f /app/.driftfin-installed ] || [ ! -f /app/src/server.js ]; then
+      if [ "$$FORCE_UPDATE" = "true" ] || [ ! -f /app/.driftfin-installed ] || [ ! -f /app/src/server.js ]; then
       rm -rf /tmp/driftfin-src /tmp/driftfin.tar.gz;
       wget -qO /tmp/driftfin.tar.gz https://codeload.github.com/dhrandy/Driftfin/tar.gz/refs/heads/main;
       mkdir -p /tmp/driftfin-src;
