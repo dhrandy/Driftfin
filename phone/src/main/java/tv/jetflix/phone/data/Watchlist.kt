@@ -61,17 +61,8 @@ object Watchlist {
         return starred
     }
 
-    /** Drops ids the server no longer returns (deleted or lost access); keeps the order of the rest. */
-    @Synchronized
-    fun pruneMissing(found: Set<String>) {
-        val o = owner ?: return
-        val current = _ids.value
-        val kept = current.filter { found.contains(it) }
-        if (kept.size != current.size) {
-            prefs?.edit()?.putString(o, kept.joinToString(","))?.apply()
-            _ids.value = kept
-        }
-    }
+    // There is deliberately no automatic removal of saved ids. A server answer that lacks some of them (library
+    // offline, access change, partial reply) must never delete the user's list; only toggle() by the user does.
 
     internal fun resetForTest() {
         prefs?.edit()?.clear()?.apply()

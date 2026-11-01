@@ -120,16 +120,20 @@ object Content {
         api.getItems(userId, parentId = id, fields = "Overview,Genres", limit = 300).body()?.Items.orEmpty()
     }
 
-    /** Driftfin's own Watchlist: starred ids fetched fresh; the default order is newest star first. Only an answer that returns items prunes ids the server lost. */
-    suspend fun watchlist(sort: Sort = Sort.Added): List<BaseItemDto> = safe(emptyList()) {
+    /** Driftfin's own Watchlist: starred ids fetched fresh; the default order is newest star first. Failure shows as empty here; use [watchlistOrNull] where the screen must tell the two apart. */
+    suspend fun watchlist(sort: Sort = Sort.Added): List<BaseItemDto> = watchlistOrNull(sort).orEmpty()
+
+    /** The watchlist titles the server returned, or null when the request failed (offline, HTTP error, bad answer).
+     *  Read-only on the saved list: an answer that lacks some ids (library offline, access change, partial reply)
+     *  only hides those titles for now. It NEVER removes saved ids; only the user's own un-star does that. */
+    suspend fun watchlistOrNull(sort: Sort = Sort.Added): List<BaseItemDto>? = try {
         val starred = Watchlist.ids.value
         if (starred.isEmpty()) emptyList() else {
             // The sorts below read these from the items themselves; a fetch without them sorts nothing (reported 10/29: Year came out alphabetical).
-            val found = api.getItems(userId, includeItemTypes = "Movie,Series", recursive = true, ids = starred.joinToString(","), fields = "Overview,Genres,ProductionYear,CommunityRating").body()?.Items.orEmpty()
-            if (found.isNotEmpty()) Watchlist.pruneMissing(found.map { it.Id }.toSet())
-            orderWatchlist(found, starred, sort)
+            val resp = api.getItems(userId, includeItemTypes = "Movie,Series", recursive = true, ids = starred.joinToString(","), fields = "Overview,Genres,ProductionYear,CommunityRating")
+            if (!resp.isSuccessful) null else orderWatchlist(resp.body()?.Items.orEmpty(), starred, sort)
         }
-    }
+    } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (e: Exception) { null }
 
     /** Watchlist ordering: "Recently added" is star recency (newest star first); the other sorts read the items, unknowns last. */
     fun orderWatchlist(found: List<BaseItemDto>, starred: List<String>, sort: Sort): List<BaseItemDto> = when (sort) {

@@ -51,11 +51,19 @@ fun MyStuffScreen(onOpen: (BaseItemDto) -> Unit, onOpenCollection: (BaseItemDto)
     var sort by remember(section) { mutableStateOf(prefs.sort(section)) }
     var sortMenu by remember { mutableStateOf(false) }
     val starred by tv.jetflix.phone.data.Watchlist.ids.collectAsState()
-    LaunchedEffect(section, starred, sort) {
+    var watchlistFailed by remember { mutableStateOf(false) }
+    var watchlistRetry by remember { mutableStateOf(0) }
+    // The list on screen belongs to one server+user. A different account must never see the previous account's titles,
+    // even when a reload fails or both accounts hold the same ids; the saved ids themselves are never touched here.
+    val account = tv.jetflix.phone.data.SessionManager.session.collectAsState().value?.let { "${it.serverUrl}#${it.userId}" }
+    var itemsOwner by remember { mutableStateOf(account) }
+    LaunchedEffect(section, starred, sort, watchlistRetry, account) {
+        if (itemsOwner != account) { items = null; itemsOwner = account }
         if (section != MySection.Watchlist) items = null
+        watchlistFailed = false
         items = when (section) {
             MySection.Favorites -> Content.favorites(sort)
-            MySection.Watchlist -> Content.watchlist(sort)
+            MySection.Watchlist -> Content.watchlistOrNull(sort).also { watchlistFailed = it == null } ?: items
             MySection.Collections -> Content.collections()
         }
     }
@@ -85,10 +93,20 @@ fun MyStuffScreen(onOpen: (BaseItemDto) -> Unit, onOpenCollection: (BaseItemDto)
                     colors = androidx.compose.material3.FilterChipDefaults.filterChipColors(selectedContainerColor = DriftfinColors.Red, selectedLabelColor = androidx.compose.ui.graphics.Color.White)) }
             }
         }
-        if (items?.isEmpty() == true) item(span = { GridItemSpan(maxLineSpan) }) {
+        if (section == MySection.Watchlist && watchlistFailed) item(span = { GridItemSpan(maxLineSpan) }) {
+            Column {
+                Text("Couldn't load your watchlist. Your saved titles are kept. Check the connection and try again.", color = DriftfinColors.TextSecondary, fontSize = 14.sp)
+                Text(
+                    "Retry",
+                    color = DriftfinColors.Red, fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.padding(top = 4.dp).clip(androidx.compose.foundation.shape.RoundedCornerShape(4.dp)).clickable { watchlistRetry++ }.padding(vertical = 4.dp),
+                )
+            }
+        }
+        if (items?.isEmpty() == true && !(section == MySection.Watchlist && watchlistFailed)) item(span = { GridItemSpan(maxLineSpan) }) {
             Text(when (section) {
                 MySection.Favorites -> "Nothing starred yet. Tap the heart on a title."
-                MySection.Watchlist -> "Your watchlist is empty. Tap Watchlist on a title to save it for later."
+                MySection.Watchlist -> if (starred.isNotEmpty()) "Your saved titles aren't available from the server right now. They are kept." else "Your watchlist is empty. Tap Watchlist on a title to save it for later."
                 MySection.Collections -> "No collections on this server."
             }, color = DriftfinColors.TextSecondary, fontSize = 14.sp)
         }
