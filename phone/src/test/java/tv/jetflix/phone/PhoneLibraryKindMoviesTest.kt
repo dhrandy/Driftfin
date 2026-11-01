@@ -34,6 +34,7 @@ class PhoneLibraryKindMoviesTest {
     @get:Rule val rule = createAndroidComposeRule<androidx.activity.ComponentActivity>()
     private lateinit var server: MockWebServer
     private val requested = CopyOnWriteArrayList<String>()
+    private val stall = IdleStallDump("PhoneLibraryKindMoviesTest")
 
     private fun awaitReal(timeoutMs: Long, condition: () -> Boolean) {
         val end = System.currentTimeMillis() + timeoutMs
@@ -46,6 +47,7 @@ class PhoneLibraryKindMoviesTest {
     }
 
     @Before fun setup() {
+        stall.arm()
         val ctx = androidx.test.core.app.ApplicationProvider.getApplicationContext<android.content.Context>()
         Graph.allowHardwareArt = false
         Graph.init(ctx)
@@ -107,5 +109,5 @@ class PhoneLibraryKindMoviesTest {
         File("build/render-check", name).outputStream().use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
     }
 
-    @org.junit.After fun tearDown() { server.shutdown(); Graph.signOut() }
+    @org.junit.After fun tearDown() { stall.disarm(); server.shutdown(); Graph.signOut() }
 }
