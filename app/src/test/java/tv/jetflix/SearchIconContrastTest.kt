@@ -21,8 +21,9 @@ import tv.jetflix.app.ui.theme.JetflixTheme
 
 /**
  * The user on build 22: on Search "you can't see the search icon, it doesn't turn grey" - the magnifier
- * was hardcoded white, invisible on the white/light pill. It now follows the pill's content color:
- * dark on the selected and focused pill, light on the plain bar. Pixel-verified in all three states.
+ * was hardcoded white, invisible on the white/light pill. It follows the pill's content color:
+ * dark on the selected (white) pill, light on the plain bar and, since build 50, light on the
+ * focused DARK pill with its white outline. Pixel-verified in all three states.
  */
 @OptIn(ExperimentalTestApi::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -77,10 +78,10 @@ class SearchIconContrastTest {
         assertTrue("selected pill is white; glyph must be dark (stroke=${strokeLum(px, w)}, pill=${backgroundLum(px, w)})", strokeLum(px, w) < 0.3 && backgroundLum(px, w) > 0.7)
     }
 
-    @Test fun glyphIsDarkOnTheFocusedPill() {
+    @Test fun glyphIsLightOnTheFocusedDarkPill() {
         bar(JetflixTab.HOME, focusSearch = true)
         val (px, w) = glyphPixels()
-        assertTrue("focused pill is light grey; glyph must be dark (stroke=${strokeLum(px, w)}, pill=${backgroundLum(px, w)})", strokeLum(px, w) < 0.35 && backgroundLum(px, w) > 0.6)
+        assertTrue("build 50: focused pill is DARK with a white outline; glyph must be light (stroke=${strokeLum(px, w)}, pill=${backgroundLum(px, w)})", strokeLum(px, w) > 0.6 && backgroundLum(px, w) < 0.4)
     }
 
     @Test fun glyphIsLightOnThePlainBar() {

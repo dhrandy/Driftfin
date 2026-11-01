@@ -59,11 +59,17 @@ class TvFocusOutlineSweepTest {
         val b = node.fetchSemanticsNode().boundsInRoot
         val cx = ((b.left + b.right) / 2).toInt()
         val cy = ((b.top + b.bottom) / 2).toInt()
+        // tv-material scales the focused VISUAL ~1.1x past the semantics bounds, so the ring
+        // lands ~5% of the button's own width/height OUTSIDE each edge: 18px out on a 360px-wide
+        // hero button, far beyond any fixed band (Run10: hero Play left strip brightest r86 with
+        // the ring plainly in the capture). Reach per edge from the actual bounds, inward +4.
+        val outX = ((b.right - b.left) * 0.06f).toInt() + 4
+        val outY = ((b.bottom - b.top) * 0.06f).toInt() + 4
         val strips = listOf(
-            "left" to ((b.left - 7).toInt()..(b.left + 4).toInt()).map { it to cy },
-            "right" to ((b.right - 4).toInt()..(b.right + 7).toInt()).map { it to cy },
-            "top" to ((b.top - 7).toInt()..(b.top + 4).toInt()).map { cx to it },
-            "bottom" to ((b.bottom - 4).toInt()..(b.bottom + 7).toInt()).map { cx to it },
+            "left" to ((b.left - outX).toInt()..(b.left + 4).toInt()).map { it to cy },
+            "right" to ((b.right - 4).toInt()..(b.right + outX).toInt()).map { it to cy },
+            "top" to ((b.top - outY).toInt()..(b.top + 4).toInt()).map { cx to it },
+            "bottom" to ((b.bottom - 4).toInt()..(b.bottom + outY).toInt()).map { cx to it },
         )
         for ((name, pts) in strips) {
             val best = pts.maxOf { pt -> android.graphics.Color.red(pixelAt(pt.first, pt.second)) }
@@ -74,6 +80,20 @@ class TvFocusOutlineSweepTest {
             val r = android.graphics.Color.red(px); val g = android.graphics.Color.green(px); val bl = android.graphics.Color.blue(px)
             assertTrue("$tag focused body is dark at ${(frac * 100).toInt()}% width (was rgb($r,$g,$bl))", r < 120 && g < 120 && bl < 120)
         }
+    }
+
+
+    /** Decisive render for CI inspection (uploaded with the test reports), written BEFORE the
+     *  assertions so the capture exists even when a check fails. */
+    private fun writeQaCapture(name: String) {
+        val view = rule.activity.window.decorView
+        val bmp = Bitmap.createBitmap(view.width, view.height, Bitmap.Config.ARGB_8888)
+        view.draw(android.graphics.Canvas(bmp))
+        val out = java.io.File("build/outputs/qa/$name").apply { parentFile?.mkdirs() }
+        out.outputStream().use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
+        val colors = HashSet<Int>()
+        for (x in 0 until bmp.width step 8) for (y in 0 until bmp.height step 8) colors.add(bmp.getPixel(x, y))
+        assertTrue("$name is not a blank frame (${colors.size} colors)", colors.size > 3)
     }
 
     @Test fun homeHeroPlayFocusedShowsWhiteOutlineOnDarkFill() {
@@ -90,6 +110,7 @@ class TvFocusOutlineSweepTest {
         val play = rule.onNodeWithText("Play")
         play.requestFocus(); rule.waitForIdle()
         play.assertIsFocused()
+        writeQaCapture("home-hero-play-focus.png")
         assertFocusOutline("Home hero Play", play)
     }
 
@@ -107,6 +128,7 @@ class TvFocusOutlineSweepTest {
         val tab = rule.onNodeWithText("Movies")
         tab.requestFocus(); rule.waitForIdle()
         tab.assertIsFocused()
+        writeQaCapture("topnav-movies-tab-focus.png")
         assertFocusOutline("Top-nav Movies tab", tab)
     }
 
@@ -120,6 +142,7 @@ class TvFocusOutlineSweepTest {
         val chip = rule.onNodeWithText("Filter")
         chip.requestFocus(); rule.waitForIdle()
         chip.assertIsFocused()
+        writeQaCapture("library-filter-chip-focus.png")
         assertFocusOutline("Library Filter chip", chip)
     }
 
@@ -139,6 +162,7 @@ class TvFocusOutlineSweepTest {
         val ok = rule.onNodeWithText("OK")
         ok.requestFocus(); rule.waitForIdle()
         ok.assertIsFocused()
+        writeQaCapture("whatsnew-ok-focus.png")
         assertFocusOutline("WhatsNew OK", ok)
     }
 }

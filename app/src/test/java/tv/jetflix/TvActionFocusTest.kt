@@ -64,11 +64,17 @@ class TvActionFocusTest {
         val b = node.fetchSemanticsNode().boundsInRoot
         val cx = ((b.left + b.right) / 2).toInt()
         val cy = ((b.top + b.bottom) / 2).toInt()
+        // tv-material scales the focused VISUAL ~1.1x past the semantics bounds, so the ring
+        // lands ~5% of the button's own width/height OUTSIDE each edge: 18px out on a 360px-wide
+        // hero button, far beyond any fixed band (Run10: hero Play left strip brightest r86 with
+        // the ring plainly in the capture). Reach per edge from the actual bounds, inward +4.
+        val outX = ((b.right - b.left) * 0.06f).toInt() + 4
+        val outY = ((b.bottom - b.top) * 0.06f).toInt() + 4
         val strips = listOf(
-            "left" to ((b.left - 7).toInt()..(b.left - 1).toInt()).map { it to cy },
-            "right" to ((b.right + 1).toInt()..(b.right + 7).toInt()).map { it to cy },
-            "top" to ((b.top - 7).toInt()..(b.top - 1).toInt()).map { cx to it },
-            "bottom" to ((b.bottom + 1).toInt()..(b.bottom + 7).toInt()).map { cx to it },
+            "left" to ((b.left - outX).toInt()..(b.left + 4).toInt()).map { it to cy },
+            "right" to ((b.right - 4).toInt()..(b.right + outX).toInt()).map { it to cy },
+            "top" to ((b.top - outY).toInt()..(b.top + 4).toInt()).map { cx to it },
+            "bottom" to ((b.bottom - 4).toInt()..(b.bottom + outY).toInt()).map { cx to it },
         )
         for ((name, pts) in strips) {
             val best = pts.maxOf { pt -> android.graphics.Color.red(pixelAt(pt.first, pt.second)) }
