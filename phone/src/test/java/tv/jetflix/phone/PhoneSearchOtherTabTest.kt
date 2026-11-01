@@ -113,15 +113,14 @@ class PhoneSearchOtherTabTest {
 
     // Every test starts MainActivity (Home refresh loop and all). Destroy it so its Compose root and loops do not outlive the test in the shared JVM.
     private var mainController: org.robolectric.android.controller.ActivityController<MainActivity>? = null
-    private fun launchMain() { mainController = Robolectric.buildActivity(MainActivity::class.java).setup() }
+    private fun launchMain() {
+        val controller = Robolectric.buildActivity(MainActivity::class.java)
+        mainController = controller // tracked before setup(), so a partial setup is still cleaned up
+        controller.setup()
+    }
 
     @After fun tearDown() {
-        try {
-            mainController?.destroy()
-        } finally {
-            mainController = null
-            server.shutdown()
-        }
+        try { mainController?.destroy() } finally { mainController = null; server.shutdown() }
     }
 
     /** Opens the Search tab and waits until BOTH recommended fetches (movie + series fallback pair)
