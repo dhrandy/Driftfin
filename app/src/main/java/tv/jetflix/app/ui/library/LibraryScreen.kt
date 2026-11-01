@@ -640,8 +640,8 @@ fun LibraryContent(
                                 androidx.tv.material3.ButtonDefaults.colors(
                                     containerColor = if (on) androidx.compose.ui.graphics.Color(0xFF3A3A3A) else androidx.compose.ui.graphics.Color.Transparent,
                                     contentColor = androidx.compose.ui.graphics.Color.White,
-                                    focusedContainerColor = androidx.compose.ui.graphics.Color.White,
-                                    focusedContentColor = androidx.compose.ui.graphics.Color.Black,
+                                    focusedContainerColor = JetflixColors.SurfaceLight.copy(alpha = 0.7f),
+                                    focusedContentColor = Color.White,
                                 )
                             }
                             androidx.tv.material3.Button(
