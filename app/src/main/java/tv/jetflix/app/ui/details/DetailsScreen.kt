@@ -76,6 +76,7 @@ import tv.jetflix.app.ui.components.PosterCard
 import tv.jetflix.app.ui.components.ResumeProgressBar
 import tv.jetflix.app.ui.components.WideCard
 import tv.jetflix.app.ui.theme.JetflixColors
+import tv.jetflix.app.ui.theme.buttonFocusOutline
 import tv.jetflix.app.ui.theme.JetflixType
 
 data class DetailsUiState(
@@ -489,10 +490,10 @@ fun DetailsContent(
                                 colors = ButtonDefaults.colors(
                                     containerColor = Color.White,
                                     contentColor = Color.Black,
-                                    // Red focus like the season chips.
-                                    focusedContainerColor = JetflixColors.Red,
-                                    focusedContentColor = Color.White,
+                                    focusedContainerColor = Color.White,
+                                    focusedContentColor = Color.Black,
                                 ),
+                                border = buttonFocusOutline(RoundedCornerShape(percent = 50)),
                             ) {
                                 Icon(Icons.Filled.PlayArrow, contentDescription = null)
                                 Spacer(Modifier.width(6.dp))
@@ -504,9 +505,10 @@ fun DetailsContent(
                                     colors = ButtonDefaults.colors(
                                         containerColor = JetflixColors.SurfaceLight.copy(alpha = 0.7f),
                                         contentColor = Color.White,
-                                        focusedContainerColor = JetflixColors.Red,
+                                        focusedContainerColor = JetflixColors.SurfaceLight.copy(alpha = 0.7f),
                                         focusedContentColor = Color.White,
                                     ),
+                                    border = buttonFocusOutline(RoundedCornerShape(percent = 50)),
                                 ) {
                                     Text("Play from start")
                                 }
@@ -517,9 +519,10 @@ fun DetailsContent(
                                     colors = ButtonDefaults.colors(
                                         containerColor = JetflixColors.SurfaceLight.copy(alpha = 0.7f),
                                         contentColor = Color.White,
-                                        focusedContainerColor = JetflixColors.Red,
+                                        focusedContainerColor = JetflixColors.SurfaceLight.copy(alpha = 0.7f),
                                         focusedContentColor = Color.White,
                                     ),
+                                    border = buttonFocusOutline(RoundedCornerShape(percent = 50)),
                                 ) {
                                     Icon(TrailerIcon, contentDescription = "Watch trailer", modifier = Modifier.size(24.dp))
                                 }
@@ -529,9 +532,10 @@ fun DetailsContent(
                                 colors = ButtonDefaults.colors(
                                     containerColor = JetflixColors.SurfaceLight.copy(alpha = 0.7f),
                                     contentColor = Color.White,
-                                    focusedContainerColor = JetflixColors.Red,
+                                    focusedContainerColor = JetflixColors.SurfaceLight.copy(alpha = 0.7f),
                                     focusedContentColor = Color.White,
                                 ),
+                                border = buttonFocusOutline(RoundedCornerShape(percent = 50)),
                             ) {
                                 val played = watchedToggleTarget(item, state.playTarget).UserData?.Played == true
                                 Icon(
@@ -548,9 +552,10 @@ fun DetailsContent(
                                     colors = ButtonDefaults.colors(
                                         containerColor = JetflixColors.SurfaceLight.copy(alpha = 0.7f),
                                         contentColor = Color.White,
-                                        focusedContainerColor = JetflixColors.Red,
+                                        focusedContainerColor = JetflixColors.SurfaceLight.copy(alpha = 0.7f),
                                         focusedContentColor = Color.White,
                                     ),
+                                    border = buttonFocusOutline(RoundedCornerShape(percent = 50)),
                                 ) {
                                     Icon(
                                         if (watchlisted) Icons.Filled.Star else StarOutlineIcon,
@@ -565,9 +570,10 @@ fun DetailsContent(
                                 colors = ButtonDefaults.colors(
                                     containerColor = JetflixColors.SurfaceLight.copy(alpha = 0.7f),
                                     contentColor = Color.White,
-                                    focusedContainerColor = JetflixColors.Red,
+                                    focusedContainerColor = JetflixColors.SurfaceLight.copy(alpha = 0.7f),
                                     focusedContentColor = Color.White,
                                 ),
+                                border = buttonFocusOutline(RoundedCornerShape(percent = 50)),
                             ) {
                                 val fav = item.UserData?.IsFavorite == true
                                 Icon(
@@ -782,9 +788,10 @@ private fun SeasonChip(season: BaseItemDto, selected: Boolean, onClick: () -> Un
         colors = ButtonDefaults.colors(
             containerColor = if (selected) Color.White else JetflixColors.Surface,
             contentColor = if (selected) Color.Black else JetflixColors.TextSecondary,
-            focusedContainerColor = JetflixColors.Red,
-            focusedContentColor = Color.White,
+            focusedContainerColor = if (selected) Color.White else JetflixColors.Surface,
+            focusedContentColor = if (selected) Color.Black else JetflixColors.TextSecondary,
         ),
+        border = buttonFocusOutline(RoundedCornerShape(20.dp)),
         shape = ButtonDefaults.shape(shape = RoundedCornerShape(20.dp)),
     ) {
         Text(season.Name ?: "Season", style = JetflixType.caption)

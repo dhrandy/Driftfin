@@ -22,6 +22,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -51,6 +52,7 @@ import tv.jetflix.app.data.SessionManager
 import tv.jetflix.app.data.TokenStore
 import tv.jetflix.app.ui.components.Wordmark
 import tv.jetflix.app.ui.theme.JetflixColors
+import tv.jetflix.app.ui.theme.buttonFocusOutline
 import tv.jetflix.app.ui.theme.JetflixType
 
 data class LoginUiState(
@@ -331,9 +333,10 @@ fun LoginContent(
                 colors = ButtonDefaults.colors(
                     containerColor = JetflixColors.SurfaceLight,
                     contentColor = JetflixColors.TextPrimary,
-                    focusedContainerColor = JetflixColors.Red,
+                    focusedContainerColor = JetflixColors.SurfaceLight,
                     focusedContentColor = JetflixColors.TextPrimary,
                 ),
+                border = buttonFocusOutline(RoundedCornerShape(percent = 50)),
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Text("Quick Connect", style = JetflixType.body)
@@ -354,9 +357,10 @@ fun LoginContent(
                             colors = ButtonDefaults.colors(
                                 containerColor = if (state.username == name) JetflixColors.Red else JetflixColors.SurfaceLight,
                                 contentColor = JetflixColors.TextPrimary,
-                                focusedContainerColor = JetflixColors.Red,
+                                focusedContainerColor = if (state.username == name) JetflixColors.Red else JetflixColors.SurfaceLight,
                                 focusedContentColor = JetflixColors.TextPrimary,
                             ),
+                            border = buttonFocusOutline(RoundedCornerShape(percent = 50)),
                         ) { Text(if (isSaved) "\u2713 $name" else name, style = JetflixType.caption) }
                     }
                 }
@@ -366,9 +370,10 @@ fun LoginContent(
                     colors = ButtonDefaults.colors(
                         containerColor = JetflixColors.SurfaceLight,
                         contentColor = JetflixColors.TextPrimary,
-                        focusedContainerColor = JetflixColors.Red,
+                        focusedContainerColor = JetflixColors.SurfaceLight,
                         focusedContentColor = JetflixColors.TextPrimary,
                     ),
+                    border = buttonFocusOutline(RoundedCornerShape(percent = 50)),
                 ) { Text("Show profiles on this server", style = JetflixType.caption) }
                 state.profilesNote?.let { Text(it, style = JetflixType.caption, color = JetflixColors.TextMuted) }
             }
@@ -381,9 +386,10 @@ fun LoginContent(
                     colors = ButtonDefaults.colors(
                         containerColor = JetflixColors.SurfaceLight,
                         contentColor = JetflixColors.TextPrimary,
-                        focusedContainerColor = JetflixColors.Red,
+                        focusedContainerColor = JetflixColors.SurfaceLight,
                         focusedContentColor = JetflixColors.TextPrimary,
                     ),
+                    border = buttonFocusOutline(RoundedCornerShape(percent = 50)),
                     modifier = Modifier.fillMaxWidth(),
                 ) {
                     Text("Cancel", style = JetflixType.body)
@@ -417,6 +423,7 @@ fun LoginContent(
                     focusedContainerColor = JetflixColors.Red,
                     focusedContentColor = JetflixColors.TextPrimary,
                 ),
+                border = buttonFocusOutline(RoundedCornerShape(percent = 50)),
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Text(if (state.connecting) "Connecting…" else "Sign In", style = JetflixType.body)

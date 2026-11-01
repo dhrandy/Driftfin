@@ -47,6 +47,7 @@ import tv.jetflix.app.data.AppSettings
 import tv.jetflix.app.ui.components.JetflixTab
 import tv.jetflix.app.ui.components.TopNavBar
 import tv.jetflix.app.ui.theme.JetflixColors
+import tv.jetflix.app.ui.theme.buttonFocusOutline
 import tv.jetflix.app.ui.theme.JetflixType
 import kotlin.math.cos
 import kotlin.math.sin
@@ -389,9 +390,10 @@ fun SettingsContent(
                                         colors = ButtonDefaults.colors(
                                             containerColor = JetflixColors.SurfaceLight.copy(alpha = 0.7f),
                                             contentColor = Color.White,
-                                            focusedContainerColor = JetflixColors.Red,
+                                            focusedContainerColor = JetflixColors.SurfaceLight.copy(alpha = 0.7f),
                                             focusedContentColor = Color.White,
                                         ),
+                                        border = buttonFocusOutline(RoundedCornerShape(6.dp)),
                                     ) { Text("Switch profile") }
                                     Button(
                                         onClick = onForgetProfile,
@@ -400,9 +402,10 @@ fun SettingsContent(
                                         colors = ButtonDefaults.colors(
                                             containerColor = JetflixColors.SurfaceLight.copy(alpha = 0.7f),
                                             contentColor = Color.White,
-                                            focusedContainerColor = JetflixColors.Red,
+                                            focusedContainerColor = JetflixColors.SurfaceLight.copy(alpha = 0.7f),
                                             focusedContentColor = Color.White,
                                         ),
+                                        border = buttonFocusOutline(RoundedCornerShape(6.dp)),
                                     ) { Text("Sign out and forget this profile") }
                                 }
                             }

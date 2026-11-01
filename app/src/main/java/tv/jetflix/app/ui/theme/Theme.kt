@@ -5,6 +5,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.darkColorScheme
@@ -44,6 +45,18 @@ fun JetflixTheme(content: @Composable () -> Unit) {
         content = content,
     )
 }
+
+/** Focus cue for buttons: the control keeps its own colors and a white outline marks the
+ *  cursor (user's pick on build 49: outline instead of a filled focus color; the avatar ring
+ *  stays red). */
+@Composable
+fun buttonFocusOutline(shape: androidx.compose.ui.graphics.Shape): androidx.tv.material3.ButtonBorder =
+    androidx.tv.material3.ButtonDefaults.border(
+        focusedBorder = androidx.tv.material3.Border(
+            androidx.compose.foundation.BorderStroke(2.dp, Color.White),
+            shape = shape,
+        ),
+    )
 
 object JetflixType {
     val wordmark = TextStyle(

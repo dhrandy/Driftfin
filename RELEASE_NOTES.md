@@ -4,6 +4,11 @@ Each build lists its real changes here. The CI release workflow copies the secti
 matching the build tag onto the GitHub release page and appends the standard
 automated-build footer.
 
+## build-50
+
+Changes:
+- Focused buttons now show a white outline instead of filling red: Play, Watched, Watchlist, Favorite, the season chips, the sign-in and profile buttons, and the settings action buttons keep their normal dark look while the white ring shows where the remote cursor is. The avatar's red focus ring is unchanged.
+
 ## build-49
 
 Changes:

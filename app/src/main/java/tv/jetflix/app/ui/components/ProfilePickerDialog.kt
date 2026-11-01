@@ -19,6 +19,7 @@ import androidx.tv.material3.Button
 import androidx.tv.material3.ButtonDefaults
 import androidx.tv.material3.Text
 import tv.jetflix.app.ui.theme.JetflixColors
+import tv.jetflix.app.ui.theme.buttonFocusOutline
 import tv.jetflix.app.ui.theme.JetflixType
 
 /**
@@ -65,9 +66,10 @@ fun ProfilePickerContent(
             colors = ButtonDefaults.colors(
                 containerColor = JetflixColors.SurfaceLight.copy(alpha = 0.7f),
                 contentColor = Color.White,
-                focusedContainerColor = JetflixColors.Red,
+                focusedContainerColor = JetflixColors.SurfaceLight.copy(alpha = 0.7f),
                 focusedContentColor = Color.White,
             ),
+            border = buttonFocusOutline(RoundedCornerShape(percent = 50)),
         ) { Text("Sign out") }
     }
 }

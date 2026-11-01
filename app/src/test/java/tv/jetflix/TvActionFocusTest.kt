@@ -24,8 +24,9 @@ import tv.jetflix.app.ui.details.DetailsContent
 import tv.jetflix.app.ui.details.DetailsUiState
 import tv.jetflix.app.ui.theme.JetflixTheme
 
-/** The Details action row (Play / Trailer / Watchlist / ...) takes the season chip's RED focus
- *  background - actual pixels at the focused button's center, not a color-constant comparison. */
+/** The Details action row (Play / Trailer / Watchlist / ...) keeps its own colors on focus and
+ *  shows a WHITE OUTLINE around the focused button - actual pixels, not a color-constant check.
+ *  (User call on build 49: white outline on focus for buttons, red stays only on the avatar ring.) */
 @OptIn(ExperimentalTestApi::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @RunWith(RobolectricTestRunner::class)
@@ -56,42 +57,50 @@ class TvActionFocusTest {
         return bmp.getPixel(cx, cy)
     }
 
-    /** Center hits the icon/text glyph; background shows at the horizontal insets. Both must be red. */
-    private fun assertRedCenter(tag: String, node: androidx.compose.ui.test.SemanticsNodeInteraction) {
+    /** tv-material scales a focused button's VISUAL up ~1.1x while the semantics bounds stay at
+     *  the layout size, so the white outline lands a few px OUTSIDE the bounds (probe-verified).
+     *  Scan a short strip across each edge and require a white pixel; the interior keeps its fill. */
+    private fun assertFocusOutline(tag: String, node: androidx.compose.ui.test.SemanticsNodeInteraction) {
         val b = node.fetchSemanticsNode().boundsInRoot
+        val cx = ((b.left + b.right) / 2).toInt()
         val cy = ((b.top + b.bottom) / 2).toInt()
-        for (frac in listOf(0.10f, 0.90f)) {
-            val px = pixelAt((b.left + (b.right - b.left) * frac).toInt(), cy)
-            val r = android.graphics.Color.red(px); val g = android.graphics.Color.green(px); val bl = android.graphics.Color.blue(px)
-            assertTrue("$tag focused background is red at ${(frac * 100).toInt()}% inset (was rgb($r,$g,$bl))", r > 150 && g < 90 && bl < 90)
+        val strips = listOf(
+            "left" to ((b.left - 7).toInt()..(b.left - 1).toInt()).map { it to cy },
+            "right" to ((b.right + 1).toInt()..(b.right + 7).toInt()).map { it to cy },
+            "top" to ((b.top - 7).toInt()..(b.top - 1).toInt()).map { cx to it },
+            "bottom" to ((b.bottom + 1).toInt()..(b.bottom + 7).toInt()).map { cx to it },
+        )
+        for ((name, pts) in strips) {
+            val best = pts.maxOf { pt -> android.graphics.Color.red(pixelAt(pt.first, pt.second)) }
+            assertTrue("$tag focused outline is white at $name edge (brightest strip pixel r=$best)", best > 200)
         }
     }
 
-    @Test fun playFocusedIsRedOnOpen() {
+    @Test fun playFocusedShowsWhiteOutlineOnOpen() {
         setDetails()
         val play = rule.onNodeWithText("Play")
         play.requestFocus(); rule.waitForIdle()
         play.assertIsFocused()
-        assertRedCenter("Play", play)
+        assertFocusOutline("Play", play)
     }
 
-    @Test fun renderFocusedPlayRedWithUnchangedChrome() {
+    @Test fun renderFocusedPlayOutlineWithUnchangedChrome() {
         setDetails()
         val play = rule.onNodeWithText("Play")
         play.requestFocus(); rule.waitForIdle()
         play.assertIsFocused()
-        // Decisive render for inspection: red-focused Play in the action row, top nav unchanged.
+        // Decisive render for inspection: white-outlined Play in the action row, top nav unchanged.
         val view = rule.activity.window.decorView
         val bmp = Bitmap.createBitmap(view.width, view.height, Bitmap.Config.ARGB_8888)
         view.draw(android.graphics.Canvas(bmp))
-        val out = java.io.File("build/outputs/qa/details-action-focus-red.png").apply { parentFile?.mkdirs() }
+        val out = java.io.File("build/outputs/qa/details-action-focus-outline.png").apply { parentFile?.mkdirs() }
         out.outputStream().use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
         val colors = HashSet<Int>()
         for (x in 0 until bmp.width step 8) for (y in 0 until bmp.height step 8) colors.add(bmp.getPixel(x, y))
-        assertTrue("details-action-focus-red.png is not a blank frame (${colors.size} colors)", colors.size > 3)
+        assertTrue("details-action-focus-outline.png is not a blank frame (${colors.size} colors)", colors.size > 3)
     }
 
-    @Test fun focusMovingRightKeepsRedOnEveryActionButton() {
+    @Test fun focusMovingRightKeepsWhiteOutlineOnEveryActionButton() {
         setDetails()
         rule.onNodeWithText("Play").requestFocus(); rule.waitForIdle()
         // Row order: Play -> Watched check -> watchlist star -> heart (fixture movie: no resume, no trailer).
@@ -99,14 +108,14 @@ class TvActionFocusTest {
         right()
         val watched = rule.onNodeWithContentDescription("Mark as watched")
         watched.assertIsFocused()
-        assertRedCenter("Watched", watched)
+        assertFocusOutline("Watched", watched)
         right()
         val star = rule.onNodeWithContentDescription("Add to watchlist")
         star.assertIsFocused()
-        assertRedCenter("Watchlist", star)
+        assertFocusOutline("Watchlist", star)
         right()
         val heart = rule.onNodeWithContentDescription("Add to favorites")
         heart.assertIsFocused()
-        assertRedCenter("Favorite", heart)
+        assertFocusOutline("Favorite", heart)
     }
 }
