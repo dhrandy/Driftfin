@@ -12,6 +12,7 @@ import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import okhttp3.mockwebserver.RecordedRequest
 import org.junit.Assert.assertTrue
+import org.junit.After
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -19,6 +20,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
+import tv.jetflix.phone.data.TvmazeCastResolver
 import tv.jetflix.phone.ui.DetailsScreen
 import tv.jetflix.phone.ui.DriftfinTheme
 import java.util.concurrent.CopyOnWriteArrayList
@@ -44,6 +46,11 @@ class PhoneEpisodeActionsTest {
             Thread.sleep(80)
         }
         assertTrue("condition not met\nREQUESTED:\n" + requested.joinToString("\n"), condition())
+    }
+
+    @After fun teardown() {
+        TvmazeCastResolver.apiForTests = null
+        TvmazeCastResolver.resetForTests()
     }
 
     @Before fun setup() {
@@ -76,6 +83,8 @@ class PhoneEpisodeActionsTest {
             }
         }
         server.start()
+        TvmazeCastResolver.apiForTests = TvmazeCastResolver.apiFor(server.url("/").toString())
+        TvmazeCastResolver.resetForTests()
         Graph.signIn(tv.jetflix.phone.data.Session(server.url("/").toString().trimEnd('/'), "u1", "Tester", "tok", "dev"))
     }
 
@@ -136,12 +145,19 @@ class PhoneEpisodeActionsTest {
         rule.onNodeWithContentDescription("In watchlist. Tap to remove").assertIsDisplayed()
     }
 
-    @Test fun castFallsBackToTheSeriesWhenTheEpisodeHasNone() {
+    @Test fun episodeWithNoOwnCastNeverShowsTheSeriesCast() {
+        // Phone build 8 owner report, shipped in a7908e9a: episodes resolve their own credits plus
+        // the verified TVMaze season's guests only - never the series cast. The mock series has a
+        // cast, the episode has none, and the mock TVMaze (the Jellyfin server's fallback answer)
+        // verifies nothing, so no cast row may appear.
         seriesCast = true
         rule.setContent { DriftfinTheme { DetailsScreen("ep1", onBack = {}, onPlay = {}) } }
-        awaitReal(15_000) { rule.onAllNodesWithText("Series Actor").fetchSemanticsNodes().isNotEmpty() }
-        rule.onNodeWithText("Cast").assertIsDisplayed()
-        capture("episode-cast-fallback.png")
+        awaitReal(15_000) { rule.onAllNodesWithText("Episode overview.").fetchSemanticsNodes().isNotEmpty() }
+        // Give the async cast resolution time to settle before asserting absence.
+        Thread.sleep(4000); rule.waitForIdle(); org.robolectric.shadows.ShadowLooper.idleMainLooper()
+        Thread.sleep(500)
+        assertTrue("an episode never falls back to the series cast", rule.onAllNodesWithText("Series Actor").fetchSemanticsNodes().isEmpty())
+        assertTrue("no cast row when the episode has no credits of its own", rule.onAllNodesWithText("Cast").fetchSemanticsNodes().isEmpty())
     }
 
     @Test fun episodeCastWinsOverTheSeriesCast() {
