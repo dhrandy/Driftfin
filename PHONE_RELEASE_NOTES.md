@@ -3,6 +3,12 @@
 The phone app has its own release line: `phone-build-N` prereleases, separate from the TV app's
 `build-N` releases. The phone's Check for updates reads these; the TV app never sees them.
 
+## phone-build-8
+
+Changes:
+- New "Keep Continue Watching up to date" setting: Home quietly refreshes Continue Watching and Next Up about once a minute while Home is open, and when you come back to the app. Off: they update when you open Home.
+- Actor pages: guest-star episode credits collapse into their series entry, and failures show an error with a retry.
+
 ## phone-build-7
 
 Changes:
