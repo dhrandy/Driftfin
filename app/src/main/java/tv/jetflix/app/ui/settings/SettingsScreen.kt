@@ -641,6 +641,10 @@ internal fun SettingRow(title: String, detail: String, on: Boolean, onClick: () 
             focusedContentColor = Color.White,
         ),
         border = buttonFocusOutline(RoundedCornerShape(6.dp)),
+        // The cue here is the white ring, not tv-material's default 1.1x focused zoom: the zoom pushes
+        // the ring past the scroll viewport's top/bottom edge (run-22 largefont first row) and toward
+        // the screen edge (run-22 mdpi right), where it clips exactly where the suite watches.
+        scale = androidx.tv.material3.ButtonDefaults.scale(focusedScale = 1f),
     ) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f).padding(end = 20.dp)) {
