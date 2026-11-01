@@ -3,12 +3,20 @@
 The phone app has its own release line: `phone-build-N` prereleases, separate from the TV app's
 `build-N` releases. The phone's Check for updates reads these; the TV app never sees them.
 
+## phone-build-6
+
+Changes:
+- New setting: "Exclude animated movies from Home banner" (Settings, off by default, same as the TV app). Movies tagged Animation are hidden from the Home hero; animated titles remain available in Continue Watching and browsing - only the Home banner is filtered.
+- Possible fix for the keyboard covering the bottom navigation on Search: the app now resizes when the keyboard opens so the nav stays tappable. Verification with a real keyboard is still pending.
+
 ## phone-build-5
 
 Changes:
-- Home now matches the TV app: Continue Watching, Next Up, Recently Added Movies and Recently Added Episodes (each combining all your matching libraries), Favorites, then a More like row based on what you last watched.
+- The phone Home is now a single combined feed: Continue Watching, Next Up, Recently Added Movies and Recently Added Episodes (each combining all your matching libraries), Favorites, then a More like row based on what you last watched.
 - The Libraries card row and the separate per-library rows are gone - the combined Recently Added rows already cover every library, and the full libraries are always in the Shows and Movies tabs.
 - Profiles still see only the libraries and titles they can access.
+
+A matching TV app update is in the works.
 
 ## phone-build-4
 

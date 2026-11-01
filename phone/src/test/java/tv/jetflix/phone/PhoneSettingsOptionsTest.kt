@@ -6,6 +6,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -39,6 +40,7 @@ class PhoneSettingsOptionsTest {
         PhoneSettings.setHeroRatings(false)
         PhoneSettings.setShowNextUp(false)
         PhoneSettings.setShowFavorites(false)
+        PhoneSettings.setExcludeHomeAnimation(true)
         PhoneSettings.init(ctx) // a new process rereads the same preferences
         assertEquals(PosterSize.Large, PhoneSettings.posterSize.value)
         assertEquals(2, PhoneSettings.posterSize.value.gridColumns)
@@ -46,6 +48,7 @@ class PhoneSettingsOptionsTest {
         assertFalse(PhoneSettings.heroRatings.value)
         assertFalse(PhoneSettings.showNextUp.value)
         assertFalse(PhoneSettings.showFavorites.value)
+        assertTrue(PhoneSettings.excludeHomeAnimation.value)
     }
 
     @Test fun defaultsMatchTv() {
@@ -55,6 +58,7 @@ class PhoneSettingsOptionsTest {
         assertEquals(true, PhoneSettings.heroRatings.value)
         assertEquals(true, PhoneSettings.showNextUp.value)
         assertEquals(true, PhoneSettings.showFavorites.value)
+        assertEquals(false, PhoneSettings.excludeHomeAnimation.value) // off by default, same as the TV app
     }
 
     @Test fun settingsScreenListsAndFlipsOptions() {
@@ -64,6 +68,7 @@ class PhoneSettingsOptionsTest {
         rule.onNodeWithText("Poster size: Medium").assertIsDisplayed()
         rule.onNodeWithText("Format badges").assertIsDisplayed()
         rule.onNodeWithText("Hero ratings").assertIsDisplayed()
+        rule.onNodeWithText("Exclude animated movies from Home banner").assertIsDisplayed()
         rule.onNodeWithText("Next Up row").assertIsDisplayed()
         rule.onNodeWithText("Favorites row").assertIsDisplayed()
         rule.onNodeWithText("Poster size: Medium").performClick()

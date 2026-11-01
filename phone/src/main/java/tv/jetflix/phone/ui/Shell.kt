@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -100,7 +101,10 @@ fun DriftfinShell() {
     val showBars = route != null && !route.startsWith("details") && !route.startsWith("player") && !route.startsWith("trailer")
     // Back from any other page goes Home first, then leaves the app.
     BackHandler(enabled = route != null && route != Routes.Home && !route.startsWith("details") && !route.startsWith("player") && !route.startsWith("trailer")) { goTo(nav, Routes.Home) }
+    // Edge-to-edge leaves the IME as an overlay: without this padding the keyboard covers the bottom
+    // nav and the lower screen, so taps meant for a tab land on the keyboard instead (reported on Search).
     Scaffold(
+        modifier = Modifier.imePadding(),
         containerColor = DriftfinColors.Background,
         bottomBar = { if (showBars) BottomBar(route, nav) },
     ) { inner ->

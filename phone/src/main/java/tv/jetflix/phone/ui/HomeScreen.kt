@@ -57,7 +57,7 @@ fun HomeScreen(onOpen: (BaseItemDto) -> Unit, onTrailer: (tv.jetflix.phone.data.
     var heroTrailer by remember { mutableStateOf<tv.jetflix.phone.data.TrailerSource?>(null) }
     val hero = data.heroes.getOrNull(heroIndex)
     LaunchedEffect(Unit) {
-        val heroes = Content.heroCandidates()
+        val heroes = Content.heroPool(Content.heroCandidates(), tv.jetflix.phone.data.PhoneSettings.excludeHomeAnimation.value)
         data = HomeData(
             heroes = heroes.shuffled().take(10),
             moreLike = Content.moreLike(),

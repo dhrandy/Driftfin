@@ -24,6 +24,10 @@ object Content {
             limit = 50, filters = "IsUnplayed", fields = "Overview,Genres,RemoteTrailers").body()?.Items.orEmpty()
     }
 
+    /** The TV app's Home-banner rule: with the setting on, movies tagged Animation never enter the hero pool. Rows are untouched. */
+    fun heroPool(items: List<BaseItemDto>, excludeAnimation: Boolean): List<BaseItemDto> =
+        if (excludeAnimation) items.filterNot { m -> m.Genres.any { it.trim().equals("Animation", ignoreCase = true) } } else items
+
     suspend fun browse(type: String, sort: Sort, unwatchedOnly: Boolean, genres: Collection<String>? = null, libraryId: String? = null): List<BaseItemDto> = safe(emptyList()) {
         val found = api.getItems(userId, parentId = libraryId, includeItemTypes = type, recursive = true, sortBy = sort.apiField, sortOrder = sort.order, limit = 500,
             filters = if (unwatchedOnly) "IsUnplayed" else null, genres = genres?.takeIf { it.isNotEmpty() }?.joinToString(","), fields = "Genres,ProductionYear,CommunityRating").body()?.Items.orEmpty()

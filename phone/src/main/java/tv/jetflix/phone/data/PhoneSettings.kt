@@ -33,6 +33,10 @@ object PhoneSettings {
     /** Shows the content rating (PG-13 and friends) on the Home hero. */
     val heroRatings: StateFlow<Boolean> = _heroRatings
 
+    private val _excludeHomeAnimation = MutableStateFlow(false)
+    /** Hides movies tagged Animation in the Home hero only. Rows are unchanged. Same default as the TV app. */
+    val excludeHomeAnimation: StateFlow<Boolean> = _excludeHomeAnimation
+
     private val _showNextUp = MutableStateFlow(true)
     /** The Next Up row on Home. */
     val showNextUp: StateFlow<Boolean> = _showNextUp
@@ -52,6 +56,7 @@ object PhoneSettings {
         _posterSize.value = p.getString("poster_size", null)?.let { runCatching { PosterSize.valueOf(it) }.getOrNull() } ?: PosterSize.Medium
         _formatBadges.value = p.getBoolean("format_badges", true)
         _heroRatings.value = p.getBoolean("hero_ratings", true)
+        _excludeHomeAnimation.value = p.getBoolean("exclude_home_animation", false)
         _showNextUp.value = p.getBoolean("show_next_up", true)
         _showFavorites.value = p.getBoolean("show_favorites", true)
         _titleLogos.value = p.getBoolean("title_logos", true)
@@ -64,6 +69,7 @@ object PhoneSettings {
     fun setPosterSize(v: PosterSize) { _posterSize.value = v; prefs?.edit()?.putString("poster_size", v.name)?.apply() }
     fun setFormatBadges(v: Boolean) { _formatBadges.value = v; prefs?.edit()?.putBoolean("format_badges", v)?.apply() }
     fun setHeroRatings(v: Boolean) { _heroRatings.value = v; prefs?.edit()?.putBoolean("hero_ratings", v)?.apply() }
+    fun setExcludeHomeAnimation(v: Boolean) { _excludeHomeAnimation.value = v; prefs?.edit()?.putBoolean("exclude_home_animation", v)?.apply() }
     fun setShowNextUp(v: Boolean) { _showNextUp.value = v; prefs?.edit()?.putBoolean("show_next_up", v)?.apply() }
     fun setShowFavorites(v: Boolean) { _showFavorites.value = v; prefs?.edit()?.putBoolean("show_favorites", v)?.apply() }
 }

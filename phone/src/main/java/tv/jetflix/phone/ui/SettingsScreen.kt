@@ -116,6 +116,14 @@ fun SettingsScreen() {
             }
             androidx.compose.material3.Switch(checked = heroRatings, onCheckedChange = { tv.jetflix.phone.data.PhoneSettings.setHeroRatings(it) })
         }
+        val excludeAnim by tv.jetflix.phone.data.PhoneSettings.excludeHomeAnimation.collectAsState()
+        androidx.compose.foundation.layout.Row(Modifier.fillMaxWidth().heightIn(min = 52.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("Exclude animated movies from Home banner", fontSize = 16.sp)
+                Text("Hide movies tagged Animation in the Home banner only. Library rows are unchanged.", fontSize = 14.sp, color = DriftfinColors.TextSecondary)
+            }
+            androidx.compose.material3.Switch(checked = excludeAnim, onCheckedChange = { tv.jetflix.phone.data.PhoneSettings.setExcludeHomeAnimation(it) })
+        }
         val nextUp by tv.jetflix.phone.data.PhoneSettings.showNextUp.collectAsState()
         androidx.compose.foundation.layout.Row(Modifier.fillMaxWidth().heightIn(min = 52.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
