@@ -1,5 +1,6 @@
 package tv.jetflix
 
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
@@ -113,7 +114,7 @@ class GuestBioTest {
         val r = resolver()
         wikidata.enqueue(MockResponse().setHeadersDelay(5, java.util.concurrent.TimeUnit.SECONDS).setBody(searchBody()))
         var cancelled = false
-        val job = kotlinx.coroutines.launch(kotlinx.coroutines.Dispatchers.IO) {
+        val job = launch(kotlinx.coroutines.Dispatchers.IO) {
             try { r.bioFor("9") } catch (ce: kotlinx.coroutines.CancellationException) { cancelled = true }
         }
         kotlinx.coroutines.delay(500)

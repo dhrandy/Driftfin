@@ -24,6 +24,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.Dispatchers
@@ -161,7 +162,7 @@ fun SettingsScreen() {
         val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
         val tvmazeCredit = androidx.compose.ui.text.buildAnnotatedString {
             append("Episode cast and guest stars come from TVMaze, used under CC BY-SA 4.0 (creativecommons.org/licenses/by-sa/4.0) and combined with your server data. Source: ")
-            withStyle(androidx.compose.ui.text.style.SpanStyle(textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline)) { append("tvmaze.com") }
+            withStyle(androidx.compose.ui.text.SpanStyle(textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline)) { append("tvmaze.com") }
         }
         Text(
             tvmazeCredit, fontSize = 13.sp, color = DriftfinColors.TextSecondary,
