@@ -630,7 +630,11 @@ $('signinForm').addEventListener('submit', async (e) => {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ server: $('serverInput').value.trim(), username: $('usernameInput').value.trim(), password: $('passwordInput').value }),
     });
-    if (!res.ok) throw new Error('Sign-in was rejected by Jellyfin, or the server could not be reached. Check the server URL, username, and password.');
+    if (!res.ok) {
+      let detail = '';
+      try { const errData = await res.json(); if (errData.error) detail = ` (${errData.error}${errData.detail ? ': ' + errData.detail : ''})`; } catch {}
+      throw new Error('Sign-in was rejected by Jellyfin, or the server could not be reached. Check the server URL, username, and password.' + detail);
+    }
     const data = await res.json();
     state.userId = data.userId; state.username = data.username;
     state.settings = await api('/api/settings');
