@@ -124,9 +124,11 @@ class JellyfinRepository {
     }
 
     fun personImageUrl(person: BaseItemPerson, maxWidth: Int = 200): String? {
-        val id = person.Id ?: return null
-        val tag = person.PrimaryImageTag ?: return null
-        return imageUrl(id, "Primary", maxWidth, tag)
+        val id = person.Id
+        val tag = person.PrimaryImageTag
+        if (id != null && tag != null) return imageUrl(id, "Primary", maxWidth, tag)
+        // Display-only (TVMaze-enriched) people carry their photo as a remote URL.
+        return person.RemoteImageUrl
     }
 
     /** Title logo. Episodes never carry their own Logo image, so theirs is the series logo. */

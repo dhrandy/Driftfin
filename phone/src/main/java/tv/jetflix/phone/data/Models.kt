@@ -74,6 +74,10 @@ data class BaseItemPerson(
     val Role: String? = null,
     val Type: String? = null,
     val PrimaryImageTag: String? = null,
+    // TVMaze-enriched guests only: the provider id that proves identity, and a remote photo,
+    // since a display-only person has no Jellyfin id to fetch an image with.
+    val ProviderIds: Map<String, String>? = null,
+    val RemoteImageUrl: String? = null,
 )
 
 @Serializable

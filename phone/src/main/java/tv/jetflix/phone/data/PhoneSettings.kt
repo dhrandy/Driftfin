@@ -49,6 +49,10 @@ object PhoneSettings {
     /** The Favorites row on Home. */
     val showFavorites: StateFlow<Boolean> = _showFavorites
 
+    private val _tvmazeEpisodeCast = MutableStateFlow(true)
+    /** Adds available guest credits from TVMaze for a verified matching episode. Same default as the TV app. */
+    val tvmazeEpisodeCast: StateFlow<Boolean> = _tvmazeEpisodeCast
+
     private val _lastSeenBuild = MutableStateFlow(0)
     /** The newest build whose What's New card was dismissed. */
     val lastSeenBuild: StateFlow<Int> = _lastSeenBuild
@@ -65,6 +69,7 @@ object PhoneSettings {
         _showFavorites.value = p.getBoolean("show_favorites", true)
         _homeAutoRefresh.value = p.getBoolean("home_auto_refresh", true)
         _titleLogos.value = p.getBoolean("title_logos", true)
+        _tvmazeEpisodeCast.value = p.getBoolean("tvmaze_episode_cast", true)
         _lastSeenBuild.value = p.getInt("last_seen_build", 0)
     }
 
@@ -78,4 +83,5 @@ object PhoneSettings {
     fun setShowNextUp(v: Boolean) { _showNextUp.value = v; prefs?.edit()?.putBoolean("show_next_up", v)?.apply() }
     fun setHomeAutoRefresh(v: Boolean) { _homeAutoRefresh.value = v; prefs?.edit()?.putBoolean("home_auto_refresh", v)?.apply() }
     fun setShowFavorites(v: Boolean) { _showFavorites.value = v; prefs?.edit()?.putBoolean("show_favorites", v)?.apply() }
+    fun setTvmazeEpisodeCast(v: Boolean) { _tvmazeEpisodeCast.value = v; prefs?.edit()?.putBoolean("tvmaze_episode_cast", v)?.apply() }
 }

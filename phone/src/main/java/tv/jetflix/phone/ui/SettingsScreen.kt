@@ -1,5 +1,6 @@
 package tv.jetflix.phone.ui
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -148,6 +149,24 @@ fun SettingsScreen() {
             }
             androidx.compose.material3.Switch(checked = favorites, onCheckedChange = { tv.jetflix.phone.data.PhoneSettings.setShowFavorites(it) })
         }
+        val tvmazeCast by tv.jetflix.phone.data.PhoneSettings.tvmazeEpisodeCast.collectAsState()
+        androidx.compose.foundation.layout.Row(Modifier.fillMaxWidth().heightIn(min = 52.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("Episode cast from TVMaze", fontSize = 16.sp)
+                Text("Adds available guest credits from TVMaze for a verified matching episode. Coverage varies. Free, no account or key needed.", fontSize = 14.sp, color = DriftfinColors.TextSecondary)
+            }
+            androidx.compose.material3.Switch(checked = tvmazeCast, onCheckedChange = { tv.jetflix.phone.data.PhoneSettings.setTvmazeEpisodeCast(it) })
+        }
+        // TVMaze's API terms ask for a link back, not just a name: the credit opens tvmaze.com.
+        val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
+        val tvmazeCredit = androidx.compose.ui.text.buildAnnotatedString {
+            append("Episode cast and guest stars come from TVMaze, used under CC BY-SA 4.0 (creativecommons.org/licenses/by-sa/4.0) and combined with your server data. Source: ")
+            withStyle(androidx.compose.ui.text.style.SpanStyle(textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline)) { append("tvmaze.com") }
+        }
+        Text(
+            tvmazeCredit, fontSize = 13.sp, color = DriftfinColors.TextSecondary,
+            modifier = Modifier.padding(vertical = 4.dp).clickable { uriHandler.openUri("https://www.tvmaze.com/") },
+        )
         Text("Account", fontSize = 16.sp, color = DriftfinColors.TextSecondary, modifier = Modifier.padding(top = 12.dp))
         Text("Signed in as ${SessionManager.session.value?.userName.orEmpty()}", fontSize = 14.sp)
         var switchNote by remember { mutableStateOf<String?>(null) }

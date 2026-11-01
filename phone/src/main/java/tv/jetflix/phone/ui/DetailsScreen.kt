@@ -23,6 +23,7 @@ import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -65,6 +66,8 @@ fun DetailsScreen(id: String, onBack: () -> Unit, onPlay: (String) -> Unit, onOp
     var favorite by remember(id) { mutableStateOf(false) }
     var trailer by remember(id) { mutableStateOf<tv.jetflix.phone.data.TrailerSource?>(null) }
     var failed by remember(id) { mutableStateOf(false) }
+    // The cast row: null while resolving, so a wrong list is never shown in the meantime.
+    var castPeople by remember(id) { mutableStateOf<List<tv.jetflix.phone.data.BaseItemPerson>?>(null) }
     val scope = rememberCoroutineScope()
     BackHandler(onBack = onBack)
     LaunchedEffect(id) {
@@ -86,9 +89,18 @@ fun DetailsScreen(id: String, onBack: () -> Unit, onPlay: (String) -> Unit, onOp
                 val local = if ((s.LocalTrailerCount ?: 0) > 0) Content.localTrailers(s.Id) else emptyList()
                 seriesTrailer = tv.jetflix.phone.data.Trailers.pick(s, local)
                 seasons = Content.seasons(s.Id)
-                episodes = Content.episodes(s.Id)
+                val eps = Content.episodes(s.Id)
+                episodes = eps
                 selectedSeason = loaded.SeasonId ?: seasons.firstOrNull()?.Id
+                // The episode's own credits plus the verified TVMaze season's guest cast; never the
+                // series cast (user report, phone build 8: a season 2 episode showed season 1 actors).
+                castPeople = tv.jetflix.phone.data.detailsCast(
+                    loaded, eps.filter { e -> e.SeasonId == loaded.SeasonId }, tv.jetflix.phone.data.TvmazeCastResolver.resolver()
+                )
             }
+        }
+        if (loaded != null && castPeople == null) {
+            castPeople = tv.jetflix.phone.data.detailsCast(loaded, emptyList(), null)
         }
         trailer = loaded?.let { m ->
             // Jellyfin's trailer files first, then the YouTube links on the item; a failed lookup just hides the button.
@@ -193,16 +205,23 @@ fun DetailsScreen(id: String, onBack: () -> Unit, onPlay: (String) -> Unit, onOp
                 }
             }
         }
-        // Cast: the item's own people first. Episodes without any fall back to the show's cast
-        // (TV parity: some servers only populate People on the series).
-        val ownCast = it.People.filter { p -> p.Id != null && (p.Type == "Actor" || p.Type == "GuestStar") }
-        val cast = (if (ownCast.isNotEmpty()) ownCast else if (it.Type == "Episode") show?.People.orEmpty().filter { p -> p.Id != null && (p.Type == "Actor" || p.Type == "GuestStar") } else emptyList()).take(20)
+        // Cast: resolved while loading (own credits + the verified season's TVMaze guests for
+        // episodes; never another season's cast). Null while resolving shows nothing yet.
+        val cast = castPeople.orEmpty()
         if (cast.isNotEmpty()) item {
             Column(Modifier.padding(top = 4.dp)) {
                 Text("Cast", fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 16.dp, bottom = 8.dp))
                 androidx.compose.foundation.lazy.LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp), contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp)) {
-                    items(cast, key = { p -> p.Id.orEmpty() }) { p ->
-                        Column(Modifier.width(84.dp).clickable { onOpenPerson(p) }, horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally) {
+                    // Display-only guests have no Jellyfin id; their TVMaze person id keys them, so
+                    // two kept same-name people can never collide on a bare-name key.
+                    items(cast, key = { p -> p.Id ?: ("tvmaze-" + (p.ProviderIds?.get("Tvmaze") ?: (p.Name.orEmpty() + "|" + p.Role.orEmpty()))) }) { p ->
+                        // Display-only (TVMaze-enriched, no Jellyfin id) people have no page to open, so
+                        // they are dimmed like the TV strip's non-actionable chips: a tap that does
+                        // nothing must not look broken.
+                        Column(
+                            Modifier.width(84.dp).then(if (p.Id != null) Modifier.clickable { onOpenPerson(p) } else Modifier.alpha(0.65f)),
+                            horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally,
+                        ) {
                             ActorAvatar(Graph.repo.personImageUrl(p), p.Name.orEmpty(), Modifier.size(72.dp).clip(androidx.compose.foundation.shape.CircleShape))
                             Text(p.Name.orEmpty(), fontSize = 12.sp, maxLines = 2, textAlign = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.padding(top = 4.dp))
                             p.Role?.takeIf { r -> r.isNotBlank() }?.let { r -> Text(r, fontSize = 11.sp, maxLines = 1, color = DriftfinColors.TextSecondary) }
