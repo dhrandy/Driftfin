@@ -1,7 +1,14 @@
 package tv.jetflix.app.update
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -52,18 +59,42 @@ object WhatsNew {
  */
 @Composable
 fun WhatsNewDialog(notes: List<String>, onDismiss: () -> Unit) {
-    val okFocus = remember { FocusRequester() }
     androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
+        WhatsNewCard(notes, onDismiss)
+    }
+}
+
+/**
+ * The card body, separate from the Dialog window so layout and pixels can be tested directly.
+ * [scrollState] is hoisted so tests can render a scrolled position.
+ */
+@Composable
+internal fun WhatsNewCard(
+    notes: List<String>,
+    onDismiss: () -> Unit,
+    scrollState: androidx.compose.foundation.ScrollState = rememberScrollState(),
+    modifier: Modifier = Modifier,
+) {
+    val okFocus = remember { FocusRequester() }
+    Column(
+        modifier
+            .fillMaxWidth(0.6f)
+            .heightIn(max = 420.dp)
+            .background(Color(0xFF222222), RoundedCornerShape(16.dp))
+            .padding(32.dp),
+    ) {
+        Text("What's new", style = JetflixType.sectionTitle, color = Color.White)
+        Spacer(Modifier.height(14.dp))
+        // Long change lists must not push OK off the card: the bullets scroll, and each bullet is
+        // a D-pad stop so the remote walks the list and the scroll follows. OK stays pinned below.
         Column(
-            Modifier
-                .background(Color(0xFF222222), RoundedCornerShape(16.dp))
-                .padding(32.dp),
+            Modifier.weight(1f).fillMaxWidth().verticalScroll(scrollState),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            Text("What's new", style = JetflixType.sectionTitle, color = Color.White)
-            notes.forEach { Text("\u2022  " + it, style = JetflixType.body, color = Color(0xFFE5E5E5)) }
-            Button(onClick = onDismiss, modifier = Modifier.focusRequester(okFocus)) { Text("OK") }
+            notes.forEach { Text("\u2022  " + it, style = JetflixType.body, color = Color(0xFFE5E5E5), modifier = Modifier.focusable()) }
         }
+        Spacer(Modifier.height(14.dp))
+        Button(onClick = onDismiss, modifier = Modifier.focusRequester(okFocus)) { Text("OK") }
     }
     LaunchedEffect(Unit) { repeat(10) { try { okFocus.requestFocus(); return@LaunchedEffect } catch (_: Exception) { kotlinx.coroutines.delay(60) } } }
 }

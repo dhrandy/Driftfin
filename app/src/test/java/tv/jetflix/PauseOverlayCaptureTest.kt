@@ -95,7 +95,7 @@ class PauseOverlayCaptureTest {
     }
 
     @Test fun pausedOverlayHidesInfoWhenSettingOff() {
-        // Randy's Settings toggle: summary + Up next hidden, title, pause icon and cast strip stay.
+        // The Settings toggle: summary + Up next hidden, title, pause icon and cast strip stay.
         show(playing = false, backdrop = Color(0xFF14161C), infoVisible = false)
         rule.onNodeWithContentDescription("Paused").assertIsDisplayed()
         rule.onNodeWithText("A marshal tracks a fugitive", substring = true).assertDoesNotExist()

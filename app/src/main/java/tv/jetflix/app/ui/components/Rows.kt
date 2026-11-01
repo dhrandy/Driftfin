@@ -34,6 +34,8 @@ fun MediaRow(
     modifier: Modifier = Modifier,
     onItemFocused: (BaseItemDto) -> Unit = {},
     focusMemory: FocusMemory? = null,
+    // Row identity for focus restore: differs from the title when libraries share a name.
+    rowKey: String? = null,
     firstItemFocus: FocusRequester? = null,
     upFocus: FocusRequester? = null,
 ) {
@@ -56,7 +58,7 @@ fun MediaRow(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             itemsIndexed(items, key = { _, it -> it.Id }) { index, item ->
-                var m: Modifier = (if (focusMemory != null) Modifier.restoreFocus(focusMemory, "$title|${item.Id}") else Modifier)
+                var m: Modifier = (if (focusMemory != null) Modifier.restoreFocus(focusMemory, "${rowKey ?: title}|${item.Id}") else Modifier)
                     .onFocusChanged { if (it.hasFocus) onItemFocused(item) }
                 if (index == entryIndex && firstItemFocus != null) m = m.focusRequester(firstItemFocus)
                 if (wide) {

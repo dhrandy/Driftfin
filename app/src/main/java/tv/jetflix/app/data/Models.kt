@@ -74,6 +74,13 @@ data class BaseItemPerson(
     val Role: String? = null,
     val Type: String? = null,
     val PrimaryImageTag: String? = null,
+    // Not a Jellyfin field: set only by the TVMaze episode-cast fallback for people Jellyfin
+    // does not know. Id stays null for them, so OK opens no actor page (never name-matched).
+    val RemoteImageUrl: String? = null,
+    // Jellyfin carries provider ids on people (e.g. {"Tvmaze": "123"}); the TVMaze fallback sets
+    // its own id here too, so cross-provider dedup can verify same-person instead of guessing
+    // from a name. Name alone is never identity proof (homonyms exist).
+    val ProviderIds: Map<String, String>? = null,
 )
 
 @Serializable
@@ -175,6 +182,11 @@ data class BaseItemDto(
 
     /** The server's premiere (air) date as a calendar date, e.g. "Mar 3, 2021". Date only, no time zone shift; null when the server has none. */
     fun airDateLabel(): String? = formatAirDate(PremiereDate)
+
+    /** Paused-player episode line, e.g. "S2:E2 · Team Building · Mar 20, 2026". The air date is
+     *  appended only when the server carries one; movies and date-less episodes get no extra text. */
+    fun pauseEpisodeLine(): String = listOfNotNull(episodeLabel(), Name, airDateLabel()).joinToString(" · ")
+
 
     fun runtimeLabel(): String? {
         val ticks = RunTimeTicks ?: return null

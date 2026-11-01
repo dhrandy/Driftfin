@@ -24,6 +24,7 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.key
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
@@ -33,6 +34,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -113,6 +115,9 @@ fun PlayerScreen(
     // Cast strip while paused: people are fetched once, the first time the video is paused.
     val pauseCastOn by tv.jetflix.app.data.AppSettings.pauseCast.collectAsState()
     val pauseInfoOn by tv.jetflix.app.data.AppSettings.pauseInfo.collectAsState()
+    val pauseBwOn by tv.jetflix.app.data.AppSettings.pauseBw.collectAsState()
+    val pauseBlurOn by tv.jetflix.app.data.AppSettings.pauseBlur.collectAsState()
+    val pauseFx = remember(pauseBwOn, pauseBlurOn) { PauseEffects.state(pauseBwOn, pauseBlurOn, android.os.Build.VERSION.SDK_INT) }
     val isPausedNow by tv.jetflix.app.ui.components.PlaybackPause.paused.collectAsState()
     var cast by remember { mutableStateOf(emptyList<tv.jetflix.app.data.BaseItemPerson>()) }
     var castFetched by remember { mutableStateOf(false) }
@@ -122,7 +127,7 @@ fun PlayerScreen(
     LaunchedEffect(isPausedNow, pauseCastOn) {
         if (isPausedNow && pauseCastOn && !castFetched) {
             castFetched = true
-            cast = tv.jetflix.app.data.loadPauseCast(api, session.userId, item)
+            cast = tv.jetflix.app.data.loadPauseCast(api, session.userId, item, tv.jetflix.app.data.TvmazeCastResolver.resolver())
         }
     }
     LaunchedEffect(isPausedNow, pauseCastOn) { if (!isPausedNow || !pauseCastOn) { castIndex = null; castKeys.reset() } }
@@ -471,17 +476,26 @@ fun PlayerScreen(
         },
     ) {
         // The video goes first so everything below (errors, up-next, the audio/subtitle panel) draws in front of it.
-        AndroidView(
-            factory = { ctx ->
-                PlayerView(ctx).apply {
-                    useController = false
-                    isFocusable = false
-                    isFocusableInTouchMode = false
-                    this.player = player
-                }
-            },
-            modifier = Modifier.fillMaxSize(),
-        )
+        // Keyed on the surface kind: pause effects need a TextureView (see PauseEffects), which is a
+        // different PlayerView instance, so toggling an effect recreates the surface once.
+        key(pauseFx.textureSurface) {
+            AndroidView(
+                factory = { ctx ->
+                    (if (pauseFx.textureSurface) {
+                        android.view.LayoutInflater.from(ctx).inflate(tv.jetflix.app.R.layout.player_texture, null) as PlayerView
+                    } else {
+                        PlayerView(ctx)
+                    }).apply {
+                        useController = false
+                        isFocusable = false
+                        isFocusableInTouchMode = false
+                        this.player = player
+                    }
+                },
+                update = { view -> PauseEffects.applyTo(view, !isPlaying, pauseFx) },
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
 
         playbackError?.let { msg -> PlayerErrorOverlay(msg, Modifier.align(androidx.compose.ui.Alignment.Center)) }
         if (skipSegment != null) {
@@ -517,7 +531,8 @@ fun PlayerScreen(
             nextEpisode = nextEp,
             infoVisible = pauseInfoOn,
             castVisible = PlayerKeys.castReady(isPausedNow, true, pauseCastOn, cast.size),
-            cast = cast, castSelected = castIndex, personImageUrl = { repo.personImageUrl(it) },
+            // TVMaze fallback people have no Jellyfin image; theirs comes from TVMaze directly.
+            cast = cast, castSelected = castIndex, personImageUrl = { p -> p.RemoteImageUrl ?: repo.personImageUrl(p) },
         )
     }
 }
@@ -541,7 +556,7 @@ fun PlayerOverlay(
 ) {
 AnimatedVisibility(visible = visible, enter = fadeIn(), exit = fadeOut()) {
         Box(Modifier.fillMaxSize()) {
-            // Paused only: light, even dim across the whole frame (Randy's pick). Uniform, no
+            // Paused only: light, even dim across the whole frame (design pick). Uniform, no
             // gradient, so text and controls stay readable without a visible box; the video's
             // color shows through. Same drawing approach as the existing scrims, no blur.
             if (!isPlaying) {
@@ -565,21 +580,24 @@ AnimatedVisibility(visible = visible, enter = fadeIn(), exit = fadeOut()) {
                 )
                 if (item.isEpisode) {
                     Text(
-                        text = listOfNotNull(item.episodeLabel(), item.Name).joinToString(" · "),
+                        text = item.pauseEpisodeLine(),
                         style = JetflixType.body,
                         color = JetflixColors.TextSecondary,
                     )
                 }
                 // Paused only: the item's own summary (already loaded, no fetch) and the next episode's
-                // name, over the whole-frame dim above (Randy's readability review and pick).
+                // name, over the whole-frame dim above (readability-reviewed design).
                 if (!isPlaying && infoVisible) {
                     Column(Modifier.padding(top = 10.dp)) {
                         item.Overview?.takeIf { it.isNotBlank() }?.let { overview ->
                             Text(
+                                // Wrap at about half the screen so the paused description turns
+                                // down a line instead of running across the whole frame.
                                 text = overview,
                                 style = JetflixType.caption,
                                 color = JetflixColors.TextSecondary,
                                 maxLines = 3,
+                                modifier = Modifier.fillMaxWidth(0.5f),
                                 overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                             )
                         }
@@ -924,7 +942,15 @@ fun PauseCastStrip(
     modifier: Modifier = Modifier,
 ) {
     Column(modifier.fillMaxWidth().padding(horizontal = 48.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(if (selected == null) "Cast   \u25BC to browse" else "Cast   \u25C0 \u25B6 choose   OK movies   \u25B2 back", style = JetflixType.caption, color = Color.White)
+        // Display-only people (TVMaze-enriched, no Jellyfin id) can be browsed - that is how the
+        // row scrolls - but OK opens nothing for them, so the hint drops "OK movies" on those cards.
+        val selectedOpenable = selected?.let { cast.getOrNull(it)?.Id != null } ?: false
+        Text(
+            if (selected == null) "Cast   \u25BC to browse"
+            else if (selectedOpenable) "Cast   \u25C0 \u25B6 choose   OK movies   \u25B2 back"
+            else "Cast   \u25C0 \u25B6 choose   \u25B2 back",
+            style = JetflixType.caption, color = Color.White,
+        )
         val listState = androidx.compose.foundation.lazy.rememberLazyListState(initialFirstVisibleItemIndex = ((selected ?: 0) - 3).coerceAtLeast(0))
         // Keep the chosen actor on screen when the row is longer than the screen.
         LaunchedEffect(selected) { selected?.let { listState.animateScrollToItem((it - 3).coerceAtLeast(0)) } }
@@ -935,8 +961,12 @@ fun PauseCastStrip(
         ) {
             itemsIndexed(cast, key = { _, p -> p.Id ?: p.Name ?: "" }) { i, p ->
                 val sel = selected == i
+                // Display-only people (TVMaze-enriched, no Jellyfin id) stay dimmed even when the
+                // selection rests on them: browse yes, open no - OK is guarded to a no-op for them.
+                val openable = p.Id != null
                 Column(
                     Modifier.width(96.dp)
+                        .then(if (openable) Modifier else Modifier.alpha(0.65f))
                         .then(Modifier.border(if (sel) 3.dp else 0.dp, if (sel) Color.White else Color.Transparent, RoundedCornerShape(12.dp)))
                         .background(if (sel) Color(0x55FFFFFF) else Color.Transparent, RoundedCornerShape(12.dp))
                         .padding(5.dp),

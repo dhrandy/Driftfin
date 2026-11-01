@@ -41,10 +41,26 @@ object AppSettings {
     val pauseCast: StateFlow<Boolean> = _pauseCast
     fun setPauseCast(v: Boolean) { _pauseCast.value = v; prefs?.edit()?.putBoolean("pause_cast", v)?.apply() }
 
+    // TVMaze episode-cast enrichment (pause screen): merges the exact playing episode's
+    // TVMaze guest cast into the pause cast after the season is verified episode-by-episode.
+    // TVMaze is a free public API - no account, no key, nothing to set up. Default on.
+    private val _tvmazeEpisodeCast = MutableStateFlow(true)
+    val tvmazeEpisodeCast: StateFlow<Boolean> = _tvmazeEpisodeCast
+    fun setTvmazeEpisodeCast(v: Boolean) { _tvmazeEpisodeCast.value = v; prefs?.edit()?.putBoolean("tvmaze_episode_cast", v)?.apply() }
+
     /** Episode/movie info (summary + Up next line) on the paused player. On by default. */
     private val _pauseInfo = MutableStateFlow(true)
     val pauseInfo: StateFlow<Boolean> = _pauseInfo
     fun setPauseInfo(v: Boolean) { _pauseInfo.value = v; prefs?.edit()?.putBoolean("pause_info", v)?.apply() }
+
+    // Pause frame effects, both OFF by default (blur was a scroll-stutter suspect on the TV, so these
+    // are strictly opt-in): black-and-white and blur apply to the video frame while paused only.
+    private val _pauseBw = MutableStateFlow(false)
+    val pauseBw: StateFlow<Boolean> = _pauseBw
+    fun setPauseBw(v: Boolean) { _pauseBw.value = v; prefs?.edit()?.putBoolean("pause_bw", v)?.apply() }
+    private val _pauseBlur = MutableStateFlow(false)
+    val pauseBlur: StateFlow<Boolean> = _pauseBlur
+    fun setPauseBlur(v: Boolean) { _pauseBlur.value = v; prefs?.edit()?.putBoolean("pause_blur", v)?.apply() }
 
     /** Startup/periodic update checks may surface the popup + red dot. Off hides them; the startup check
      *  still runs and the Settings row can always check manually (always-check-on-startup stands). */
@@ -69,6 +85,37 @@ object AppSettings {
     private val _searchRecommendations = MutableStateFlow(true)
     val searchRecommendations: StateFlow<Boolean> = _searchRecommendations
     fun setSearchRecommendations(v: Boolean) { _searchRecommendations.value = v; prefs?.edit()?.putBoolean("search_recommendations", v)?.apply() }
+
+    // Avatar choices are per profile: the prefs key carries a short hash of serverUrl+userId
+    // (same shape as Session's profileKey), so two profiles on this TV keep independent picks.
+    private fun avatarScoped(base: String): String {
+        val s = SessionManager.session.value ?: return base
+        val h = java.security.MessageDigest.getInstance("SHA-256").digest("${s.serverUrl}${s.userId}".toByteArray())
+        return base + "_" + h.joinToString("") { "%02x".format(it) }.take(12)
+    }
+
+    /** Profile avatar picked by the active profile: 0 = none (the top bar shows the username as before). */
+    private val _avatarId = MutableStateFlow(0)
+    val avatarId: StateFlow<Int> = _avatarId
+    fun setAvatarId(v: Int) { _avatarId.value = v; prefs?.edit()?.putInt(avatarScoped("avatar_id"), v)?.apply() }
+
+    /** Top-bar profile display: username only (the original look, default), avatar + username, or avatar only. */
+    private val _avatarDisplay = MutableStateFlow(AvatarDisplay.UsernameOnly)
+    val avatarDisplay: StateFlow<AvatarDisplay> = _avatarDisplay
+    fun setAvatarDisplay(v: AvatarDisplay) { _avatarDisplay.value = v; prefs?.edit()?.putString(avatarScoped("avatar_display"), v.name)?.apply() }
+
+    private fun loadAvatars(p: android.content.SharedPreferences) {
+        _avatarId.value = p.getInt(avatarScoped("avatar_id"), 0)
+        _avatarDisplay.value = AvatarDisplay.values().firstOrNull { it.name == p.getString(avatarScoped("avatar_display"), null) } ?: AvatarDisplay.UsernameOnly
+    }
+
+    /** Rereads the avatar choice for the active profile. Called on sign-in, profile switch and sign-out. */
+    fun reloadAvatars() { prefs?.let { loadAvatars(it) } }
+
+    /** The featured-movie banner at the top of Home. On by default; off starts Home with the rows. */
+    private val _homeBanner = MutableStateFlow(true)
+    val homeBanner: StateFlow<Boolean> = _homeBanner
+    fun setHomeBanner(v: Boolean) { _homeBanner.value = v; prefs?.edit()?.putBoolean("home_banner", v)?.apply() }
 
     /** Home banner only: exclude movies Jellyfin marks with the Animation genre. */
     private val _excludeHomeAnimation = MutableStateFlow(false)
@@ -127,12 +174,17 @@ object AppSettings {
         _titleLogos.value = p.getBoolean("title_logos", true)
         _formatBadges.value = p.getBoolean("format_badges", true)
         _pauseCast.value = p.getBoolean("pause_cast", true)
+        _tvmazeEpisodeCast.value = p.getBoolean("tvmaze_episode_cast", true)
         _pauseInfo.value = p.getBoolean("pause_info", true)
+        _pauseBw.value = p.getBoolean("pause_bw", false)
+        _pauseBlur.value = p.getBoolean("pause_blur", false)
         _updateNotices.value = p.getBoolean("update_notices", true)
         _startupWall.value = p.getBoolean("startup_wall", true)
+        _homeBanner.value = p.getBoolean("home_banner", true)
         _excludeHomeAnimation.value = p.getBoolean("exclude_home_animation", false)
         _heroRatings.value = p.getBoolean("hero_ratings", true)
         _searchRecommendations.value = p.getBoolean("search_recommendations", true)
+        loadAvatars(p)
         _buttonSound.value = tv.jetflix.app.ui.components.ButtonSound.values().firstOrNull { it.name == p.getString("button_sound", null) } ?: tv.jetflix.app.ui.components.ButtonSound.Off
         tv.jetflix.app.ui.components.ButtonSounds.style = _buttonSound.value
         _posterSize.value = PosterSize.values().firstOrNull { it.name == p.getString("poster_size", null) } ?: PosterSize.Medium

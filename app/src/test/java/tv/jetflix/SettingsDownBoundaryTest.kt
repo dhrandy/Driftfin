@@ -59,8 +59,12 @@ class SettingsDownBoundaryTest {
         rule.waitForIdle()
         press(Key.DirectionLeft)                 // rail: Updates
         repeat(7) { press(Key.DirectionDown) }   // Account
-        press(Key.DirectionRight)                // pane: Switch profile
-        assertTrue("pane entry lands on Switch profile, was: ${focusedLabel()}", focusedLabel().contains("Switch profile"))
+        press(Key.DirectionRight)                // pane: Profile avatar (first control)
+        assertTrue("pane entry lands on Profile avatar, was: ${focusedLabel()}", focusedLabel().contains("Profile avatar"))
+        press(Key.DirectionDown)                 // Profile display
+        assertTrue("Down reaches Profile display, was: ${focusedLabel()}", focusedLabel().contains("Profile display"))
+        press(Key.DirectionDown)                 // Switch profile
+        assertTrue("Down reaches Switch profile, was: ${focusedLabel()}", focusedLabel().contains("Switch profile"))
         press(Key.DirectionDown)                 // boundary: must stay on the account actions
         assertTrue("Down on the account actions must stay put, was: ${focusedLabel()}", focusedLabel().contains("Switch profile"))
     }

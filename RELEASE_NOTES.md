@@ -4,6 +4,19 @@ Each build lists its real changes here. The CI release workflow copies the secti
 matching the build tag onto the GitHub release page and appends the standard
 automated-build footer.
 
+## build-48
+
+Changes:
+- Focus fixes after Back: returning from an actor page keeps the cursor on the button you came from, and when the episode you were on disappears from Continue Watching the cursor lands on the row and the row scrolls back on screen instead of leaving you lost on the page.
+- Home is tidier: the separate per-library rows are gone; there is one Continue Watching row, one Next Up row, and combined Recently Added Movies and Recently Added Episodes rows instead of a separate set for every library.
+- Pausing a show can now show that episode's cast and guest stars (from TVMaze - free, no account or key needed), so the names match the episode you're actually watching.
+- Profiles can have avatars: 20 built-in pictures to pick from, scoped per server and per user. Three display modes: Avatar, Avatar + username, or Username only (the existing default).
+- Shows can be sorted by Date Added using the server's real last-episode date, so a show with a brand-new episode sorts as newly added.
+- New "Home banner" setting to hide the big banner at the top of Home.
+- Two optional pause effects, both off by default (Android 12 and newer only): black-and-white, and blur. Each has its own setting.
+- The Play, Watched, Watchlist, and Favorite buttons now glow red when focused, matching the rest of the TV interface.
+- The What's new card after an update now fits the screen no matter how long the list is: the list scrolls with the remote and OK stays put.
+
 ## build-47
 
 Changes:

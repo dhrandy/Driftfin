@@ -10,6 +10,7 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performKeyInput
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.pressKey
 import org.junit.Rule
 import org.junit.Test
@@ -17,6 +18,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
+import tv.jetflix.app.ui.settings.SettingsCategory
 import tv.jetflix.app.ui.settings.SettingsContent
 import tv.jetflix.app.ui.theme.JetflixTheme
 import java.io.File
@@ -45,14 +47,15 @@ class SettingsCaptureTest {
     private fun key(k: Key) { rule.onRoot().performKeyInput { pressKey(k) }; rule.waitForIdle() }
 
     @Test fun playbackPaneShowsPauseInfoToggle() {
-        // Randy's toggle row: "Episode and movie info while paused" lives in the Playback pane, on by default.
+        // The toggle row: "Episode and movie info while paused" lives in the Playback pane, on by default.
         rule.setContent {
             JetflixTheme { SettingsContent(true, true, true, "Demo", "http://demo.test", {}, {}, {}, {}, {}, buildLabel = "Driftfin TV build 45") }
         }
         rule.waitForIdle()
         key(Key.DirectionLeft)                 // rail: Updates
         key(Key.DirectionDown)                 // Playback
-        rule.onNodeWithText("Episode and movie info while paused").assertIsDisplayed()
+        // The pane grew a row ("Cast while paused"): scroll the toggle into view before asserting.
+        rule.onNodeWithText("Episode and movie info while paused").performScrollTo().assertIsDisplayed()
         capture("settings-playback-pane")
     }
 
@@ -74,6 +77,16 @@ class SettingsCaptureTest {
             org.junit.Assert.assertTrue("Account fully on screen: $b within $root", b.top >= root.top && b.bottom <= root.bottom)
         }
         capture("settings-rail-account-bottom")
+    }
+
+    @Test fun homeDiscoveryPaneShowsBannerToggle() {
+        // The "Home banner" toggle lives in the Home & discovery pane, on by default.
+        rule.setContent {
+            JetflixTheme { SettingsContent(true, true, true, "Demo", "http://demo.test", {}, {}, {}, {}, {}, initialCategory = SettingsCategory.HomeDiscovery, buildLabel = "Driftfin TV build 45") }
+        }
+        rule.waitForIdle()
+        rule.onNodeWithText("Home banner").performScrollTo().assertIsDisplayed()
+        capture("settings-homediscovery-banner-toggle")
     }
 
     @Test fun railPanes() {

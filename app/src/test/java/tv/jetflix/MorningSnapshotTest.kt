@@ -90,10 +90,9 @@ class MorningSnapshotTest {
         val order = tv.jetflix.app.ui.home.orderHomeSections(
             items.take(2), items.take(2), items.take(3), items.take(4), items.take(2),
             tv.jetflix.app.ui.home.HomeSection("More like X", items.take(2), wide = false),
-            listOf(tv.jetflix.app.ui.home.HomeSection("Action", items.take(2), wide = false)),
         )
         org.junit.Assert.assertEquals(
-            listOf("Continue Watching", "Next Up", "Recently Added Movies", "Recently Added Episodes", "Favorites", "Action", "More like X"),
+            listOf("Continue Watching", "Next Up", "Recently Added Movies", "Recently Added Episodes", "Favorites", "More like X"),
             order.map { it.title },
         )
         paparazzi.snapshot(name = "home_row_order") {

@@ -489,8 +489,9 @@ fun DetailsContent(
                                 colors = ButtonDefaults.colors(
                                     containerColor = Color.White,
                                     contentColor = Color.Black,
-                                    focusedContainerColor = Color.White,
-                                    focusedContentColor = Color.Black,
+                                    // Red focus like the season chips.
+                                    focusedContainerColor = JetflixColors.Red,
+                                    focusedContentColor = Color.White,
                                 ),
                             ) {
                                 Icon(Icons.Filled.PlayArrow, contentDescription = null)
@@ -503,7 +504,7 @@ fun DetailsContent(
                                     colors = ButtonDefaults.colors(
                                         containerColor = JetflixColors.SurfaceLight.copy(alpha = 0.7f),
                                         contentColor = Color.White,
-                                        focusedContainerColor = JetflixColors.SurfaceLight,
+                                        focusedContainerColor = JetflixColors.Red,
                                         focusedContentColor = Color.White,
                                     ),
                                 ) {
@@ -516,7 +517,7 @@ fun DetailsContent(
                                     colors = ButtonDefaults.colors(
                                         containerColor = JetflixColors.SurfaceLight.copy(alpha = 0.7f),
                                         contentColor = Color.White,
-                                        focusedContainerColor = JetflixColors.SurfaceLight,
+                                        focusedContainerColor = JetflixColors.Red,
                                         focusedContentColor = Color.White,
                                     ),
                                 ) {
@@ -528,7 +529,7 @@ fun DetailsContent(
                                 colors = ButtonDefaults.colors(
                                     containerColor = JetflixColors.SurfaceLight.copy(alpha = 0.7f),
                                     contentColor = Color.White,
-                                    focusedContainerColor = JetflixColors.SurfaceLight,
+                                    focusedContainerColor = JetflixColors.Red,
                                     focusedContentColor = Color.White,
                                 ),
                             ) {
@@ -547,7 +548,7 @@ fun DetailsContent(
                                     colors = ButtonDefaults.colors(
                                         containerColor = JetflixColors.SurfaceLight.copy(alpha = 0.7f),
                                         contentColor = Color.White,
-                                        focusedContainerColor = JetflixColors.SurfaceLight,
+                                        focusedContainerColor = JetflixColors.Red,
                                         focusedContentColor = Color.White,
                                     ),
                                 ) {
@@ -564,7 +565,7 @@ fun DetailsContent(
                                 colors = ButtonDefaults.colors(
                                     containerColor = JetflixColors.SurfaceLight.copy(alpha = 0.7f),
                                     contentColor = Color.White,
-                                    focusedContainerColor = JetflixColors.SurfaceLight,
+                                    focusedContainerColor = JetflixColors.Red,
                                     focusedContentColor = Color.White,
                                 ),
                             ) {

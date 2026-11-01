@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -188,10 +189,18 @@ fun TopNavBar(
                             .semantics { contentDescription = "Update available" },
                     )
                 }
+                val avatarId by tv.jetflix.app.data.AppSettings.avatarId.collectAsState()
+                val avatarDisplay by tv.jetflix.app.data.AppSettings.avatarDisplay.collectAsState()
+                val avatar = tv.jetflix.app.data.Avatars.byId(avatarId)
+                val showAvatar = avatar != null && avatarDisplay != tv.jetflix.app.data.AvatarDisplay.UsernameOnly
+                val avatarOnly = showAvatar && avatarDisplay == tv.jetflix.app.data.AvatarDisplay.AvatarOnly
                 NavTab(
-                    label = userName,
+                    label = if (avatarOnly) "" else userName,
                     selected = false,
                     onClick = onUserClick,
+                    // Avatar-only keeps the name as the accessible label.
+                    contentDescription = if (avatarOnly) userName else null,
+                    leading = if (showAvatar && avatar != null) { { AvatarImage(avatar, 22.dp) } } else null,
                 )
             }
         }
@@ -241,12 +250,14 @@ private fun SearchIconTab(selected: Boolean, onClick: () -> Unit, modifier: Modi
 }
 
 @Composable
-private fun NavTab(label: String, selected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier, onFocusLost: () -> Unit = {}, onFocusGained: () -> Boolean = { false }, onDwell: () -> Unit = {}) {
+private fun NavTab(label: String, selected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier, onFocusLost: () -> Unit = {}, onFocusGained: () -> Boolean = { false }, onDwell: () -> Unit = {}, leading: (@Composable () -> Unit)? = null, contentDescription: String? = null) {
     var focused by remember { mutableStateOf(false) }
     FocusActivation(focused, onFocusGained, onDwell)
     Surface(
         onClick = onClick,
-        modifier = modifier.onFocusChanged { if (focused && !it.isFocused) onFocusLost(); focused = it.isFocused },
+        modifier = modifier
+            .then(if (contentDescription != null) Modifier.semantics { this.contentDescription = contentDescription } else Modifier)
+            .onFocusChanged { if (focused && !it.isFocused) onFocusLost(); focused = it.isFocused },
         colors = ClickableSurfaceDefaults.colors(
             // Current tab: white pill, dark text. Focused non-current tab: light gray pill.
             containerColor = if (selected) Color.White else Color.Transparent,
@@ -259,12 +270,33 @@ private fun NavTab(label: String, selected: Boolean, onClick: () -> Unit, modifi
         ),
         shape = ClickableSurfaceDefaults.shape(shape = androidx.compose.foundation.shape.RoundedCornerShape(50)),
     ) {
-        Text(
-            text = label,
-            style = JetflixType.body,
-            fontWeight = if (selected) androidx.compose.ui.text.font.FontWeight.SemiBold else androidx.compose.ui.text.font.FontWeight.Normal,
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-        )
+        if (leading == null) {
+            Text(
+                text = label,
+                style = JetflixType.body,
+                fontWeight = if (selected) androidx.compose.ui.text.font.FontWeight.SemiBold else androidx.compose.ui.text.font.FontWeight.Normal,
+                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+            )
+        } else {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+            ) {
+                leading()
+                if (label.isNotEmpty()) {
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        text = label,
+                        style = JetflixType.body,
+                        fontWeight = if (selected) androidx.compose.ui.text.font.FontWeight.SemiBold else androidx.compose.ui.text.font.FontWeight.Normal,
+                        // A long profile name clips with an ellipsis instead of pushing the bar wider.
+                        maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                        modifier = Modifier.widthIn(max = 220.dp),
+                    )
+                }
+            }
+        }
     }
 }
 

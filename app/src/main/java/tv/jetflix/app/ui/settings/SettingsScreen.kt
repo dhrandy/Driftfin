@@ -1,5 +1,6 @@
 package tv.jetflix.app.ui.settings
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -15,6 +16,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -114,6 +116,8 @@ fun SettingsScreen(
         onTabSelected, onSignOut,
         excludeHomeAnimation = AppSettings.excludeHomeAnimation.collectAsState().value,
         onToggleExcludeHomeAnimation = { AppSettings.setExcludeHomeAnimation(!AppSettings.excludeHomeAnimation.value) },
+        homeBanner = AppSettings.homeBanner.collectAsState().value,
+        onToggleHomeBanner = { AppSettings.setHomeBanner(!AppSettings.homeBanner.value) },
         onForgetProfile = onForgetProfile,
         onUserClick = onUserClick,
         posterSize = AppSettings.posterSize.collectAsState().value,
@@ -125,7 +129,13 @@ fun SettingsScreen(
         showWatchlist = watchlist,
         onToggleWatchlist = { AppSettings.setShowWatchlist(!watchlist) },
         onTogglePauseCast = { AppSettings.setPauseCast(!AppSettings.pauseCast.value) },
+        tvmazeEpisodeCast = AppSettings.tvmazeEpisodeCast.collectAsState().value,
+        onToggleTvmazeEpisodeCast = { AppSettings.setTvmazeEpisodeCast(!AppSettings.tvmazeEpisodeCast.value) },
         onTogglePauseInfo = { AppSettings.setPauseInfo(!AppSettings.pauseInfo.value) },
+        pauseBw = AppSettings.pauseBw.collectAsState().value,
+        onTogglePauseBw = { AppSettings.setPauseBw(!AppSettings.pauseBw.value) },
+        pauseBlur = AppSettings.pauseBlur.collectAsState().value,
+        onTogglePauseBlur = { AppSettings.setPauseBlur(!AppSettings.pauseBlur.value) },
         skipIntro = AppSettings.skipIntro.collectAsState().value,
         onToggleSkipIntro = { AppSettings.setSkipIntro(!AppSettings.skipIntro.value) },
         update = update,
@@ -161,6 +171,10 @@ fun SettingsScreen(
         onToggleSearchRecommendations = { AppSettings.setSearchRecommendations(!AppSettings.searchRecommendations.value) },
         liveBlur = AppSettings.liveBlur.collectAsState().value,
         onToggleLiveBlur = { AppSettings.setLiveBlur(!AppSettings.liveBlur.value) },
+        avatarId = AppSettings.avatarId.collectAsState().value,
+        onAvatarSelected = { AppSettings.setAvatarId(it) },
+        avatarDisplay = AppSettings.avatarDisplay.collectAsState().value,
+        onCycleAvatarDisplay = { AppSettings.setAvatarDisplay(AppSettings.avatarDisplay.value.next()) },
         buttonSound = AppSettings.buttonSound.collectAsState().value,
         onCycleButtonSound = {
             val next = AppSettings.buttonSound.value.next()
@@ -194,8 +208,14 @@ fun SettingsContent(
     onToggleContinueWatchingPosters: () -> Unit = {},
     pauseCast: Boolean = true,
     onTogglePauseCast: () -> Unit = {},
+    tvmazeEpisodeCast: Boolean = true,
+    onToggleTvmazeEpisodeCast: () -> Unit = {},
     pauseInfo: Boolean = true,
     onTogglePauseInfo: () -> Unit = {},
+    pauseBw: Boolean = false,
+    onTogglePauseBw: () -> Unit = {},
+    pauseBlur: Boolean = false,
+    onTogglePauseBlur: () -> Unit = {},
     skipIntro: Boolean = true,
     onToggleSkipIntro: () -> Unit = {},
     onForgetProfile: () -> Unit = {},
@@ -213,6 +233,8 @@ fun SettingsContent(
     onToggleHeroRatings: () -> Unit = {},
     excludeHomeAnimation: Boolean = false,
     onToggleExcludeHomeAnimation: () -> Unit = {},
+    homeBanner: Boolean = true,
+    onToggleHomeBanner: () -> Unit = {},
     searchRecommendations: Boolean = true,
     onToggleSearchRecommendations: () -> Unit = {},
     /** Tests open a specific pane; the screen opens on Updates. */
@@ -224,12 +246,21 @@ fun SettingsContent(
     /** Updates pane: hides/shows the update popup + red dot (checks still run on startup). */
     updateNotices: Boolean = true,
     onToggleUpdateNotices: () -> Unit = {},
+    /** Account pane: the picked avatar (0 = none) and how the top bar shows the profile. */
+    avatarId: Int = 0,
+    onAvatarSelected: (Int) -> Unit = {},
+    avatarDisplay: tv.jetflix.app.data.AvatarDisplay = tv.jetflix.app.data.AvatarDisplay.UsernameOnly,
+    onCycleAvatarDisplay: () -> Unit = {},
 ) {
+    var showAvatarPicker by remember { mutableStateOf(false) }
     val menuBack = tv.jetflix.app.ui.components.rememberMenuBack()
     // Rail and pane focus anchors: Left from any pane row returns to the rail, Right from the rail
     // enters the pane's first control. Focusing a control never changes it; only OK does.
     val paneFirst = remember { FocusRequester() }
     val railFocus = remember { FocusRequester() }
+    // Account pane: Down from "Profile display" must land on "Switch profile", not whichever side-by-side
+    // button the direction search happens to pick from a full-width row.
+    val accountFirstAction = remember { FocusRequester() }
     var category by remember { mutableStateOf(initialCategory) }
     // Captured at composition: arriving by a tab sweep keeps focus on the tab until Down or OK (NavSweep is
     // cleared by the handoff, so reading it live here races and either steals focus or defers it forever).
@@ -295,13 +326,22 @@ fun SettingsContent(
                             SettingsCategory.Playback -> {
                                 SettingRow("Autoplay next episode", "Starts the next episode after a 5 second countdown.", autoplay, onToggleAutoplay, firstRow())
                                 SettingRow("Cast while paused", "Shows the cast along the bottom when you pause. Press Down to pick an actor and OK to see their movies on your server.", pauseCast, onTogglePauseCast, nextRow())
+                                SettingRow("Episode cast from TVMaze", "Adds available guest credits from TVMaze for a verified matching episode. Coverage varies. Free, no account or key needed.", tvmazeEpisodeCast, onToggleTvmazeEpisodeCast, nextRow())
+                                Text(
+                                    "Episode cast and guest stars come from TVMaze (tvmaze.com), used under CC BY-SA 4.0 (creativecommons.org/licenses/by-sa/4.0) and combined with your server data.",
+                                    style = JetflixType.caption, color = JetflixColors.TextMuted,
+                                    modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 4.dp, bottom = 8.dp),
+                                )
                                 SettingRow("Episode and movie info while paused", "Shows the story summary and the Up next line when you pause. The title and player controls always stay.", pauseInfo, onTogglePauseInfo, nextRow())
+                                SettingRow("Black and white while paused", "Turns the paused video frame black and white. Off by default. Needs Android 12 or newer; on older devices this does nothing.", pauseBw, onTogglePauseBw, nextRow())
+                                SettingRow("Blur while paused", "Blurs the paused video frame. Off by default. Needs Android 12 or newer; on older devices this does nothing.", pauseBlur, onTogglePauseBlur, nextRow())
                                 SettingRow("Skip Intro button", "Shows a Skip Intro button in the player when your Jellyfin server has marked an intro. It only skips when you press OK.", skipIntro, onToggleSkipIntro, nextRow(last = true))
                             }
                             SettingsCategory.HomeDiscovery -> {
                                 SettingRow("Show My List on Home", "My List uses your Jellyfin favorites for this user.", showMyList, onToggleMyList, firstRow())
                                 SettingRow("Show Next Up on Home", "Jellyfin's next unwatched episode of series you follow.", showNextUp, onToggleNextUp, nextRow())
                                 SettingRow("Exclude animated movies from Home banner", "Hide movies tagged Animation in the Home banner only. Library rows are unchanged.", excludeHomeAnimation, onToggleExcludeHomeAnimation, nextRow())
+                                SettingRow("Home banner", "Shows the featured movie banner at the top of Home. Off starts Home with the rows.", homeBanner, onToggleHomeBanner, nextRow())
                                 SettingRow("Age rating and score on Home", "Shows the age rating and community score under the title on the Home banner.", heroRatings, onToggleHeroRatings, nextRow())
                                 SettingRow("Recommended rows on Search", "Shows recommended movies and shows on the Search page before you type.", searchRecommendations, onToggleSearchRecommendations, nextRow(last = true))
                             }
@@ -334,10 +374,12 @@ fun SettingsContent(
                                         )
                                     }
                                 }
+                                SettingRow("Profile avatar", "Pick one of the 20 built-in avatars for the top bar. Press OK to choose.", true, { showAvatarPicker = true }, firstRow(), valueText = tv.jetflix.app.data.Avatars.byId(avatarId)?.label ?: "None")
+                                SettingRow("Profile display", "How you appear in the top bar: username only (the original look), avatar + username, or avatar only. Press OK to change.", true, onCycleAvatarDisplay, Modifier.focusProperties { left = railFocus; down = accountFirstAction }, valueText = avatarDisplay.label)
                                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                                     Button(
                                         onClick = onSignOut,
-                                        modifier = firstRow(last = true),
+                                        modifier = Modifier.focusRequester(accountFirstAction).focusProperties { left = railFocus; down = androidx.compose.ui.focus.FocusRequester.Cancel },
                                         shape = ButtonDefaults.shape(shape = RoundedCornerShape(6.dp)),
                                         colors = ButtonDefaults.colors(
                                             containerColor = JetflixColors.SurfaceLight.copy(alpha = 0.7f),
@@ -379,6 +421,14 @@ fun SettingsContent(
             onUserClick = onUserClick,
             modifier = Modifier.align(Alignment.TopCenter),
         )
+
+        if (showAvatarPicker) {
+            tv.jetflix.app.ui.components.AvatarPickerDialog(
+                selectedId = avatarId,
+                onSelect = { onAvatarSelected(it); showAvatarPicker = false },
+                onDismiss = { showAvatarPicker = false },
+            )
+        }
     }
 }
 
@@ -530,7 +580,6 @@ internal fun SettingRow(title: String, detail: String, on: Boolean, onClick: () 
         }
     }
 }
-
 /** Row value and explanation for each update step. Updates only ever start when the user presses OK. */
 fun updateTexts(u: tv.jetflix.app.update.UpdateUi): Pair<String, String> {
     val base = "Looks for a newer Driftfin release on GitHub. Nothing is downloaded until you press OK on an available update, and Android asks you to confirm the install."

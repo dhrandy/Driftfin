@@ -54,6 +54,16 @@ enum class LibrarySort(val label: String, val sortBy: String, val order: String)
     PlayCount("Play Count", "PlayCount,SortName", "Descending"),
 }
 
+
+/**
+ * Date Added on the Shows tab follows the newest episode added: a series' own DateCreated is when the
+ * show first landed on the server, so a fresh episode would never move it up (user report: "the last
+ * thing that was added isn't showing first"). Jellyfin's DateLastContentAdded bumps when content is added
+ * under the series. Movies and mixed queries keep DateCreated (the field only exists on series).
+ */
+internal fun gridSortBy(sort: LibrarySort, includeTypes: String): String =
+    if (sort == LibrarySort.Added && includeTypes == "Series") "DateLastContentAdded,DateCreated,SortName" else sort.sortBy
+
 /** Watched filter, as in the Jellyfin IsPlayed / IsUnplayed item filters. */
 enum class WatchFilter(val label: String, val jellyfin: String?) {
     All("All", null), Unwatched("Unwatched", "IsUnplayed"), Watched("Watched", "IsPlayed");
@@ -64,7 +74,7 @@ enum class WatchFilter(val label: String, val jellyfin: String?) {
 enum class Audience(val label: String) { All("All"), KidsOnly("Kids only"), NoKids("No kids") }
 
 /**
- * His two Kids libraries are named exactly "Kids Shows" and "Kids Movies" (his own words, Marquee notes). Exact names,
+ * The Kids libraries are matched by exact name ("Kids Shows" and "Kids Movies"),
  * not a contains-"kid" guess, so an unrelated library can never be hidden. The server has no kids flag to read.
  */
 private val KidsLibraryNames = setOf("kids shows", "kids movies")
@@ -331,7 +341,7 @@ class LibraryViewModel(val repo: JellyfinRepository, private val store: LibraryP
                             parentId = view.Id,
                             includeItemTypes = includeTypes,
                             recursive = true,
-                            sortBy = sort.sortBy,
+                            sortBy = gridSortBy(sort, includeTypes),
                             sortOrder = order(),
                             fields = "Overview,Genres",
                             filters = filterString(), genres = genre, years = year?.toString(),

@@ -61,8 +61,6 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.sync.Semaphore
-import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
@@ -139,22 +137,6 @@ class HomeViewModel(val repo: JellyfinRepository) : ViewModel() {
                 val latestEpisodes = async {
                     api.getLatest(session.userId, limit = 16, includeItemTypes = "Episode").body() ?: emptyList()
                 }
-                val viewsResp = api.getUserViews(session.userId)
-                val views = viewsResp.body()?.Items ?: emptyList()
-                val librarySections = fetchLibrarySections(
-                    views = views.filter { tv.jetflix.app.ui.library.isVideoLibrary(it) },
-                ) { view ->
-                    api.getItems(
-                        userId = session.userId,
-                        parentId = view.Id,
-                        includeItemTypes = when (view.CollectionType) { "movies" -> "Movie"; "tvshows" -> "Series"; else -> "Movie,Series" },
-                        recursive = true,
-                        sortBy = "DateCreated",
-                        sortOrder = "Descending",
-                        limit = 16,
-                    ).body()?.Items ?: emptyList()
-                }.filter { it.items.isNotEmpty() }
-
                 val myList = if (tv.jetflix.app.data.AppSettings.showMyList.value) {
                     api.getItems(
                         userId = session.userId,
@@ -190,13 +172,14 @@ class HomeViewModel(val repo: JellyfinRepository) : ViewModel() {
 
                 val sections = orderHomeSections(
                     resumeItems, nextUpItems.takeIf { tv.jetflix.app.data.AppSettings.showNextUp.value } ?: emptyList(),
-                    latestMovieItems, myList, latestEpisodeItems, moreLike, librarySections,
+                    latestMovieItems, myList, latestEpisodeItems, moreLike,
                 ).toMutableList()
 
                 // Banner: six random picks from the 50 highest-rated unwatched movies (Jellyfin CommunityRating, 7.0 or more when there are any), new on each Home load.
                 // If none reach 7.0 the best-rated unwatched movies are used; if there are no unwatched movies there is no banner.
                 // null = the request failed (timeout, server error); an empty list = the server answered with no titles.
-                val unwatchedMovies: List<BaseItemDto>? = try {
+                val bannerOn = tv.jetflix.app.data.AppSettings.homeBanner.value
+                val unwatchedMovies: List<BaseItemDto>? = if (!bannerOn) null else try {
                     val resp = api.getItems(
                         userId = session.userId,
                         includeItemTypes = "Movie",
@@ -210,7 +193,7 @@ class HomeViewModel(val repo: JellyfinRepository) : ViewModel() {
                     if (resp.isSuccessful) resp.body()?.Items ?: emptyList() else null
                 } catch (_: Exception) { null }
                 val excludeAnimation = tv.jetflix.app.data.AppSettings.excludeHomeAnimation.value
-                val heroes = if (unwatchedMovies != null) {
+                val heroes = if (!bannerOn) emptyList() else if (unwatchedMovies != null) {
                     tv.jetflix.app.data.BannerPicks.randomTopUnwatchedMovies(unwatchedMovies, hasBackdrop = { repo.backdropUrl(it) != null }, count = HeroRotation.MAX_TITLES, excludeAnimation = excludeAnimation)
                 } else {
                     // A failed banner request must not blank a banner that was already showing: keep those titles
@@ -219,7 +202,7 @@ class HomeViewModel(val repo: JellyfinRepository) : ViewModel() {
                         .filterNot { h -> excludeAnimation && h.Genres.orEmpty().any { it.trim().equals("Animation", ignoreCase = true) } }
                 }
                 // Counts only, never titles: why the banner is or is not there (request failed, nothing fetched, filtered out).
-                val bannerDiag = if (unwatchedMovies == null) "banner request failed; kept=${heroes.size}" else {
+                val bannerDiag = if (!bannerOn) "banner off in Settings" else if (unwatchedMovies == null) "banner request failed; kept=${heroes.size}" else {
                     val afterExclude = if (excludeAnimation) unwatchedMovies.count { m -> m.Genres.orEmpty().none { it.trim().equals("Animation", ignoreCase = true) } } else unwatchedMovies.size
                     "banner fetched=${unwatchedMovies.size} afterAnimationFilter=$afterExclude picked=${heroes.size}"
                 }
@@ -290,28 +273,11 @@ class MenuAwareScrollSpec(
     }
 }
 
-/**
- * Fetches every library row at once, at most [maxConcurrent] in flight, keeping the views' order in the result.
- * A failed fetch cancels the rest and propagates, so one bad library still fails the whole Home load exactly as the
- * old one-row-at-a-time fetch did; cancellation passes straight through.
- */
-suspend fun fetchLibrarySections(
-    views: List<BaseItemDto>,
-    maxConcurrent: Int = 4,
-    fetch: suspend (BaseItemDto) -> List<BaseItemDto>,
-): List<HomeSection> = kotlinx.coroutines.coroutineScope {
-    // A semaphore, not limitedParallelism: a dispatcher permit is released while a fetch suspends on the
-    // network, so only a semaphore actually caps how many server requests are in flight at once.
-    val gate = Semaphore(maxConcurrent)
-    views.map { view ->
-        async { gate.withPermit { HomeSection(view.Name ?: "Library", fetch(view), wide = false) } }
-    }.awaitAll()
-}
-
-/** Home row order: Continue Watching, Next Up, Recently Added Movies, Recently Added Episodes, Favorites, then library rows, and More like X last. */
+/** Home row order: Continue Watching, Next Up, Recently Added Movies, Recently Added Episodes, Favorites,
+ *  and More like X last. No per-library rows: full libraries live in Browse (user decision 2026-10-31). */
 fun orderHomeSections(
     resume: List<BaseItemDto>, nextUp: List<BaseItemDto>, latestMovies: List<BaseItemDto>, favorites: List<BaseItemDto>,
-    latestEpisodes: List<BaseItemDto>, moreLike: HomeSection?, library: List<HomeSection>,
+    latestEpisodes: List<BaseItemDto>, moreLike: HomeSection?,
 ): List<HomeSection> {
     val out = mutableListOf<HomeSection>()
     if (resume.isNotEmpty()) out += HomeSection("Continue Watching", resume, wide = true)
@@ -319,7 +285,6 @@ fun orderHomeSections(
     if (latestMovies.isNotEmpty()) out += HomeSection("Recently Added Movies", latestMovies, wide = false)
     if (latestEpisodes.isNotEmpty()) out += HomeSection("Recently Added Episodes", latestEpisodes, wide = true)
     if (favorites.isNotEmpty()) out += HomeSection("Favorites", favorites, wide = false)
-    out += library.filter { it.items.isNotEmpty() }
     moreLike?.let { out += it } // recommendations always sit at the very bottom
     return out
 }
@@ -342,11 +307,29 @@ fun HomeContent(
     heroIntervalMs: Long = HeroRotation.INTERVAL_MS,
 ) {
     CountRecompose("home")
+    // Home banner can be turned off in Settings: the hero block disappears and the rows start at the
+    // top. Gating the state here means every focus and scroll path below sees the same hero-less state.
+    val bannerOn by tv.jetflix.app.data.AppSettings.homeBanner.collectAsState()
+    val state = if (bannerOn) state else state.copy(hero = null, heroes = emptyList())
     val focusMemory = rememberFocusMemory(restoredFocusKey)
     val heroPlayFocus = remember { FocusRequester() }
     val navFocus = remember { FocusRequester() }
     var navHasFocus by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
     val firstRowFocus = remember { FocusRequester() }
+    // One stable requester per non-first row, so a Back return whose exact card is gone can still
+    // land on the same row (the focus key carries the row title) instead of jumping to the banner.
+    val rowFocus = remember { mutableMapOf<String, FocusRequester>() }
+    // Row identity for focus restore: Jellyfin allows two libraries with the same name, and the bare
+    // title would collide (in restore keys, in rowFocus, and as a LazyColumn item key). A repeated
+    // title gets "#1", "#2", ... in display order; the first keeps the bare title.
+    val rowKeys = remember(state.sections) {
+        val seen = mutableMapOf<String, Int>()
+        state.sections.map { sec ->
+            val n = seen.getOrDefault(sec.title, 0)
+            seen[sec.title] = n + 1
+            if (n == 0) sec.title else sec.title + "#" + n
+        }
+    }
     val listState = rememberLazyListState(initialFirstVisibleItemIndex = previewScrollIndex)
     val scope = rememberCoroutineScope()
     // Artwork warmer, on the same image loader the cards use, so a focus move finds its art already cached.
@@ -422,7 +405,9 @@ fun HomeContent(
     // The focus scroll for the Play button would otherwise stop with the banner's title above the screen, so the banner
     // is corrected here: once the banner has focus, the list goes back to the very top.
     LaunchedEffect(heroHasFocus) {
-        if (heroHasFocus) {
+        // No scroll correction while a Back-return restore is still trying to land on its card:
+        // a transient banner focus during the handoff must not pull the list to the top.
+        if (heroHasFocus && !focusMemory.pending) {
             repeat(3) {
                 delay(if (it == 0) 80L else 250L)
                 if (heroHasFocus && (listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 0)) listState.animateScrollToItem(0)
@@ -465,10 +450,42 @@ fun HomeContent(
         if (focusMemory.pending && focusMemory.key != null) {
             delay(1200)
             if (focusMemory.pending) {
-                focusMemory.pending = false
-                focusMemory.key = null
-                listState.scrollToItem(0)
-                focusHero()
+                // The remembered card never composed (Continue Watching moved on, the row shifted).
+                // Land on the same row - the key is "row title|item id" - not on the banner.
+                val rememberedRow = focusMemory.key?.substringBefore('|')
+                val rowIndex = rowKeys.indexOfFirst { it == rememberedRow }
+                if (rowIndex >= 0) {
+                    val target = if (rowIndex == 0) firstRowFocus else rowFocus.getOrPut(rememberedRow!!) { FocusRequester() }
+                    // Register the landing spot BEFORE asking for focus: while the restore is
+                    // pending, the focus group's enter guard redirects stray entries (window
+                    // focus settling, the leaving page's disposal) to restoreTarget. Without
+                    // this they land on the banner Play button, whose focus scroll drags the
+                    // list back to the top and strands the card below the fold.
+                    focusMemory.restoreTarget = target
+                    listState.scrollToItem(rowIndex + 1) // one leading item is the hero block
+                    var landed = false
+                    for (attempt in 1..20) {
+                        try { target.requestFocus(); landed = true; break } catch (_: Exception) { delay(60) }
+                    }
+                    focusMemory.pending = false
+                    focusMemory.key = null
+                    if (landed) {
+                        // Bring-into-view from the focus handoff can still drag the list toward
+                        // the banner while the banner is half on screen; once the focus rests,
+                        // snap the restored row back into view.
+                        delay(150)
+                        listState.scrollToItem(rowIndex + 1)
+                    } else {
+                        if (focusMemory.restoreTarget === target) focusMemory.restoreTarget = null
+                        listState.scrollToItem(0)
+                        focusHero()
+                    }
+                } else {
+                    focusMemory.pending = false
+                    focusMemory.key = null
+                    listState.scrollToItem(0)
+                    focusHero()
+                }
             }
         }
     }
@@ -524,6 +541,16 @@ fun HomeContent(
             // never on Play (TV46 report). focusHero has the same guard; this is the other path
             // to the hero. (FocusRequester.Cancel here left the screen focusless - redirect instead.)
             if (tv.jetflix.app.ui.components.NavSweep.active && tv.jetflix.app.ui.components.NavSweep.tab == tv.jetflix.app.ui.components.JetflixTab.HOME) navFocus
+            // A Back return with a remembered card must not be stolen by this default entry: the
+            // card's restoreFocus is retrying right now and owns the landing spot. Cancel is
+            // transient here (the restore or the 1200 ms same-row fallback lands focus next);
+            // the TV46 focusless-forever case had no restore pending.
+            else if (focusMemory.pending && focusMemory.key != null) {
+                // Redirect to the remembered card itself: Cancel also swallows the card's own
+                // restore request (verified: the request returns normally but focus never lands),
+                // and the hero would steal the landing spot.
+                focusMemory.restoreTarget ?: FocusRequester.Cancel
+            }
             else if (state.hero != null) heroPlayFocus
             else if (state.sections.isNotEmpty()) firstRowFocus
             else FocusRequester.Default
@@ -583,8 +610,8 @@ fun HomeContent(
                     )
                 }
             }
-            state.sections.forEach { section ->
-                item(key = section.title) {
+            state.sections.forEachIndexed { sectionIndex, section ->
+                item(key = rowKeys[sectionIndex]) {
                     // Continue Watching can show posters instead of scene images (Settings); every other row keeps its own shape.
                     val wide = section.wide && !(section.title == "Continue Watching" && continueWatchingPosters)
                     MediaRow(
@@ -628,7 +655,8 @@ fun HomeContent(
                                 )
                             }
                         },
-                        firstItemFocus = if (section === state.sections.first()) firstRowFocus else null,
+                        rowKey = rowKeys[sectionIndex],
+                        firstItemFocus = if (section === state.sections.first()) firstRowFocus else rowFocus.getOrPut(rowKeys[sectionIndex]) { FocusRequester() },
                         upFocus = if (section === state.sections.first()) (if (state.hero != null) heroPlayFocus else navFocus) else null,
                     )
                 }

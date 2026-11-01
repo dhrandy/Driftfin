@@ -55,7 +55,10 @@ class SettingsScrollReachTest {
 
         // The Account pane holds both profile actions, side by side.
         press(Key.DirectionRight)
-        assertTrue("Account pane opens on Switch profile, was: ${focusedLabel()}", focusedLabel().contains("Switch profile"))
+        assertTrue("Account pane opens on Profile avatar, was: ${focusedLabel()}", focusedLabel().contains("Profile avatar"))
+        press(Key.DirectionDown)                 // Profile display
+        press(Key.DirectionDown)                 // Switch profile
+        assertTrue("Down reaches Switch profile, was: ${focusedLabel()}", focusedLabel().contains("Switch profile"))
         assertTrue("Switch profile on screen", focusedBottom() <= rootH + 1f)
         press(Key.DirectionRight)
         assertTrue("Right from Switch profile should focus Sign out, was: ${focusedLabel()}", focusedLabel().contains("Sign out and forget"))

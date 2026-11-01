@@ -49,6 +49,8 @@ Driftfin is still in alpha. Its focus is making your Jellyfin library feel good 
 | | |
 | --- | --- |
 | Device | Android TV or Google TV running Android 8 (API 26) or newer, the app's install floor. Device compatibility beyond that floor is not exhaustively tested. |
+| Optional pause effects | Black-and-white and blur while paused are off by default and need Android 12 (API 31) or newer; on older devices they do nothing. |
+| Episode cast while paused | Uses the free TVMaze public API ([tvmaze.com](https://www.tvmaze.com)) - no account or key. Cast data is used under [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/) and combined with your server data. |
 | Server | A Jellyfin server you can reach from the TV. The oldest server version the app fully supports has not been verified. Some features need a specific server version and hide themselves when the server doesn't have it: Quick Connect sign-in needs Jellyfin 10.7 or newer ([10.7.0 release notes](https://github.com/jellyfin/jellyfin/releases/tag/v10.7.0)), and Skip Intro needs Media Segments, added in Jellyfin 10.10 ([10.10 release post](https://jellyfin.org/posts/jellyfin-release-10.10.0/)). |
 
 ## Install
