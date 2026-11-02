@@ -17,3 +17,14 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
+
+## TVMaze API (season episode guest credits)
+
+- Project: https://www.tvmaze.com / API docs: https://www.tvmaze.com/api
+- Data license: CC BY-SA 4.0 (https://creativecommons.org/licenses/by-sa/4.0/)
+- Why it is here: some seasons carry no cast on the Jellyfin server because the
+  metadata provider splits the season into its own entry (Jury Duty season 2 =
+  TVMaze's separate "Jury Duty Presents: Company Retreat"). When a season is
+  verified episode-by-episode (number + title + air date), the season Cast row
+  can show that season's TVMaze guest credits. Free public API, no account or
+  key. Called server-side by src/server.js; credited in Settings.

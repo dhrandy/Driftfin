@@ -70,6 +70,8 @@ const DEFAULT_SETTINGS = {
   searchRecommendations: true,
   showWatchlist: true,
   continueWatchingPosters: false,
+  // TV "Episode cast from TVMaze" parity (TvmazeCast.kt): verified season guest credits, no key.
+  tvmazeEpisodeCast: true,
   posterSize: 'Medium',
   // Player track preferences (TV AppSettings.kt: English audio, subtitles off).
   audioLanguage: 'eng',
@@ -422,6 +424,147 @@ const MIME = {
   '.js': 'text/javascript; charset=utf-8', '.json': 'application/json',
   '.png': 'image/png', '.jpg': 'image/jpeg', '.svg': 'image/svg+xml', '.ico': 'image/x-icon',
 };
+// ---- TVMaze verified season cast (TV TvmazeCast.kt parity) ----
+// Some seasons carry no Actor People on the Jellyfin server because the provider splits
+// the season into its own entry (Jury Duty season 2 = TVMaze's separate
+// "Jury Duty Presents: Company Retreat"). This resolves THAT season on TVMaze - never by
+// provider id and never by name alone: a candidate show's season must match every Jellyfin
+// episode on number + title + air date. Only then are that season's episode guest credits
+// served. No verified match, no enrichment. TVMaze's show-level regulars are never fetched:
+// they are not the season's episode credits.
+//
+// TVMaze is a free public API: no account, no key (https://www.tvmaze.com/api; data
+// CC BY-SA 4.0, credit + link shown in Settings). Rate limit is at least 20 calls per
+// 10 seconds per IP; a season costs 1 search + up to 5 episode lists + one guest-cast
+// call per verified episode, all cached for hours.
+const TVMAZE_BASE = (process.env.TVMAZE_BASE_URL || 'https://api.tvmaze.com').replace(/\/+$/, '');
+const TVMAZE_UA = 'Driftfin (github.com/dhrandy/Driftfin)';
+const TVMAZE_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
+const TVMAZE_MAX_EPISODES = 50; // a sane bound on guest-cast calls per verified season
+const TVMAZE_RESOLUTION_DEADLINE_MS = 60000; // whole-resolution cap: 1 search + <=5 lists + <=50 guest calls
+// Authenticated-abuse bounds: a season lookup costs real outbound calls, so resolutions
+// are capped globally and per session, and the cache is size-bounded (oldest evicted).
+const TVMAZE_CACHE_MAX = 500;
+const TVMAZE_MAX_CONCURRENT = 3;
+const TVMAZE_SESSION_WINDOW_MS = 60000;
+const TVMAZE_SESSION_MAX_RESOLUTIONS = 12;
+const tvmazeSeasonCache = new Map();    // key -> { ts, people } (insertion order = eviction order)
+const tvmazeSeasonInflight = new Map(); // key -> Promise (one resolution per season at a time)
+const tvmazeSessionLog = new Map();     // sessionKey -> number[] recent resolution start times
+function tvmazeSessionAllowed(sessionKey) {
+  const now = Date.now();
+  const log = (tvmazeSessionLog.get(sessionKey) || []).filter((t) => now - t < TVMAZE_SESSION_WINDOW_MS);
+  if (log.length >= TVMAZE_SESSION_MAX_RESOLUTIONS) { tvmazeSessionLog.set(sessionKey, log); return false; }
+  log.push(now); tvmazeSessionLog.set(sessionKey, log);
+  if (tvmazeSessionLog.size > 1000) tvmazeSessionLog.delete(tvmazeSessionLog.keys().next().value);
+  return true;
+}
+function tvmazeCacheSet(key, people) {
+  if (tvmazeSeasonCache.size >= TVMAZE_CACHE_MAX) tvmazeSeasonCache.delete(tvmazeSeasonCache.keys().next().value);
+  tvmazeSeasonCache.set(key, { ts: Date.now(), people });
+}
+
+async function tvmazeFetch(pathname) {
+  const opts = { headers: { 'User-Agent': TVMAZE_UA, Accept: 'application/json' }, signal: AbortSignal.timeout(15000) };
+  let res = await fetch(TVMAZE_BASE + pathname, opts).catch(() => null);
+  if (res && res.status === 429) { // one bounded retry on rate-limit; everything else fails closed
+    await new Promise((r) => setTimeout(r, 1500));
+    res = await fetch(TVMAZE_BASE + pathname, opts).catch(() => null);
+  }
+  if (!res || !res.ok) return null;
+  return res.json().catch(() => null);
+}
+
+function tvmazeNormalizeTitle(str) {
+  // "&" and "and" are the same word in episode titles ("Mergers & Acquisitions" ==
+  // "Mergers and Acquisitions"): normalize before stripping punctuation.
+  return String(str || '').toLowerCase().replace(/&/g, 'and').replace(/[^\p{L}\p{N}]/gu, '');
+}
+function tvmazeSameAirDate(jellyfinPremiereDate, tvmazeAirDate) {
+  const j = String(jellyfinPremiereDate || '').slice(0, 10);
+  const t = String(tvmazeAirDate || '').slice(0, 10);
+  return j !== '' && t !== '' && j === t;
+}
+// Strict, extras-aware fingerprint: EVERY TVMaze episode must map onto EXACTLY ONE server
+// episode with the same episode number, the same normalized title, and the same air date
+// (non-blank on both sides). Server items beyond that - extras like behind-the-scenes
+// rows - are tolerated: they match nothing. Any TVMaze episode left unmatched (a middle
+// disagreement, a missing date, a duplicate server row) fails the whole season. A
+// title-only coincidence can never pass.
+function tvmazeFingerprintMatches(jellyfinEpisodes, tvmazeEpisodes) {
+  if (!jellyfinEpisodes.length || !tvmazeEpisodes.length) return false;
+  if (tvmazeEpisodes.length > jellyfinEpisodes.length) return false;
+  for (const t of tvmazeEpisodes) {
+    const matches = jellyfinEpisodes.filter((j) =>
+      j.IndexNumber != null && j.IndexNumber === t.number &&
+      tvmazeNormalizeTitle(j.Name) === tvmazeNormalizeTitle(t.name) &&
+      tvmazeSameAirDate(j.PremiereDate, t.airdate));
+    if (matches.length !== 1) return false;
+  }
+  return true;
+}
+
+// The verified season's episode guest credits, deduped by TVMaze person id, in episode
+// order - or [] when no season can be verified. A credit with a missing or non-positive
+// person id is rejected: it must never collapse two id-less credits into one.
+async function tvmazeSeasonCast(session, seriesId, seasonId) {
+  const deadline = Date.now() + TVMAZE_RESOLUTION_DEADLINE_MS;
+  const expired = () => Date.now() > deadline;
+  const epsRes = await jellyfinRequest(session, `Shows/${seriesId}/Episodes?userId=${encodeURIComponent(session.userId)}&seasonId=${encodeURIComponent(seasonId)}&fields=PremiereDate&limit=2000`, 'GET');
+  if (epsRes.status !== 200) return [];
+  let items = [];
+  try { items = JSON.parse(epsRes.body.toString('utf8')).Items || []; } catch { return []; }
+  if (!items.length) return [];
+  const seriesName = items[0] && items[0].SeriesName;
+  if (!seriesName) return [];
+  const hits = await tvmazeFetch('/search/shows?q=' + encodeURIComponent(seriesName));
+  if (!Array.isArray(hits)) return [];
+  const candidates = []; const seenShows = new Set();
+  for (const h of hits) {
+    const show = h && h.show;
+    if (show && show.id > 0 && !seenShows.has(show.id)) { seenShows.add(show.id); candidates.push(show); }
+    if (candidates.length >= 5) break;
+  }
+  let match = null; // the one verified candidate season's episodes
+  for (const candidate of candidates) {
+    if (expired()) return [];
+    const all = await tvmazeFetch(`/shows/${candidate.id}/episodes`);
+    if (!Array.isArray(all)) continue;
+    const bySeason = new Map();
+    for (const e of all) {
+      if (!e || typeof e.number !== 'number' || e.number < 1) continue;
+      if (!bySeason.has(e.season)) bySeason.set(e.season, []);
+      bySeason.get(e.season).push(e);
+    }
+    for (const seasonEpisodes of bySeason.values()) {
+      // Server may carry MORE items than the real season (extras); never fewer.
+      if (!seasonEpisodes.length || seasonEpisodes.length > items.length) continue;
+      if (!tvmazeFingerprintMatches(items, seasonEpisodes)) continue;
+      if (match) return []; // ambiguous: two candidate seasons both match - stay hidden
+      match = seasonEpisodes;
+    }
+  }
+  if (!match) return [];
+  const people = []; const seenPeople = new Set();
+  for (const ep of match.slice(0, TVMAZE_MAX_EPISODES)) {
+    if (expired()) return [];
+    const credits = await tvmazeFetch(`/episodes/${ep.id}/guestcast`);
+    if (!Array.isArray(credits)) continue;
+    for (const c of credits) {
+      const person = c && c.person;
+      if (!person || !(person.id > 0) || !String(person.name || '').trim() || seenPeople.has(person.id)) continue;
+      seenPeople.add(person.id);
+      people.push({
+        Name: person.name,
+        Role: (c.character && c.character.name) || '',
+        RemoteImageUrl: (person.image && person.image.medium) || '',
+        ProviderIds: { Tvmaze: String(person.id) },
+      });
+    }
+  }
+  return people;
+}
+
 function serveStatic(req, res, pathname) {
   let filePath = pathname === '/' ? path.join(PUBLIC_DIR, 'index.html') : path.join(PUBLIC_DIR, pathname);
   const root = path.resolve(PUBLIC_DIR);
@@ -659,6 +802,33 @@ const server = http.createServer(async (req, res) => {
         return sendJson(res, 200, { ok: true });
       }
       return sendJson(res, 405, { error: 'method_not_allowed' });
+    }
+    // TVMaze verified season guest credits (TV TvmazeCast.kt parity), display-only
+    // enrichment for the season Cast row. Never a substitute for server credits, never
+    // another season's cast. Fails closed to an empty list on any error.
+    if (pathname === '/api/tvmaze/season-cast' && req.method === 'GET') {
+      if (!session || !sessionAllowedForTarget(session)) return sendJson(res, 401, { error: 'not_signed_in' });
+      const seriesId = String(url.searchParams.get('seriesId') || '');
+      const seasonId = String(url.searchParams.get('seasonId') || '');
+      // Jellyfin ids are 32-hex; the charset check (not the exact length) is what keeps
+      // these out of the upstream path.
+      if (!/^[A-Za-z0-9-]{1,64}$/.test(seriesId) || !/^[A-Za-z0-9-]{1,64}$/.test(seasonId)) return sendJson(res, 400, { error: 'bad_id' });
+      const allSettings = readJsonFile(path.join(DATA_DIR, 'settings.json'), {});
+      if ({ ...DEFAULT_SETTINGS, ...(allSettings[session.userId] || {}) }.tvmazeEpisodeCast === false) return sendJson(res, 200, { people: [] });
+      const cacheKey = `${session.server}#${session.userId}#${seriesId}|${seasonId}`;
+      const hit = tvmazeSeasonCache.get(cacheKey);
+      if (hit && Date.now() - hit.ts < TVMAZE_CACHE_TTL_MS) return sendJson(res, 200, { people: hit.people });
+      if (!tvmazeSeasonInflight.has(cacheKey)) {
+        // Over the caps: fail closed WITHOUT caching, so a later calm request can still resolve.
+        if (tvmazeSeasonInflight.size >= TVMAZE_MAX_CONCURRENT || !tvmazeSessionAllowed(`${session.server}#${session.userId}`)) {
+          return sendJson(res, 200, { people: [] });
+        }
+        tvmazeSeasonInflight.set(cacheKey, tvmazeSeasonCast(session, seriesId, seasonId).catch(() => []));
+      }
+      const people = await tvmazeSeasonInflight.get(cacheKey);
+      tvmazeSeasonInflight.delete(cacheKey);
+      tvmazeCacheSet(cacheKey, people);
+      return sendJson(res, 200, { people });
     }
     if (pathname.startsWith('/api/jellyfin/')) {
       if (!session || !sessionAllowedForTarget(session)) return sendJson(res, 401, { error: 'not_signed_in' });

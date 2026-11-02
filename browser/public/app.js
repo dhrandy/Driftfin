@@ -599,7 +599,7 @@ async function goDetails(id, keepSeasonId) {
     const uid = state.userId;
     const item = await jf(`Items/${id}?userId=${uid}`);
     state.currentItem = item;
-    state.allEpisodes = []; state.seasons = []; state.playTarget = item; state.selectedSeasonId = null;
+    state.allEpisodes = []; state.seasons = []; state.playTarget = item; state.selectedSeasonId = null; state.seasonCastRemote = {};
     state.detailTrailer = null; state.detailSimilar = []; state.fourKEpisodeIds = new Set();
     if (item.Type === 'Movie' || item.Type === 'Series') {
       try { state.watchlistIds = ((await api('/api/watchlist')) || {}).ids || []; } catch { state.watchlistIds = []; }
@@ -621,10 +621,50 @@ async function goDetails(id, keepSeasonId) {
     }
     renderDetails();
     fillDetailExtras(item, seriesId);
+    if (seriesId && state.selectedSeasonId) loadSeasonCastRemote(item, seriesId, state.selectedSeasonId);
   } catch (e) {
     el.innerHTML = `<p class="error">Could not load details from Jellyfin: ${esc(e.message)}</p>`;
   }
 }
+// TV TvmazeCast/PauseCast parity helpers for the season Cast row.
+// "&" == "and", punctuation-insensitive, unicode-aware.
+function normalizePersonKey(str) {
+  return String(str || '').toLowerCase().replace(/&/g, 'and').replace(/[^\p{L}\p{N}]/gu, '');
+}
+// TV PauseCast display-dedup parity: local server credits stay first and untouched; a
+// TVMaze person is dropped only when a local credit proves the same person (TVMaze
+// provider id) or carries the same normalized name AND the same normalized non-blank
+// role. A name match with a different or blank role is ambiguous: both stay.
+function mergeCastPeople(local, remote) {
+  const localTvmazeIds = new Set((local || []).map((p) => p.ProviderIds && p.ProviderIds.Tvmaze).filter(Boolean));
+  const extras = (remote || []).filter((g) => {
+    if (g.ProviderIds && g.ProviderIds.Tvmaze && localTvmazeIds.has(g.ProviderIds.Tvmaze)) return false;
+    const gRole = normalizePersonKey(g.Role);
+    if (!gRole) return true;
+    const gName = normalizePersonKey(g.Name);
+    return !(local || []).some((l) => normalizePersonKey(l.Name) === gName && normalizePersonKey(l.Role) === gRole);
+  }).map((g) => ({ ...g, Remote: true }));
+  return (local || []).concat(extras);
+}
+// Fills the season Cast row from TVMaze when the server has no actors for that season
+// (and merges guest credits when it has some). The server endpoint verifies the season
+// episode-by-episode before returning anyone. Display-only people: no Jellyfin person
+// page exists for them. Fetched once per season per details page; re-renders only when
+// the page still shows the same item and season.
+async function loadSeasonCastRemote(item, seriesId, seasonId) {
+  if (!seriesId || !seasonId) return;
+  if (state.settings && state.settings.tvmazeEpisodeCast === false) return;
+  state.seasonCastRemote = state.seasonCastRemote || {};
+  if (seasonId in state.seasonCastRemote) return;
+  state.seasonCastRemote[seasonId] = [];
+  try {
+    const r = await api(`/api/tvmaze/season-cast?seriesId=${encodeURIComponent(seriesId)}&seasonId=${encodeURIComponent(seasonId)}`);
+    state.seasonCastRemote[seasonId] = (r && r.people) || [];
+  } catch { state.seasonCastRemote[seasonId] = []; }
+  if (state.currentItem && state.currentItem.Id === item.Id && state.selectedSeasonId === seasonId &&
+      state.seasonCastRemote[seasonId].length && !$('view-details').hidden) renderDetails();
+}
+
 function renderDetails() {
   const el = $('details');
   const item = state.currentItem;
@@ -680,11 +720,23 @@ function renderDetails() {
     return out;
   };
   const seasonEps = hasSeasons ? state.allEpisodes.filter((ep) => ep.SeasonId === state.selectedSeasonId) : [];
-  const cast = hasSeasons
-    ? dedupPeople((seasonEps.length ? seasonEps : state.allEpisodes).flatMap((ep) => actorsOf(ep.People))).slice(0, 15)
-    : dedupPeople([...actorsOf(item.People), ...(target && target !== item ? actorsOf(target.People) : [])]).slice(0, 15);
+  const localCast = hasSeasons
+    ? dedupPeople((seasonEps.length ? seasonEps : state.allEpisodes).flatMap((ep) => actorsOf(ep.People)))
+    : dedupPeople([...actorsOf(item.People), ...(target && target !== item ? actorsOf(target.People) : [])]);
+  // TVMaze verified-season guest credits merge after local credits (TV PauseCast parity);
+  // an empty or unverified lookup changes nothing, and series-wide People are still never
+  // substituted.
+  const remoteCast = hasSeasons && state.seasonCastRemote ? state.seasonCastRemote[state.selectedSeasonId] || [] : [];
+  const cast = mergeCastPeople(localCast, remoteCast).slice(0, 15);
+  // TVMaze-enriched people are display-only (no Jellyfin person id, so no actor page),
+  // matching the TV guest cards. They render as spans, not buttons.
   const castHtml = cast.length
-    ? `<h2>Cast</h2><div class="cast-row">${cast.map((p) => `
+    ? `<h2>Cast</h2><div class="cast-row">${cast.map((p) => p.Remote ? `
+        <span class="cast-person remote" title="Guest credit via TVMaze">
+          <img src="${esc(p.RemoteImageUrl || '')}" alt="" loading="lazy" onerror="this.src='data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=='">
+          <div class="cast-name">${esc(p.Name || '')}</div>
+          ${p.Role ? `<div class="cast-role">${esc(p.Role)}</div>` : ''}
+        </span>` : `
         <button type="button" class="cast-person" data-person="${esc(p.Id)}">
           <img src="/api/jellyfin/Items/${esc(p.Id)}/Images/Primary?maxWidth=220&quality=90" alt="" loading="lazy" onerror="this.src='data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=='">
           <div class="cast-name">${esc(p.Name || '')}</div>
@@ -717,7 +769,7 @@ function renderDetails() {
     ${castHtml}
     ${seasonsHtml}
     ${similarHtml}`;
-  el.querySelectorAll('.cast-person').forEach((btn) => btn.addEventListener('click', () => { location.hash = '#/actor?id=' + encodeURIComponent(btn.dataset.person); }));
+  el.querySelectorAll('.cast-person[data-person]').forEach((btn) => btn.addEventListener('click', () => { location.hash = '#/actor?id=' + encodeURIComponent(btn.dataset.person); }));
   bindCards(el);
   $('detailPlay').addEventListener('click', () => { location.hash = '#/player?id=' + encodeURIComponent(target.Id); });
   const fromStart = $('detailFromStart');
@@ -753,6 +805,8 @@ function renderDetails() {
     // Season switching only changes the list; Play/Resume keeps pointing at the series target.
     state.selectedSeasonId = btn.dataset.season;
     renderDetails();
+    const chipSeriesId = item.Type === 'Series' ? item.Id : item.SeriesId;
+    loadSeasonCastRemote(item, chipSeriesId, state.selectedSeasonId);
   }));
   el.querySelectorAll('.episode-play').forEach((btn) => btn.addEventListener('click', (e) => { e.stopPropagation(); location.hash = '#/player?id=' + encodeURIComponent(btn.dataset.id); }));
   el.querySelectorAll('.episode-watched').forEach((btn) => btn.addEventListener('click', async (e) => {
