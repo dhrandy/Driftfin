@@ -24,7 +24,18 @@ const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&':
 
 async function api(path, options) {
   const res = await fetch(path, { credentials: 'same-origin', ...(options || {}) });
-  if (res.status === 401) { showView('signin'); throw new Error('not_signed_in'); }
+  if (res.status === 401) {
+    // Token is dead (e.g. Jellyfin revoked it after a same-device-id login
+    // elsewhere): tear down LOCAL playback/timers once so the 10s progress
+    // loop does not 401 forever. No Stopped report - it would 401 too, and we
+    // must not loop. Sign-out is the user's choice, never automatic here.
+    if (!state.unauthorized401) {
+      state.unauthorized401 = true;
+      try { stopPlayback(false); } catch {}
+      showView('signin');
+    }
+    throw new Error('not_signed_in');
+  }
   if (!res.ok) {
     let detail = '';
     try { const j = await res.json(); detail = j.error || j.detail || ''; } catch {}
@@ -288,6 +299,7 @@ function applyPosterSize() {
   document.documentElement.style.setProperty('--card-w', POSTER_WIDTHS[size] || POSTER_WIDTHS.Medium);
 }
 async function ensureSignedIn() {
+  state.unauthorized401 = false;
   if (state.userId) return true;
   try {
     const me = await api('/api/auth/me');

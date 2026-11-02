@@ -54,6 +54,20 @@ const PUBLIC_DIR = process.env.PUBLIC_DIR || path.join(__dirname, '..', 'public'
 const COOKIE_SECURE = String(process.env.COOKIE_SECURE || '').toLowerCase() === 'true';
 const VERSION = '0.1.0';
 const CLIENT = 'MediaBrowser Client="Driftfin Browser", Device="Browser", DeviceId="driftfin-browser", Version="0.1.0"';
+// Jellyfin revokes every existing token for a (user, DeviceId) pair on each new
+// login (SessionManager.GetAuthorizationToken: "Logout any existing sessions for
+// the user on this device"), so one fixed DeviceId lets any sign-in kick the
+// user's other devices off. Every sign-in below mints its own random DeviceId,
+// stored in the session record; sessions saved before the field existed fall
+// back to the legacy fixed ID so their tokens are not silently broken.
+const LEGACY_DEVICE_ID = 'driftfin-browser';
+function newDeviceId() { return 'driftfin-' + crypto.randomBytes(12).toString('hex'); }
+function clientHeader(deviceId) {
+  return 'MediaBrowser Client="Driftfin Browser", Device="Browser", DeviceId="' + (deviceId || LEGACY_DEVICE_ID) + '", Version="0.1.0"';
+}
+function authHeader(session) {
+  return clientHeader(session.deviceId || LEGACY_DEVICE_ID) + ', Token="' + session.token + '"';
+}
 
 const DEFAULT_SETTINGS = {
   titleLogos: true,
@@ -368,7 +382,7 @@ async function jellyfinRequest(session, targetPath, method, body, contentType) {
   const addrs = await pinnedAddrsFor(session, hostname);
   if (!addrs.length) throw new Error('no allowed upstream address for Jellyfin server');
   // TV Session.kt uses the standard Authorization header (Jellyfin 12 default).
-  const headers = { 'Authorization': `${CLIENT}, Token="${session.token}"` };
+  const headers = { 'Authorization': authHeader(session) };
   if (body && body.length) headers['Content-Type'] = contentType || 'application/json';
   let lastErr = null;
   for (const addr of addrs) {
@@ -378,8 +392,8 @@ async function jellyfinRequest(session, targetPath, method, body, contentType) {
   }
   throw lastErr;
 }
-async function jellyfinUnauthenticatedGet(target, targetPath) {
-  const headers = { 'Authorization': CLIENT };
+async function jellyfinUnauthenticatedGet(target, targetPath, deviceId) {
+  const headers = { 'Authorization': clientHeader(deviceId) };
   let lastErr = null;
   for (const addr of target.addrs) {
     try {
@@ -423,9 +437,9 @@ function pruneQuickConnect() {
   for (const [id, p] of quickConnectPending) { if (p.expiresAt <= now) quickConnectPending.delete(id); }
 }
 
-async function jellyfinUnauthenticated(target, targetPath, body) {
+async function jellyfinUnauthenticated(target, targetPath, body, deviceId) {
   const payload = Buffer.from(JSON.stringify(body), 'utf8');
-  const headers = { 'Authorization': CLIENT, 'Content-Type': 'application/json', 'Content-Length': payload.length };
+  const headers = { 'Authorization': clientHeader(deviceId), 'Content-Type': 'application/json', 'Content-Length': payload.length };
   let lastErr = null;
   for (const addr of target.addrs) {
     try {
@@ -784,7 +798,8 @@ const server = http.createServer(async (req, res) => {
       loginIpInflight.set(clientIp, (loginIpInflight.get(clientIp) || 0) + 1);
       try {
       let result;
-      try { result = await jellyfinUnauthenticated(target, 'Users/AuthenticateByName', { Username: username, Pw: password }); }
+      const sessionDeviceId = newDeviceId();
+      try { result = await jellyfinUnauthenticated(target, 'Users/AuthenticateByName', { Username: username, Pw: password }, sessionDeviceId); }
       catch (e) { console.error('Driftfin login unreachable', effectiveServer, String(e.message || e)); noteLoginFail(clientIp, loginPair); return sendJson(res, 502, { error: 'jellyfin_unreachable', detail: String(e.message || e).slice(0, 500) }); }
       let parsed = {};
       try { parsed = JSON.parse(result.body.toString('utf8')); } catch {}
@@ -797,6 +812,7 @@ const server = http.createServer(async (req, res) => {
       const session = {
         id: crypto.randomBytes(32).toString('hex'),
         server: effectiveServer, token: parsed.AccessToken, pinnedAddrs: target.addrs,
+        deviceId: sessionDeviceId,
         userId: parsed.User.Id, username: parsed.User.Name || username,
         createdAt: new Date().toISOString(),
       };
@@ -832,7 +848,7 @@ const server = http.createServer(async (req, res) => {
       }
       const id = crypto.randomBytes(16).toString('hex');
       const browserKey = crypto.randomBytes(24).toString('hex');
-      quickConnectPending.set(id, { secret: parsed.Secret, server: effectiveServer, target, clientIp: qcIp, browserKey, expiresAt: Date.now() + QUICKCONNECT_TTL_MS });
+      quickConnectPending.set(id, { secret: parsed.Secret, server: effectiveServer, target, clientIp: qcIp, browserKey, deviceId: newDeviceId(), expiresAt: Date.now() + QUICKCONNECT_TTL_MS });
       return sendJson(res, 200, { id, code: parsed.Code, expiresInSeconds: QUICKCONNECT_TTL_MS / 1000 }, { 'Set-Cookie': qcCookieHeader(browserKey) });
     }
     if (pathname === '/api/quickconnect/status' && req.method === 'GET') {
@@ -844,13 +860,13 @@ const server = http.createServer(async (req, res) => {
         return sendJson(res, 200, { status: 'expired' });
       }
       let chk;
-      try { chk = await jellyfinUnauthenticatedGet(pending.target, 'QuickConnect/Connect?secret=' + encodeURIComponent(pending.secret)); }
+      try { chk = await jellyfinUnauthenticatedGet(pending.target, 'QuickConnect/Connect?secret=' + encodeURIComponent(pending.secret), pending.deviceId); }
       catch { return sendJson(res, 200, { status: 'pending' }); }
       let state = {};
       try { state = JSON.parse(chk.body.toString('utf8')); } catch {}
       if (!state.Authenticated) return sendJson(res, 200, { status: 'pending' });
       let auth;
-      try { auth = await jellyfinUnauthenticated(pending.target, 'Users/AuthenticateWithQuickConnect', { Secret: pending.secret }); }
+      try { auth = await jellyfinUnauthenticated(pending.target, 'Users/AuthenticateWithQuickConnect', { Secret: pending.secret }, pending.deviceId); }
       catch (e) { return sendJson(res, 502, { error: 'jellyfin_unreachable', detail: String(e.message || e).slice(0, 500) }); }
       let body = {};
       try { body = JSON.parse(auth.body.toString('utf8')); } catch {}
@@ -861,6 +877,7 @@ const server = http.createServer(async (req, res) => {
       const session = {
         id: crypto.randomBytes(32).toString('hex'),
         server: pending.server, token: body.AccessToken, pinnedAddrs: pending.target.addrs,
+        deviceId: pending.deviceId,
         userId: body.User.Id, username: body.User.Name || 'Jellyfin user',
         createdAt: new Date().toISOString(),
       };
@@ -1070,7 +1087,7 @@ const server = http.createServer(async (req, res) => {
       const port = parseInt(base.port || '', 10) || (tls ? 443 : 80);
       const addrs = await pinnedAddrsFor(session, hostname);
       if (!addrs.length) return sendJson(res, 502, { error: 'jellyfin_unreachable' });
-      const headers = { 'Authorization': `${CLIENT}, Token="${session.token}"` };
+      const headers = { 'Authorization': authHeader(session) };
       if (req.headers.range) headers.Range = req.headers.range;
       let streamed = false, lastErr = null;
       for (const addr of addrs) {
