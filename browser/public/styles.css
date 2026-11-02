@@ -98,6 +98,8 @@ main { padding: 0 24px 96px; max-width: 1400px; margin: 0 auto; }
 #fsBtn.overlay-btn { top: 10px; right: 10px; font-size: 18px; line-height: 1; }
 .videowrap:fullscreen { background: #000; display: flex; align-items: center; border-radius: 0; }
 .videowrap:fullscreen #player { width: 100%; height: 100%; aspect-ratio: auto; border-radius: 0; }
+/* Element fullscreen keeps its own chrome: the windowed selector row and stream note stay out of it. */
+.videowrap:fullscreen .player-controls, .videowrap:fullscreen #playerNote { display: none; }
 #player { width: 100%; aspect-ratio: 16/9; background: #000; border-radius: 12px; }
 .player-controls { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 12px; }
 .up-next { background: var(--card); border-radius: 10px; padding: 12px; margin-top: 12px; }
@@ -288,8 +290,8 @@ body.signed-out .logo { font-size: 28px; }
 .user-avatar { width: 30px; height: 30px; border-radius: 50%; vertical-align: middle; margin-right: 6px; }
 
 /* Idle chrome fade: controls reveal on pointer activity and fade while playing. */
-#playerBack, #fsBtn, #playerBar, #skipIntroBtn { transition: opacity .4s; }
-.videowrap.hide-chrome #playerBack, .videowrap.hide-chrome #fsBtn, .videowrap.hide-chrome #playerBar, .videowrap.hide-chrome #skipIntroBtn { opacity: 0; pointer-events: none; }
+#playerBack, #fsBtn, #playerBar, #skipIntroBtn, .player-controls, #playerNote { transition: opacity .4s; }
+.videowrap.hide-chrome #playerBack, .videowrap.hide-chrome #fsBtn, .videowrap.hide-chrome #playerBar, .videowrap.hide-chrome #skipIntroBtn, .videowrap.hide-chrome .player-controls, .videowrap.hide-chrome #playerNote, .videowrap.hide-chrome .player-controls label { opacity: 0; pointer-events: none; }
 .videowrap.hide-chrome, .videowrap.hide-chrome #player { cursor: none; }
 
 /* Touch 10-second skips: only where a coarse pointer makes arrow keys unavailable. */
@@ -339,32 +341,41 @@ body:has(#view-player:not([hidden])) #view-player { height: 100dvh; }
 body:has(#view-player:not([hidden])) #playerWrap:not(.landscape-fill) { max-width: none; margin: 0; width: 100%; height: 100%; display: flex; flex-direction: column; background: #000; }
 body:has(#view-player:not([hidden])) #playerWrap:not(.landscape-fill) .videowrap { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; }
 body:has(#view-player:not([hidden])) #playerWrap:not(.landscape-fill) #player { width: 100%; height: 100%; aspect-ratio: auto; object-fit: contain; border-radius: 0; }
-body:has(#view-player:not([hidden])) #playerWrap .player-controls { margin: 0; padding: 6px 12px; gap: 12px; background: #000; justify-content: center; }
-body:has(#view-player:not([hidden])) #playerWrap #playerNote { margin: 0; padding: 0 12px 6px; text-align: center; font-size: 11px; }
+/* Theater bottom stack: the transport bar owns the very bottom edge. The
+   track/speed selectors and the stream note overlay the video just above it
+   and fade with the rest of the chrome while playing. The row is one slim
+   non-wrapping line at every width (scrolls sideways only when it must),
+   centered when it fits, click-through except on the labels so video
+   tap-to-pause keeps working, and clear of the Skip Intro corner. */
+body:has(#view-player:not([hidden])) #playerWrap .player-controls { position: absolute; left: 0; right: 0; bottom: 82px; z-index: 3; margin: 0 auto; padding: 6px 10px; gap: 10px; background: none; flex-direction: row; flex-wrap: nowrap; overflow-x: auto; align-items: center; justify-content: safe center; -webkit-overflow-scrolling: touch; pointer-events: none; }
+body:has(#view-player:not([hidden])) #playerWrap .player-controls label { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 6px; font-size: 13px; white-space: nowrap; pointer-events: auto; text-shadow: 0 1px 4px rgba(0,0,0,.8); }
+body:has(#view-player:not([hidden])) #playerWrap .player-controls select { width: auto; max-width: none; padding: 6px 8px; font-size: 13px; }
+body:has(#view-player:not([hidden])) #playerWrap #playerNote { position: absolute; left: 0; right: 0; bottom: 64px; z-index: 3; margin: 0; padding: 0 12px; text-align: center; font-size: 11px; pointer-events: none; text-shadow: 0 1px 4px rgba(0,0,0,.8); }
+@media (min-width: 561px) {
+  body:has(#view-player:not([hidden])) #playerWrap .player-controls { max-width: calc(100% - 48px); }
+  /* While Skip Intro is up the row narrows so its right corner stays clear,
+     the same way the cast strip reserves that corner. */
+  body:has(#view-player:not([hidden])) .videowrap:has(#skipIntroBtn:not([hidden])) .player-controls { max-width: calc(100% - 320px); }
+}
 body:has(#view-player:not([hidden])) #playerWrap .up-next { margin: 0 12px 8px; }
 
-/* Theater on narrow screens: the transport bar becomes a two-row grid at
-   <=560px, so the full-size pause cast strip must clear it. */
+/* Theater: with the selectors and note overlaid above the bar, the pause cast
+   strip rises to clear the whole bottom stack at every width. */
+body:has(#view-player:not([hidden])) #pauseInfo:not(.compact):not(.tiny) .pause-cast { bottom: 134px; }
+body:has(#view-player:not([hidden])) #pauseInfo.compact .pause-cast { bottom: 128px; }
+/* Theater at <=560px: the two-row grid bar is taller, so the overlaid
+   selectors, note, cast strip and Skip Intro all rise one more notch. */
 @media (max-width: 560px) {
-  body:has(#view-player:not([hidden])) #pauseInfo:not(.compact):not(.tiny) .pause-cast { bottom: 118px; }
-  body:has(#view-player:not([hidden])) #pauseInfo.compact .pause-cast { bottom: 112px; }
-}
-/* Theater: track/speed selectors stay one slim scrollable row on narrow
-   screens instead of stacking full-width rows. Labels and tap targets kept. */
-@media (max-width: 700px) {
-  body:has(#view-player:not([hidden])) #playerWrap .player-controls { flex-direction: row; flex-wrap: nowrap; overflow-x: auto; align-items: center; gap: 10px; padding: 6px 10px; -webkit-overflow-scrolling: touch; }
-  body:has(#view-player:not([hidden])) #playerWrap .player-controls label { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 6px; font-size: 13px; white-space: nowrap; }
-  body:has(#view-player:not([hidden])) #playerWrap .player-controls select { width: auto; max-width: none; padding: 6px 8px; font-size: 13px; }
+  body:has(#view-player:not([hidden])) #playerWrap .player-controls { bottom: 130px; }
+  body:has(#view-player:not([hidden])) #playerWrap #playerNote { bottom: 112px; }
+  body:has(#view-player:not([hidden])) #skipIntroBtn { bottom: 180px; }
+  body:has(#view-player:not([hidden])) #pauseInfo:not(.compact):not(.tiny) .pause-cast { bottom: 180px; }
+  body:has(#view-player:not([hidden])) #pauseInfo.compact .pause-cast { bottom: 174px; }
 }
 
 /* Narrow transport bar is two rows: Skip Intro clears it too. */
 @media (max-width: 560px) {
   #skipIntroBtn { bottom: 112px; }
-}
-/* Theater selector row: center when it fits, never clip the start when it
-   overflows (plain center + overflow makes the first label unreachable). */
-@media (max-width: 700px) {
-  body:has(#view-player:not([hidden])) #playerWrap .player-controls { justify-content: safe center; }
 }
 
 /* Paused during the intro: the cast strip reserves its right end so Skip Intro

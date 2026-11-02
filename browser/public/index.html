@@ -249,27 +249,27 @@
           <div class="pause-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="64" height="64" fill="currentColor" focusable="false"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg></div>
           <div id="pauseCast" class="pause-cast"></div>
         </div>
+        <div class="player-controls">
+          <label>Audio
+            <select id="audioSelect"></select>
+          </label>
+          <label>Subtitles
+            <select id="subtitleSelect"></select>
+          </label>
+          <label>Speed
+            <select id="speedSelect">
+              <option value="0.5">0.5x</option>
+              <option value="0.75">0.75x</option>
+              <option value="1" selected>1x</option>
+              <option value="1.25">1.25x</option>
+              <option value="1.5">1.5x</option>
+              <option value="2">2x</option>
+            </select>
+          </label>
+        </div>
+        <p id="playerNote" class="muted"></p>
       </div>
       <div id="upNext" class="up-next" hidden></div>
-      <div class="player-controls">
-        <label>Audio
-          <select id="audioSelect"></select>
-        </label>
-        <label>Subtitles
-          <select id="subtitleSelect"></select>
-        </label>
-        <label>Speed
-          <select id="speedSelect">
-            <option value="0.5">0.5x</option>
-            <option value="0.75">0.75x</option>
-            <option value="1" selected>1x</option>
-            <option value="1.25">1.25x</option>
-            <option value="1.5">1.5x</option>
-            <option value="2">2x</option>
-          </select>
-        </label>
-      </div>
-      <p id="playerNote" class="muted"></p>
     </div>
   </section>
 </main>

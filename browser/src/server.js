@@ -52,8 +52,7 @@ const PORT = parseInt(process.env.PORT || '8740', 10);
 const DATA_DIR = process.env.DATA_DIR || '/data';
 const PUBLIC_DIR = process.env.PUBLIC_DIR || path.join(__dirname, '..', 'public');
 const COOKIE_SECURE = String(process.env.COOKIE_SECURE || '').toLowerCase() === 'true';
-const VERSION = '0.1.0';
-const CLIENT = 'MediaBrowser Client="Driftfin Browser", Device="Browser", DeviceId="driftfin-browser", Version="0.1.0"';
+const VERSION = '0.2.0';
 // Jellyfin revokes every existing token for a (user, DeviceId) pair on each new
 // login (SessionManager.GetAuthorizationToken: "Logout any existing sessions for
 // the user on this device"), so one fixed DeviceId lets any sign-in kick the
@@ -63,7 +62,7 @@ const CLIENT = 'MediaBrowser Client="Driftfin Browser", Device="Browser", Device
 const LEGACY_DEVICE_ID = 'driftfin-browser';
 function newDeviceId() { return 'driftfin-' + crypto.randomBytes(12).toString('hex'); }
 function clientHeader(deviceId) {
-  return 'MediaBrowser Client="Driftfin Browser", Device="Browser", DeviceId="' + (deviceId || LEGACY_DEVICE_ID) + '", Version="0.1.0"';
+  return 'MediaBrowser Client="Driftfin Browser", Device="Browser", DeviceId="' + (deviceId || LEGACY_DEVICE_ID) + '", Version="' + VERSION + '"';
 }
 function authHeader(session) {
   return clientHeader(session.deviceId || LEGACY_DEVICE_ID) + ', Token="' + session.token + '"';
