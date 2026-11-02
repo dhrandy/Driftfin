@@ -1,104 +1,80 @@
-# Driftfin Browser v1
+# Driftfin Browser
+
+[![Status: alpha](https://img.shields.io/badge/status-alpha-orange)](https://github.com/dhrandy/Driftfin/releases)
+[![License: proprietary](https://img.shields.io/badge/license-proprietary-blue)](../LICENSE)
+
+**Status: alpha.** Expect rough edges and bugs. The app is exercised
+end to end in automated browser tests against a mock Jellyfin server,
+but real-server and real-device coverage is still limited, and known
+issues are open. Please file issues on the repo.
 
 Self-hosted web app, part of Driftfin. Browser-first, responsive at
 desktop, tablet, and phone. Same feature and behavior direction as
 the TV and phone apps, in a browser.
 
-Design: concept 1 overall layout, concept 2 shorter banner. The hero
-is deliberately not full viewport, so rows start sooner.
-
-Logo: text placeholder only (`DRIFTFIN` in the header). The logo is
-NOT final, a white-fin variation is being explored, and whatever is
-chosen will be the same across TV, phone, and browser. Do not treat
-this placeholder as locked, and do not change any existing TV or
-phone logos.
-
 This app is browser-only. It does not edit, build, or touch any
 TV or phone app code.
 
-## Deploy in Dockhand (the only run path)
+## Install
 
-Deploy with Docker Compose via Dockhand (or any compose runner).
-There is no other run path documented here.
+The app runs as one Docker container that downloads the current code
+from GitHub on first start (pull-on-startup). There is NO published
+image, NO Dockerfile, and NO GitHub Actions build for this app. Any
+Docker host that can run a compose file works. The two documented
+routes below are plain Docker Compose and Dockhand.
 
-This is a pull-on-startup compose: the container downloads the code on startup, there is no published image and no build step.
-There is NO published image, NO Dockerfile, and NO GitHub Actions
-build for this app.
+On the first start only, the container:
 
-1. In Dockhand, create a new app named `driftfin-browser`.
-2. Paste the complete stack below as the stack file.
-3. In the Dockhand Environment tab (not a `.env` file), set the
-   variables in the table below.
-4. Deploy. On the first start only, the container downloads the
-   current Driftfin main tarball from GitHub, unpacks it, copies
-   ONLY `browser/` to `/app`, runs `npm ci --omit=dev`, and starts
-   the server. Later restarts just start the server from the code
-   already saved in `/app`, they do NOT download or rebuild again.
-5. Point your reverse proxy at the host port (8740 by default).
-   The container itself binds `0.0.0.0:8740` inside, and the compose
-   port mapping has no `127.0.0.1` prefix, so the reverse proxy
-   can reach it.
+1. Downloads the current Driftfin main tarball from GitHub.
+2. Unpacks it and copies ONLY `browser/` to `/app`.
+3. Runs `npm ci --omit=dev` (no dependencies yet, so this is fast).
+4. Starts `node src/server.js`.
 
-To update: set `FORCE_UPDATE=true` in the Dockhand Environment
-tab, then recreate the stack. After it updates, set
-`FORCE_UPDATE` back to `false`, so later restarts do not rebuild
-again. A running app does not update itself. Persistent state
-lives in these bind volumes:
+Later restarts just start the server from the code already saved in
+`/app`. They do NOT download or rebuild again.
 
-```
-/DATA/AppData/driftfin-browser:/data
-/DATA/AppData/driftfin-browser-app:/app
+### Option 1: Docker Compose (plain Docker)
+
+1. Save the paste-ready stack below as `docker-compose.yml`.
+2. Create a `.env` file next to it with your values:
+
+```ini
+DRIFTFIN_PORT=8740
+JELLYFIN_URL=
+JELLYFIN_LOCKED=
+TZ=America/New_York
+COOKIE_SECURE=false
+FORCE_UPDATE=false
 ```
 
-The first volume holds `settings.json`, `sessions.json`, and
-`session-secret`. The second holds the app code, so it is only
-downloaded and installed on the first start. The container is
-`read_only: true` with `cap_drop: ALL` and tmpfs `/tmp`, and a
-healthcheck on `GET /api/health`.
+3. `docker compose up -d`. The first start downloads and installs
+   the code, which takes a minute; later starts are instant.
+4. Open `http://your-host:8740`, or point your reverse proxy at that
+   port (see below).
 
-### Environment (Dockhand Environment tab)
+### Option 2: Dockhand
 
-| Variable | Value / default | Notes |
+1. Create a new app named `driftfin-browser`.
+2. Paste the stack below as the stack file.
+3. Set the same variables in the Dockhand Environment tab (Dockhand
+   does not read `.env`). Enter plain values, no `${VAR}` and no
+   `:-` default suffixes.
+4. Deploy.
+
+### Environment
+
+| Variable | Example / default | Notes |
 | --- | --- | --- |
-| `DRIFTFIN_PORT` | `8740` | Host port, default 8740. |
+| `DRIFTFIN_PORT` | `8740` | Host port. |
 | `JELLYFIN_URL` | (blank) | Optional server URL prefill on the sign-in page only. No username, password, or token goes here. |
+| `JELLYFIN_LOCKED` | (blank) | `1` locks sign-in to `JELLYFIN_URL`: the form's server field is ignored and sessions for any other server are rejected. Fails closed if `JELLYFIN_URL` is empty. Leave unset to keep the open form. |
 | `TZ` | `America/New_York` | Timezone. |
 | `COOKIE_SECURE` | `false` | `true` ONLY behind an HTTPS reverse proxy. Use `false` for plain LAN http, or the session cookie will not be sent and sign-in will loop. |
-| `FORCE_UPDATE` | `false` | Set to `true` only when you want to re-download and rebuild from GitHub, then set it back to `false`. |
+| `FORCE_UPDATE` | `false` | Set to `true` only when you want to re-download and rebuild from GitHub (see Updating). |
 
 ### Paste-ready stack
 
 ```yaml
-# Driftfin Browser - Dockhand / CasaOS compose.
-#
-# Pull-on-startup, adapted for the browser/ folder in
-# the Driftfin repo. There is NO published image, NO Dockerfile, and
-# NO GitHub Actions build for this app.
-#
-# First container start only, this stack:
-#   1. Downloads the current Driftfin main tarball from GitHub.
-#   2. Unpacks it and copies ONLY browser/ to /app.
-#   3. Runs npm ci --omit=dev (no dependencies in v1, so this is fast).
-#   4. Starts node src/server.js.
-# After that, restarts just start the server from the code already
-# saved in /app. It does NOT download or rebuild on every restart.
-# To update to a newer GitHub version: set FORCE_UPDATE=true in
-# the Dockhand Environment tab, then recreate the stack. After it
-# updates, set FORCE_UPDATE back to false, so later restarts do
-# not rebuild again. A running app does not update itself.
-#
-# IMPORTANT: this compose pulls browser/ from the Driftfin repo on
-# main. It will fail at startup with a copy error if browser/ is
-# ever removed from main upstream.
-#
-# Environment is set in the Dockhand Environment tab, not a .env file.
-#   DRIFTFIN_PORT   host port, default 8740.
-#   JELLYFIN_URL    optional server URL prefill on the sign-in page.
-#                   No username, password, or token goes here.
-#   TZ              timezone, default America/New_York.
-#   COOKIE_SECURE   "true" ONLY behind an HTTPS reverse proxy.
-#                   Use "false" for plain LAN http, or the session
-#                   cookie will not be sent and sign-in will loop.
 services:
   driftfin-browser:
     image: node:22-alpine
@@ -113,19 +89,20 @@ services:
     environment:
       - PORT=8740
       - DATA_DIR=/data
-      - JELLYFIN_URL=${JELLYFIN_URL:-}
-      - TZ=${TZ:-America/New_York}
-      - COOKIE_SECURE=${COOKIE_SECURE:-false}
-      - FORCE_UPDATE=${FORCE_UPDATE:-false}
+      - JELLYFIN_URL=${JELLYFIN_URL}
+      - JELLYFIN_LOCKED=${JELLYFIN_LOCKED}
+      - TZ=${TZ}
+      - COOKIE_SECURE=${COOKIE_SECURE}
+      - FORCE_UPDATE=${FORCE_UPDATE}
     volumes:
       # Settings, sessions, and the session secret persist here.
-      - /DATA/AppData/driftfin-browser:/data
+      - driftfin-browser-data:/data
       # App code persists here, so it is only downloaded and
       # installed on the first start, not on every restart.
-      - /DATA/AppData/driftfin-browser-app:/app
+      - driftfin-browser-app:/app
     ports:
       # Host interface, NOT 127.0.0.1, so the reverse proxy can reach it.
-      - "${DRIFTFIN_PORT:-8740}:8740"
+      - "${DRIFTFIN_PORT}:8740"
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8740/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 30s
@@ -150,12 +127,46 @@ services:
       fi;
       cd /app;
       exec node src/server.js'
+
+volumes:
+  driftfin-browser-data:
+  driftfin-browser-app:
 ```
+
+The container is `read_only: true` with `cap_drop: ALL` and tmpfs
+`/tmp`, plus a healthcheck on `GET /api/health`.
+
+### Updating
+
+A running app does not update itself. To update to the newest
+Driftfin main:
+
+- Compose CLI: set `FORCE_UPDATE=true` in `.env`, run
+  `docker compose up -d --force-recreate`, and wait for the
+  healthcheck to go green. Then set it back to `false` and recreate
+  once more, so later restarts do not rebuild again.
+- Dockhand: set `FORCE_UPDATE=true` in the Environment tab, recreate
+  the stack, then set it back to `false` and recreate again.
+
+Persistent state survives updates in the two named volumes:
+`driftfin-browser-data` (settings, sessions, session secret) and
+`driftfin-browser-app` (the downloaded app code).
+
+### Reverse proxy and HTTPS
+
+If you front the app with a reverse proxy, forward it to
+`http://your-host:8740` (the compose port mapping has no
+`127.0.0.1` prefix, so the proxy can reach it). Set
+`COOKIE_SECURE=true` only when the proxy serves HTTPS.
+
+To install the app on a phone home screen (Add to Home Screen as a
+standalone app), the app must be served over HTTPS. On plain LAN
+http, browsers only offer a normal bookmark shortcut.
 
 ### Important: this stack pulls browser/ from Driftfin main
 
-This compose downloads the Driftfin main tarball on startup and
-copies browser/ from it. If browser/ is ever removed from main
+The stack downloads the Driftfin main tarball on first start and
+copies `browser/` from it. If `browser/` is ever removed from main
 upstream, it will fail at startup at the copy step
 (`cp -a /tmp/driftfin-src/browser/.`). Do not "fix" it by mounting
 a local source volume as the primary path.
@@ -165,17 +176,19 @@ a local source volume as the primary path.
 This folder is the `browser/` folder in the Driftfin repo
 (https://github.com/dhrandy/Driftfin).
 
-- `src/server.js` — Node stdlib only, no build step. Serves the
+- `src/server.js` - Node stdlib only, no build step. Serves the
   frontend, proxies Jellyfin server-side, holds the Jellyfin token
   server-side keyed by a signed session cookie, and stores per-user
   settings server-side.
-- `public/index.html`, `public/styles.css`, `public/app.js` — plain
+- `public/index.html`, `public/styles.css`, `public/app.js` - plain
   HTML/CSS/JS, no build step, no bundler.
-- `package.json`, `package-lock.json` — no runtime dependencies in
+- `package.json`, `package-lock.json` - no runtime dependencies in
   v1, so `npm ci --omit=dev` is fast. The lockfile exists so `npm ci`
   works in the container.
-- `docker-compose.yml` — the Dockhand stack above.
-- `public/vendor/hls.min.js` — hls.js v1.7.4 for HLS playback in
+- `docker-compose.yml` - the compose file the maintainer deploys
+  with. The paste-ready stack in the Install section is the
+  recommended generic version (named volumes, no host paths).
+- `public/vendor/hls.min.js` - hls.js v1.7.4 for HLS playback in
   browsers without native HLS. License: `THIRD_PARTY_NOTICES.md`.
 
 ## How it works
@@ -225,37 +238,36 @@ not hard-coded demo titles.
 
 ## What is NOT in v1
 
-- Quick Connect sign-in (username/password only in v1).
-- Cast while paused, trailers, downloads, kids PIN profiles.
-  None of these appear in the app UI.
+- Downloads and kids PIN profiles. Neither appears in the app UI.
 
-## Not verified (no real Jellyfin server was available for testing)
+## Status and testing
 
-- No sign-in, library load, playback, subtitle, Skip Intro, or
-  autoplay flow has been tested against a real Jellyfin server.
-  Those paths were tested end to end against a local mock Jellyfin
-  server returning the TV app's API shapes, through the real
-  browser server (see the test report delivered with this build),
-  but they need a live server check before anyone calls this
-  working on a real library.
-- The Dockhand compose has not been run in Dockhand, and the
-  pull-on-startup script has not been run in a `node:22-alpine`
-  container. It parses as
-  valid YAML with the expected service keys, but it needs a real
-  Dockhand deploy to prove it.
-- The responsive layout has not been checked on a real phone or
-  tablet, only by breakpoint rules in `styles.css`.
-- Playback was exercised in headless Chrome against a mock
-  Jellyfin: a direct stream plays, an HLS transcode plays through
-  the bundled hls.js and the playlist-rewriting proxy, and leaving
-  the player stops the video and reports Stopped. A real Jellyfin
-  server transcode still needs a live check.
+Alpha. The flows that touch Jellyfin (sign-in, library, playback,
+subtitles, Skip Intro, autoplay) are covered by automated
+end-to-end browser tests that run against a mock Jellyfin server
+through the real app server, and the compose deployment path is
+exercised in real use. That is still not broad device or browser
+coverage: expect rough edges, and please file issues on the repo
+for anything that misbehaves on your setup.
 
-## Open questions
+## Getting help
 
-1. Is the `browser/` folder name and the `8740` default port right,
-   or do you want a different port?
-2. Is LAN + Twingate the intended access route for v1, or should
-   this also be public behind the reverse proxy from day one?
-   That decides `COOKIE_SECURE` and whether server-side sessions
-   need any hardening beyond this build.
+If you use an AI assistant to troubleshoot your install, share only
+the relevant log excerpt, not a raw log dump, and remove anything
+private first: server URLs and IP addresses, usernames, passwords,
+tokens, cookies, and auth headers. A prompt that works well:
+
+```
+I'm installing Driftfin Browser, a self-hosted Jellyfin web client
+that runs as one Docker container (pull-on-startup compose, no
+published image). Here is my compose file with private values
+removed: [paste]. Here is the relevant excerpt from the container
+logs, with URLs, tokens, cookies, and auth headers removed: [paste].
+I expected: [describe]. What is wrong and how do I fix it?
+```
+
+## License
+
+Driftfin is free for personal use, not free to fork or republish.
+See `LICENSE` at the repo root. The bundled hls.js player is
+Apache-2.0; see `THIRD_PARTY_NOTICES.md`.
