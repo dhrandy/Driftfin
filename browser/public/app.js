@@ -2133,26 +2133,12 @@ window.addEventListener('resize', syncLandscapeFill);
 document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement) setTimeout(syncLandscapeFill, 60); });
 
 // F toggles the same fullscreen as the on-screen button; Esc stays browser-native.
+// Shares the pinch path's safe chain (enterPlayerFullscreen: element -> native
+// -> in-app viewport fill), so a rejected, throwing, or missing Fullscreen API
+// never leaves the button dead, and a deliberate press always exits again.
 function togglePlayerFullscreen() {
-  const wrap = document.querySelector('.videowrap');
-  const video = $('player');
-  // iPadOS home-screen apps can expose requestFullscreen but reject every call (and
-  // older iOS webviews lack it entirely); a swallowed rejection leaves the button
-  // dead. Fall back to the video element's native fullscreen so the button always
-  // does something; native fullscreen keeps its own contain fit (no crop).
-  const nativeFallback = () => {
-    if (video && video.webkitEnterFullscreen) { try { video.webkitEnterFullscreen(); } catch {} }
-  };
-  if (document.fullscreenElement || document.webkitFullscreenElement) {
-    const exit = document.exitFullscreen || document.webkitExitFullscreen;
-    // Old webkit exit returns void, not a promise - guard before .catch.
-    if (exit) { try { const p = exit.call(document); if (p && p.catch) p.catch(() => {}); } catch {} }
-  } else if (wrap && wrap.requestFullscreen) {
-    // Older engines can throw synchronously instead of rejecting.
-    try { wrap.requestFullscreen().catch(nativeFallback); } catch { nativeFallback(); }
-  } else {
-    nativeFallback();
-  }
+  if (playerFullscreenActive()) exitPlayerFullscreen();
+  else enterPlayerFullscreen();
 }
 $('fsBtn').addEventListener('click', togglePlayerFullscreen);
 $('speedSelect').addEventListener('change', () => { $('player').playbackRate = parseFloat($('speedSelect').value); });
