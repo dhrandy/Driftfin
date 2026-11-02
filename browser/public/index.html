@@ -13,15 +13,15 @@
   <a class="logo" href="#/home">DRIFTFIN</a>
   <!-- Text placeholder only. The logo is NOT final. Do not lock this in. -->
   <nav class="topnav" aria-label="Main">
-    <a href="#/search" data-nav="search">Search</a>
+    <a href="#/search" data-nav="search" aria-label="Search"><svg class="nav-icon" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true" focusable="false"><circle cx="11" cy="11" r="7"/><line x1="16.6" y1="16.6" x2="20.4" y2="20.4"/></svg></a>
     <a href="#/home" data-nav="home">Home</a>
-    <a href="#/shows" data-nav="shows">Shows</a>
     <a href="#/movies" data-nav="movies">Movies</a>
+    <a href="#/shows" data-nav="shows">Shows</a>
     <a href="#/mystuff" data-nav="mystuff">My Stuff</a>
     <a href="#/settings" data-nav="settings">Settings</a>
   </nav>
   <div class="top-actions">
-    <button id="signoutBtn" type="button" hidden>Sign out</button>
+    <button id="signoutBtn" type="button" aria-label="Sign out" title="Sign out" hidden><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg></button>
     <span id="userLabel" class="user-label"></span>
   </div>
 </header>
@@ -44,6 +44,13 @@
       <button type="submit">Sign in</button>
       <p id="signinError" class="error" role="alert"></p>
     </form>
+    <div class="signin-divider"><span>or</span></div>
+    <button id="quickConnectBtn" type="button" class="secondary">Use Quick Connect</button>
+    <div id="quickConnectPanel" hidden>
+      <p class="muted">Approve this code in any Jellyfin app (Dashboard &gt; Quick Connect):</p>
+      <p id="quickConnectCode" class="qc-code" aria-live="polite"></p>
+      <button id="quickConnectCancel" type="button" class="secondary">Cancel</button>
+    </div>
   </section>
 
   <section id="view-home" class="view" hidden>
@@ -88,9 +95,10 @@
     <h1>Search</h1>
     <form id="searchForm">
       <input id="searchInput" type="search" placeholder="Search shows, movies, episodes" aria-label="Search">
-      <button type="submit">Search</button>
+      <button type="submit" aria-label="Search" title="Search"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true" focusable="false"><circle cx="11" cy="11" r="7"/><line x1="16.6" y1="16.6" x2="20.4" y2="20.4"/></svg></button>
     </form>
     <div id="searchPeople"></div>
+    <div id="searchRecs"></div>
     <div id="searchResults" class="grid"></div>
   </section>
 
@@ -118,9 +126,29 @@
       <label><input type="checkbox" name="skipIntro"> Skip Intro button (only where Jellyfin reports an intro)</label>
       <label><input type="checkbox" name="autoplay"> Autoplay next episode</label>
       <label><input type="checkbox" name="excludeAnimatedFromBanner"> Leave animated movies out of the home banner</label>
+      <label><input type="checkbox" name="homeBanner"> Home banner</label>
+      <label><input type="checkbox" name="heroRatings"> Age rating and score on the home banner</label>
+      <label><input type="checkbox" name="showMyListOnHome"> Show Favorites on Home</label>
+      <label><input type="checkbox" name="showNextUpOnHome"> Show Next Up on Home</label>
+      <label><input type="checkbox" name="homeAutoRefresh"> Keep Continue Watching up to date</label>
+      <label><input type="checkbox" name="searchRecommendations"> Recommended rows on Search</label>
+      <label><input type="checkbox" name="showWatchlist"> Watchlist star and My Stuff section</label>
+      <label><input type="checkbox" name="continueWatchingPosters"> Posters instead of scene images in Continue Watching</label>
+      <label>Poster size
+        <select name="posterSize">
+          <option value="Small">Small</option>
+          <option value="Medium">Medium</option>
+          <option value="Large">Large</option>
+        </select>
+      </label>
       <button type="submit">Save settings</button>
       <p id="settingsSaved" class="muted"></p>
     </form>
+    <h2>Account</h2>
+    <div class="account-actions">
+      <button id="switchUserBtn" type="button" class="secondary">Switch user</button>
+    </div>
+    <p class="muted">Switch user signs you out and returns to sign-in, where another Jellyfin user can sign in with a password or Quick Connect. No credentials are stored.</p>
   </section>
 
   <section id="view-player" class="view" hidden>
@@ -156,10 +184,10 @@
 </main>
 
 <nav class="bottomnav" aria-label="Mobile">
-  <a href="#/search" data-nav="search">Search</a>
+  <a href="#/search" data-nav="search" aria-label="Search"><svg class="nav-icon" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true" focusable="false"><circle cx="11" cy="11" r="7"/><line x1="16.6" y1="16.6" x2="20.4" y2="20.4"/></svg></a>
   <a href="#/home" data-nav="home">Home</a>
-  <a href="#/shows" data-nav="shows">Shows</a>
   <a href="#/movies" data-nav="movies">Movies</a>
+  <a href="#/shows" data-nav="shows">Shows</a>
   <a href="#/mystuff" data-nav="mystuff">My Stuff</a>
   <a href="#/settings" data-nav="settings">Settings</a>
 </nav>

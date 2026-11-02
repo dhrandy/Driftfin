@@ -61,6 +61,16 @@ const DEFAULT_SETTINGS = {
   skipIntro: true,
   autoplay: true,
   excludeAnimatedFromBanner: false,
+  // TV AppSettings parity (browser-applicable): home rows, banner, search, artwork choices.
+  homeBanner: true,
+  heroRatings: true,
+  showMyListOnHome: true,
+  showNextUpOnHome: true,
+  homeAutoRefresh: true,
+  searchRecommendations: true,
+  showWatchlist: true,
+  continueWatchingPosters: false,
+  posterSize: 'Medium',
   // Player track preferences (TV AppSettings.kt: English audio, subtitles off).
   audioLanguage: 'eng',
   subtitleLanguage: null,
@@ -350,6 +360,51 @@ async function jellyfinRequest(session, targetPath, method, body, contentType) {
   }
   throw lastErr;
 }
+async function jellyfinUnauthenticatedGet(target, targetPath) {
+  const headers = { 'Authorization': CLIENT };
+  let lastErr = null;
+  for (const addr of target.addrs) {
+    try {
+      return await rawUpstreamRequest({ tls: target.tls, addr, hostname: target.hostname, port: target.port, path: '/' + targetPath, method: 'GET', headers, timeoutMs: 30000 });
+    } catch (e) { lastErr = e; }
+  }
+  throw lastErr;
+}
+
+// Quick Connect pending codes live only in memory, expire after 5 minutes, and
+// the secret never leaves this server (the browser only sees the short code).
+const quickConnectPending = new Map();
+const QUICKCONNECT_TTL_MS = 5 * 60 * 1000;
+const QUICKCONNECT_MAX_PER_IP = 3;
+const QUICKCONNECT_START_WINDOW_MS = 10 * 60 * 1000;
+const QUICKCONNECT_START_MAX = 10;
+const quickConnectStarts = new Map(); // ip -> [timestamps]
+function clientIpFor(req) {
+  return process.env.TRUST_PROXY === '1'
+    ? String(req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.socket.remoteAddress || 'unknown'
+    : req.socket.remoteAddress || 'unknown';
+}
+function quickConnectStartAllowed(ip) {
+  const now = Date.now();
+  const list = (quickConnectStarts.get(ip) || []).filter((t) => now - t < QUICKCONNECT_START_WINDOW_MS);
+  if (list.length >= QUICKCONNECT_START_MAX) { quickConnectStarts.set(ip, list); return false; }
+  list.push(now);
+  quickConnectStarts.set(ip, list);
+  return true;
+}
+function qcBrowserKey(req) {
+  const m = /(?:^|;\s*)driftfin_qc=([a-f0-9]{48})/.exec(String(req.headers.cookie || ''));
+  return m ? m[1] : null;
+}
+function qcCookieHeader(key, maxAge) {
+  const base = `driftfin_qc=${key}; Path=/api/quickconnect; HttpOnly; SameSite=Strict; Max-Age=${maxAge == null ? 600 : maxAge}`;
+  return COOKIE_SECURE ? base + '; Secure' : base;
+}
+function pruneQuickConnect() {
+  const now = Date.now();
+  for (const [id, p] of quickConnectPending) { if (p.expiresAt <= now) quickConnectPending.delete(id); }
+}
+
 async function jellyfinUnauthenticated(target, targetPath, body) {
   const payload = Buffer.from(JSON.stringify(body), 'utf8');
   const headers = { 'Authorization': CLIENT, 'Content-Type': 'application/json', 'Content-Length': payload.length };
@@ -460,6 +515,74 @@ const server = http.createServer(async (req, res) => {
         loginInflight.set(loginPair, Math.max(0, (loginInflight.get(loginPair) || 1) - 1));
         loginIpInflight.set(clientIp, Math.max(0, (loginIpInflight.get(clientIp) || 1) - 1));
       }
+    }
+    if (pathname === '/api/quickconnect/start' && req.method === 'POST') {
+      pruneQuickConnect();
+      const qcIp = clientIpFor(req);
+      if (quickConnectPending.size >= 100 || !quickConnectStartAllowed(qcIp)
+        || [...quickConnectPending.values()].filter((x) => x.clientIp === qcIp).length >= QUICKCONNECT_MAX_PER_IP) {
+        return sendJson(res, 429, { error: 'too_many_pending' });
+      }
+      const payload = await readJsonBody(req);
+      const serverUrl = String(payload.server || '').trim().replace(/\/$/, '');
+      const effectiveServer = process.env.JELLYFIN_LOCKED === '1' ? String(process.env.JELLYFIN_URL || '').trim() : serverUrl;
+      if (!effectiveServer) return sendJson(res, 400, { error: process.env.JELLYFIN_LOCKED === '1' ? 'locked_target_missing' : 'server_required' });
+      if (!/^https?:\/\//.test(effectiveServer)) return sendJson(res, 400, { error: 'server must start with http:// or https://' });
+      const target = await resolveJellyfinTarget(effectiveServer);
+      if (!target) return sendJson(res, 400, { error: 'server address is not allowed (link-local, metadata, multicast, or unresolvable addresses are rejected)' });
+      let result;
+      try { result = await jellyfinUnauthenticated(target, 'QuickConnect/Initiate', {}); }
+      catch (e) { return sendJson(res, 502, { error: 'jellyfin_unreachable', detail: String(e.message || e).slice(0, 500) }); }
+      let parsed = {};
+      try { parsed = JSON.parse(result.body.toString('utf8')); } catch {}
+      if (result.status >= 400 || !parsed.Secret || !parsed.Code) {
+        return sendJson(res, 400, { error: 'quickconnect_unavailable' });
+      }
+      const id = crypto.randomBytes(16).toString('hex');
+      const browserKey = crypto.randomBytes(24).toString('hex');
+      quickConnectPending.set(id, { secret: parsed.Secret, server: effectiveServer, target, clientIp: qcIp, browserKey, expiresAt: Date.now() + QUICKCONNECT_TTL_MS });
+      return sendJson(res, 200, { id, code: parsed.Code, expiresInSeconds: QUICKCONNECT_TTL_MS / 1000 }, { 'Set-Cookie': qcCookieHeader(browserKey) });
+    }
+    if (pathname === '/api/quickconnect/status' && req.method === 'GET') {
+      pruneQuickConnect();
+      const pending = quickConnectPending.get(url.searchParams.get('id') || '');
+      // A shared reverse proxy makes IPs non-unique: the initiating browser proves
+      // itself with the unguessable cookie issued at /start, not just its address.
+      if (!pending || pending.clientIp !== clientIpFor(req) || pending.browserKey !== qcBrowserKey(req)) {
+        return sendJson(res, 200, { status: 'expired' });
+      }
+      let chk;
+      try { chk = await jellyfinUnauthenticatedGet(pending.target, 'QuickConnect/Connect?secret=' + encodeURIComponent(pending.secret)); }
+      catch { return sendJson(res, 200, { status: 'pending' }); }
+      let state = {};
+      try { state = JSON.parse(chk.body.toString('utf8')); } catch {}
+      if (!state.Authenticated) return sendJson(res, 200, { status: 'pending' });
+      let auth;
+      try { auth = await jellyfinUnauthenticated(pending.target, 'Users/AuthenticateWithQuickConnect', { Secret: pending.secret }); }
+      catch (e) { return sendJson(res, 502, { error: 'jellyfin_unreachable', detail: String(e.message || e).slice(0, 500) }); }
+      let body = {};
+      try { body = JSON.parse(auth.body.toString('utf8')); } catch {}
+      quickConnectPending.delete(url.searchParams.get('id') || '');
+      if (auth.status >= 400 || !body.AccessToken || !body.User || !body.User.Id) {
+        return sendJson(res, 200, { status: 'failed' });
+      }
+      const session = {
+        id: crypto.randomBytes(32).toString('hex'),
+        server: pending.server, token: body.AccessToken, pinnedAddrs: pending.target.addrs,
+        userId: body.User.Id, username: body.User.Name || 'Jellyfin user',
+        createdAt: new Date().toISOString(),
+      };
+      saveSession(session);
+      return sendJson(res, 200, { status: 'authorized', username: session.username, userId: session.userId },
+        { 'Set-Cookie': [cookieHeader(session.id), qcCookieHeader('', 0)] });
+    }
+    if (pathname === '/api/quickconnect/cancel' && req.method === 'POST') {
+      const payload = await readJsonBody(req);
+      const pending = quickConnectPending.get(String(payload.id || ''));
+      if (pending && pending.clientIp === clientIpFor(req) && pending.browserKey === qcBrowserKey(req)) {
+        quickConnectPending.delete(String(payload.id || ''));
+      }
+      return sendJson(res, 200, { ok: true });
     }
     if (pathname === '/api/auth/logout') {
       dropSession(req);

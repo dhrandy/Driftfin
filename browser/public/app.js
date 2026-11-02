@@ -140,7 +140,9 @@ function logoUrlFor(item) {
 function titleHtml(item) {
   if (state.settings && state.settings.titleLogos) {
     const hasLogo = (item.ImageTags && item.ImageTags.Logo) || item.Type === 'Episode';
-    if (hasLogo) return `<img src="${logoUrlFor(item)}" alt="" style="max-height:90px;max-width:60%" onerror="this.src='data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=='">`;
+    // Real Jellyfin serves an episode's inherited series logo; where no logo exists
+    // anywhere the image 404s and the text title must take over, not a blank space.
+    if (hasLogo) return `<img src="${logoUrlFor(item)}" alt="${esc(item.Name)}" style="max-height:90px;max-width:60%" onerror="this.style.display='none';this.nextElementSibling.style.display=''"><h1 style="display:none">${esc(item.Name)}</h1>`;
   }
   return `<h1>${esc(item.Name)}</h1>`;
 }
@@ -165,19 +167,42 @@ function formatBadges(item) {
   }
   return [...new Set(badges)].map((b) => `<span class="badge">${b}</span>`).join(' ');
 }
-function metaLine(item) {
+function metaLine(item, opts) {
+  const showRatings = !opts || opts.ratings !== false;
   const parts = [];
-  if (item.OfficialRating) parts.push(item.OfficialRating);
+  if (showRatings && item.OfficialRating) parts.push(item.OfficialRating);
   if (item.Type === 'Series' && item.ChildCount != null) parts.push(item.ChildCount === 1 ? '1 Season' : item.ChildCount + ' Seasons');
   const air = formatAirDate(item.PremiereDate);
   if (item.Type === 'Series' && air) parts.push(air);
   else if (item.ProductionYear) parts.push(item.ProductionYear);
-  if (item.CommunityRating) parts.push(Math.round(item.CommunityRating * 10) + '%');
+  if (showRatings && item.CommunityRating) parts.push(Math.round(item.CommunityRating * 10) + '%');
   return parts.map((p) => `<span>${esc(p)}</span>`).join(' ');
 }
 const img = (item, type, maxWidth) => {
   if (!item || !item.Id) return '';
   return `/api/jellyfin/Items/${item.Id}/Images/${type}?maxWidth=${maxWidth || 400}&quality=90`;
+};
+// TV JellyfinRepository.backdropUrl parity: an episode without its own backdrop
+// uses its series backdrop, not a blank banner.
+function detailBackdropCandidates(item) {
+  const out = [];
+  if (!item || !item.Id) return out;
+  if (item.BackdropImageTags && item.BackdropImageTags.length) out.push(img(item, 'Backdrop', 1600));
+  if (item.ImageTags && item.ImageTags.Thumb) out.push(img(item, 'Thumb', 1600));
+  if (item.ParentBackdropItemId && item.ParentBackdropImageTags && item.ParentBackdropImageTags.length) {
+    out.push(`/api/jellyfin/Items/${item.ParentBackdropItemId}/Images/Backdrop?maxWidth=1600&quality=90`);
+  }
+  if (item.SeriesPrimaryImageTag && item.SeriesId) out.push(`/api/jellyfin/Items/${item.SeriesId}/Images/Primary?maxWidth=1600&quality=90`);
+  if (item.ImageTags && item.ImageTags.Primary) out.push(img(item, 'Primary', 1600));
+  return out;
+}
+// A metadata tag is a claim, not proof: on a 404 the banner advances to the next
+// candidate, and only when every candidate fails is it removed (leaving no gap).
+window.__dfbNextBackdrop = function (el) {
+  const list = state.detailBackdropList || [];
+  const next = (state.detailBackdropIdx || 0) + 1;
+  if (next < list.length) { state.detailBackdropIdx = next; el.src = list[next]; }
+  else el.remove();
 };
 function cardImage(item) {
   // TV posterUrl: an episode falls back to its series poster.
@@ -192,8 +217,11 @@ function cardImageWide(item) {
   return img(item, 'Primary', 360);
 }
 function cardHtml(item, wide) {
-  const pct = item.UserData && item.UserData.PlayedPercentage ? Math.round(item.UserData.PlayedPercentage) : 0;
   const watched = item.UserData && item.UserData.Played === true;
+  // A full red bar under an already-watched card is noise (the check mark says it);
+  // progress shows only for real partial progress, e.g. Continue Watching.
+  const pct = !watched && item.UserData && item.UserData.PlayedPercentage && item.UserData.PlayedPercentage < 100
+    ? Math.round(item.UserData.PlayedPercentage) : 0;
   const title = item.SeriesName ? `${item.SeriesName} - ${item.Name}` : item.Name;
   const label = episodeLabel(item) ? episodeLabel(item) + ' ' : '';
   return `<button class="card${wide ? ' wide' : ''}" data-id="${esc(item.Id)}" data-type="${esc(item.Type || '')}">
@@ -208,9 +236,9 @@ function bindCards(container) {
     el.addEventListener('click', () => { location.hash = '#/details?id=' + encodeURIComponent(el.dataset.id); });
   });
 }
-function rowHtml(title, items, wide) {
+function rowHtml(title, items, wide, key) {
   if (!items || !items.length) return '';
-  return `<section class="row"><h2>${esc(title)}</h2><div class="row-scroll">${items.map((i) => cardHtml(i, wide)).join('')}</div></section>`;
+  return `<section class="row"${key ? ` data-row="${esc(key)}"` : ''}><h2>${esc(title)}</h2><div class="row-scroll">${items.map((i) => cardHtml(i, wide)).join('')}</div></section>`;
 }
 function showView(name, navOverride) {
   document.body.classList.toggle('signed-out', name === 'signin');
@@ -223,12 +251,19 @@ function showView(name, navOverride) {
   });
   window.scrollTo(0, 0);
 }
+const POSTER_WIDTHS = { Small: '140px', Medium: '180px', Large: '220px' };
+function applyPosterSize() {
+  const size = (state.settings && state.settings.posterSize) || 'Medium';
+  document.documentElement.style.setProperty('--card-w', POSTER_WIDTHS[size] || POSTER_WIDTHS.Medium);
+}
 async function ensureSignedIn() {
   if (state.userId) return true;
   try {
     const me = await api('/api/auth/me');
     state.userId = me.Id; state.username = me.Name;
     state.settings = await api('/api/settings');
+  applyPosterSize();
+    applyPosterSize();
     $('userLabel').textContent = state.username || '';
     $('signoutBtn').hidden = false;
     return true;
@@ -260,14 +295,21 @@ async function loadHome() {
       const picked = pickHeroSet(heroRes.Items, state.settings && state.settings.excludeAnimatedFromBanner);
       if (picked.length) { state.heroList = picked; state.heroIndex = 0; state.heroItem = picked[0]; }
     }
-    renderHero(state.heroItem);
-    startHeroRotation();
+    if (state.settings && state.settings.homeBanner === false) {
+      stopHeroRotation();
+      $('hero').hidden = true;
+    } else {
+      $('hero').hidden = false;
+      renderHero(state.heroItem);
+      startHeroRotation();
+    }
+    const cwWide = !(state.settings && state.settings.continueWatchingPosters === true);
     let html = '';
-    html += rowHtml('Continue Watching', resume, true);
-    html += rowHtml('Next Up', nextUp.Items || [], true);
+    html += rowHtml('Continue Watching', resume, cwWide, 'resume');
+    if (!state.settings || state.settings.showNextUpOnHome !== false) html += rowHtml('Next Up', nextUp.Items || [], true, 'nextup');
     html += rowHtml('Recently Added Movies', latestMovies.Items || latestMovies || []);
     html += rowHtml('Recently Added Episodes', latestEpisodes.Items || latestEpisodes || [], true);
-    html += rowHtml('Favorites', favorites.Items || []);
+    if (!state.settings || state.settings.showMyListOnHome !== false) html += rowHtml('Favorites', favorites.Items || []);
     // More like the last played title, TV RelatedItems rule: same kind, shared genre, at least 4.
     try {
       const last = await jf(`Items?userId=${uid}&IncludeItemTypes=Movie,Series&Recursive=true&SortBy=DatePlayed&SortOrder=Descending&limit=1&fields=Genres&filters=IsPlayed`);
@@ -282,9 +324,41 @@ async function loadHome() {
     // No per-library Latest rows: the 10-31 trimmed Home design dropped them on TV and phone.
     wrap.innerHTML = html || '<p class="muted">No rows returned by Jellyfin for this user.</p>';
     bindCards(wrap);
+    startHomeAutoRefresh();
   } catch (e) {
     wrap.innerHTML = `<p class="error">Could not load Home from Jellyfin: ${esc(e.message)}</p>`;
   }
+}
+let homeRefreshTimer = null;
+function startHomeAutoRefresh() {
+  stopHomeAutoRefresh();
+  if (state.settings && state.settings.homeAutoRefresh === false) return;
+  homeRefreshTimer = setInterval(refreshProgressRows, 60000);
+}
+function stopHomeAutoRefresh() { if (homeRefreshTimer) { clearInterval(homeRefreshTimer); homeRefreshTimer = null; } }
+// TV homeAutoRefresh: only the progress rows update, in place, so scroll position is kept.
+async function refreshProgressRows() {
+  if ($('view-home').hidden || document.visibilityState !== 'visible') return;
+  const uid = state.userId;
+  if (!uid) return;
+  try {
+    const fields = 'Overview,Genres,MediaStreams,CommunityRating,ProductionYear';
+    const [resumeRes, nextUp] = await Promise.all([
+      jf(`UserItems/Resume?userId=${uid}&limit=16&mediaTypes=Video&fields=${fields}`),
+      state.settings && state.settings.showNextUpOnHome === false ? Promise.resolve(null)
+        : jf(`Shows/NextUp?userId=${uid}&limit=16&enableResumable=false&fields=${fields}`),
+    ]);
+    const wrap = $('homeRows');
+    const cwWide = !(state.settings && state.settings.continueWatchingPosters === true);
+    const replaceRow = (key, html) => {
+      const old = wrap.querySelector(`[data-row="${key}"]`);
+      if (old) { if (html) old.outerHTML = html; else old.remove(); }
+      else if (html) wrap.insertAdjacentHTML('afterbegin', html);
+    };
+    replaceRow('resume', rowHtml('Continue Watching', (resumeRes.Items || []).filter(isResumeable), cwWide, 'resume'));
+    if (nextUp) replaceRow('nextup', rowHtml('Next Up', nextUp.Items || [], true, 'nextup'));
+    bindCards(wrap);
+  } catch {}
 }
 function startHeroRotation() {
   stopHeroRotation();
@@ -313,7 +387,7 @@ function renderHero(item) {
     <img class="hero-backdrop" src="${img(item, 'Backdrop', 1600)}" alt="" onerror="this.src='data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=='">
     <div class="hero-body">
       ${titleHtml(item)}
-      <div class="hero-meta">${metaLine(item)} ${formatBadges(item)}</div>
+      <div class="hero-meta">${metaLine(item, { ratings: !state.settings || state.settings.heroRatings !== false })} ${formatBadges(item)}</div>
       <p>${esc(truncateOverview(item.Overview))}</p>
       <button type="button" id="heroPlay">${isResumeable(item) ? 'Resume' : 'Play'}</button>
       <button type="button" class="secondary" id="heroInfo">More Info</button>
@@ -460,15 +534,29 @@ function renderDetails() {
           ${pct ? `<div class="progress"><div style="width:${pct}%"></div></div>` : ''}
         </div>
         <div class="episode-actions">
-          <button type="button" class="episode-play" data-id="${esc(ep.Id)}">${isResumeable(ep) ? 'Resume' : 'Play'}</button>
-          <button type="button" class="episode-watched secondary" data-id="${esc(ep.Id)}">${ep.UserData && ep.UserData.Played ? 'Mark unwatched' : 'Mark watched'}</button>
+          <button type="button" class="episode-play icon-btn" data-id="${esc(ep.Id)}" aria-label="${esc((isResumeable(ep) ? 'Resume ' : 'Play ') + (episodeLabel(ep) || ep.Name))}" title="${esc((isResumeable(ep) ? 'Resume' : 'Play'))}"><svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true" focusable="false"><path d="M8 5v14l11-7z"/></svg></button>
+          <button type="button" class="episode-watched icon-btn secondary${ep.UserData && ep.UserData.Played ? ' on' : ''}" data-id="${esc(ep.Id)}" aria-pressed="${ep.UserData && ep.UserData.Played ? 'true' : 'false'}" aria-label="${esc(ep.UserData && ep.UserData.Played ? 'Mark unwatched' : 'Mark watched')}" title="${esc(ep.UserData && ep.UserData.Played ? 'Mark unwatched' : 'Mark watched')}"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><polyline points="4 12.5 9.5 18 20 6.5"/></svg></button>
         </div>
       </div>`;
     }).join('') || '<p class="muted">No episodes returned for this season.</p>';
     seasonsHtml = `<h2>Seasons and Episodes</h2><div class="season-chips">${chips}</div>${episodesHtml}`;
   }
-  // Cast follows the play-target episode on series (TV rule), else the item's own People.
-  const cast = (isSeries && target && target.Type === 'Episode' && (target.People || []).length ? target.People : item.People) || [];
+  // TV DetailsScreen cast rules:
+  // - Series with a selected season: actors of THAT season's episodes, episode order,
+  //   deduped by Id (name fallback), capped at 15. Series-wide People are never
+  //   substituted (a regular may not appear in this season), and an empty result
+  //   hides the row instead of showing unrelated cast.
+  // - Other items: the item's actors, then the play-target episode's actors (merged).
+  const actorsOf = (people) => (people || []).filter((p) => p.Type === 'Actor');
+  const dedupPeople = (list) => {
+    const seen = new Set(); const out = [];
+    for (const p of list) { const k = p.Id || 'name:' + (p.Name || ''); if (!seen.has(k)) { seen.add(k); out.push(p); } }
+    return out;
+  };
+  const seasonEps = isSeries ? state.allEpisodes.filter((ep) => ep.SeasonId === state.selectedSeasonId) : [];
+  const cast = isSeries
+    ? dedupPeople((seasonEps.length ? seasonEps : state.allEpisodes).flatMap((ep) => actorsOf(ep.People))).slice(0, 15)
+    : dedupPeople([...actorsOf(item.People), ...(target && target !== item ? actorsOf(target.People) : [])]).slice(0, 15);
   const castHtml = cast.length
     ? `<h2>Cast</h2><div class="cast-row">${cast.map((p) => `
         <button type="button" class="cast-person" data-person="${esc(p.Id)}">
@@ -477,15 +565,17 @@ function renderDetails() {
           ${p.Role ? `<div class="cast-role">${esc(p.Role)}</div>` : ''}
         </button>`).join('')}</div>`
     : '';
+  state.detailBackdropList = detailBackdropCandidates(item);
+  state.detailBackdropIdx = 0;
   el.innerHTML = `
-    <img class="details-backdrop" src="${img(item, 'Backdrop', 1600)}" alt="" onerror="this.src='data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=='">
+    ${state.detailBackdropList.length ? `<img class="details-backdrop" src="${state.detailBackdropList[0]}" alt="" onerror="window.__dfbNextBackdrop(this)">` : ''}
     ${titleHtml(item)}
     <div class="hero-meta">${metaLine(item)} ${formatBadges(item)}</div>
     <p>${esc(item.Overview || '')}</p>
     <button type="button" id="detailPlay">${playLabel(target)}</button>
     ${isResumeable(target) ? `<button type="button" class="secondary" id="detailFromStart">Play from start</button>` : ''}
     <button type="button" class="secondary" id="detailFav">${isFav ? 'Remove from My List' : 'Add to My List'}</button>
-    ${(item.Type === 'Movie' || item.Type === 'Series') ? `<button type="button" class="secondary" id="detailStar">${(state.watchlistIds || []).includes(item.Id) ? '\u2605 On Watchlist' : '\u2606 Watchlist'}</button>` : ''}
+    ${(item.Type === 'Movie' || item.Type === 'Series') && (!state.settings || state.settings.showWatchlist !== false) ? `<button type="button" class="secondary" id="detailStar">${(state.watchlistIds || []).includes(item.Id) ? '\u2605 On Watchlist' : '\u2606 Watchlist'}</button>` : ''}
     <button type="button" class="secondary" id="detailWatched">${watchedPlayed ? 'Mark unwatched' : 'Mark watched'}${isSeries && target.Type === 'Episode' ? ' (' + esc(episodeLabel(target) || target.Name) + ')' : ''}</button>
     ${castHtml}
     ${seasonsHtml}`;
@@ -552,12 +642,42 @@ async function toggleWatched(target) {
 }
 
 // ---------- Search / My Stuff ----------
+const hasPoster = (i) => (i.ImageTags && i.ImageTags.Primary) || (i.SeriesPrimaryImageTag && i.SeriesId);
+// TV SearchScreen.recommend: server suggestions filtered to confirmed-unplayed (fail closed),
+// falling back to top-rated unplayed titles when suggestions come up short.
+async function recommendTitles(type) {
+  const uid = state.userId;
+  const suggested = (await jf(`Items/Suggestions?userId=${uid}&type=${type}&limit=24`).catch(() => null)) || {};
+  const withPoster = (suggested.Items || []).filter(hasPoster);
+  if (withPoster.length) {
+    const unplayed = await jf(`Items?userId=${uid}&Ids=${withPoster.map((i) => i.Id).join(',')}&filters=IsUnplayed&limit=${withPoster.length}`).catch(() => null);
+    const keep = new Set(((unplayed && unplayed.Items) || []).map((i) => i.Id));
+    const unwatched = withPoster.filter((i) => keep.has(i.Id));
+    if (unwatched.length) return unwatched.slice(0, 20);
+  }
+  const fallback = (await jf(`Items?userId=${uid}&includeItemTypes=${type}&recursive=true&sortBy=CommunityRating&sortOrder=Descending&limit=40&filters=IsUnplayed`).catch(() => null)) || {};
+  return (fallback.Items || []).filter(hasPoster).slice(0, 20);
+}
+async function loadSearchRecommendations() {
+  if (!(await ensureSignedIn())) return;
+  showView('search');
+  const recs = $('searchRecs');
+  if ($('searchPeople')) $('searchPeople').innerHTML = '';
+  $('searchResults').innerHTML = '';
+  if (state.settings && state.settings.searchRecommendations === false) { recs.innerHTML = ''; return; }
+  recs.innerHTML = '<p class="muted">Loading recommendations…</p>';
+  const [movies, shows] = await Promise.all([recommendTitles('Movie'), recommendTitles('Series')]);
+  const html = rowHtml('Recommended Movies', movies) + rowHtml('Recommended Shows', shows);
+  recs.innerHTML = html || '';
+  bindCards(recs);
+}
 async function loadSearch(term) {
   if (!(await ensureSignedIn())) return;
   showView('search');
   const grid = $('searchResults');
   const peopleWrap = $('searchPeople');
-  if (!term) { grid.innerHTML = ''; if (peopleWrap) peopleWrap.innerHTML = ''; return; }
+  if ($('searchRecs')) $('searchRecs').innerHTML = '';
+  if (!term) { grid.innerHTML = ''; if (peopleWrap) peopleWrap.innerHTML = ''; loadSearchRecommendations(); return; }
   grid.innerHTML = '<p class="muted">Searching Jellyfin…</p>';
   try {
     // TV SearchScreen parity: titles plus an Actors row from the Persons endpoint.
@@ -586,6 +706,9 @@ async function loadMyStuff() {
   if (!(await ensureSignedIn())) return;
   showView('mystuff');
   const grid = $('mystuffGrid');
+  const wlBtn = document.querySelector('#mystuffTabs button[data-section="watchlist"]');
+  if (wlBtn) wlBtn.hidden = Boolean(state.settings && state.settings.showWatchlist === false);
+  if (mystuffSection === 'watchlist' && state.settings && state.settings.showWatchlist === false) mystuffSection = 'favorites';
   document.querySelectorAll('#mystuffTabs button').forEach((b) => b.classList.toggle('active', b.dataset.section === mystuffSection));
   grid.innerHTML = '<p class="muted">Loading from Jellyfin…</p>';
   try {
@@ -868,8 +991,8 @@ function route() {
   else if (pathPart === 'shows') loadLibrary('shows');
   else if (pathPart === 'movies') loadLibrary('movies');
   else if (pathPart === 'mystuff') loadMyStuff();
-  else if (pathPart === 'search') { showView('search'); if (params.get('q')) { $('searchInput').value = params.get('q'); loadSearch(params.get('q')); } }
-  else if (pathPart === 'settings') { ensureSignedIn().then((ok) => { if (ok) { showView('settings'); const f = $('settingsForm'); for (const key of Object.keys(state.settings || {})) { if (f.elements[key]) f.elements[key].checked = Boolean(state.settings[key]); } } }); }
+  else if (pathPart === 'search') { showView('search'); if (params.get('q')) { $('searchInput').value = params.get('q'); loadSearch(params.get('q')); } else loadSearchRecommendations(); }
+  else if (pathPart === 'settings') { ensureSignedIn().then((ok) => { if (ok) { showView('settings'); const f = $('settingsForm'); for (const key of Object.keys(state.settings || {})) { const el = f.elements[key]; if (!el) continue; if (el.type === 'checkbox') el.checked = Boolean(state.settings[key]); else el.value = state.settings[key]; } } }); }
   else if (pathPart === 'details' && params.get('id')) goDetails(params.get('id'));
   else if (pathPart === 'actor' && params.get('id')) goActor(params.get('id'));
   else if (pathPart === 'player' && params.get('id')) goPlayer(params.get('id'), { fromStart: params.get('start') === '1' });
@@ -877,6 +1000,72 @@ function route() {
   else loadHome();
 }
 window.addEventListener('hashchange', route);
+async function finishSignIn(userId, username) {
+  state.userId = userId; state.username = username;
+  state.settings = await api('/api/settings');
+  applyPosterSize();
+  $('userLabel').textContent = state.username || '';
+  $('signoutBtn').hidden = false;
+  location.hash = '#/home';
+}
+
+// Quick Connect: the server shows a short code, the user approves it in another
+// Jellyfin app, and the server-side secret completes sign-in (TV LoginScreen flow).
+let qcPollTimer = null;
+let qcPendingId = null;
+function stopQuickConnect() {
+  if (qcPollTimer) { clearInterval(qcPollTimer); qcPollTimer = null; }
+  if (qcPendingId) {
+    fetch('/api/quickconnect/cancel', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: qcPendingId }) }).catch(() => {});
+    qcPendingId = null;
+  }
+  $('quickConnectPanel').hidden = true;
+  $('quickConnectBtn').hidden = false;
+}
+$('quickConnectBtn').addEventListener('click', async () => {
+  $('signinError').textContent = '';
+  try {
+    const res = await fetch('/api/quickconnect/start', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ server: $('serverInput').value.trim() }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.id) {
+      $('signinError').textContent = data.error === 'quickconnect_unavailable'
+        ? "Quick Connect isn't enabled on this server. Sign in with your password instead."
+        : 'Could not start Quick Connect.' + (data.error ? ` (${data.error})` : '');
+      return;
+    }
+    qcPendingId = data.id;
+    $('quickConnectCode').textContent = data.code;
+    $('quickConnectPanel').hidden = false;
+    $('quickConnectBtn').hidden = true;
+    const deadline = Date.now() + (data.expiresInSeconds || 300) * 1000;
+    if (qcPollTimer) clearInterval(qcPollTimer);
+    qcPollTimer = setInterval(async () => {
+      if (Date.now() > deadline) {
+        stopQuickConnect();
+        $('signinError').textContent = "Quick Connect wasn't approved in time. Try again or use your password.";
+        return;
+      }
+      try {
+        const st = await (await fetch('/api/quickconnect/status?id=' + encodeURIComponent(qcPendingId))).json();
+        if (st.status === 'authorized') {
+          const uid = st.userId, name = st.username;
+          stopQuickConnect();
+          await finishSignIn(uid, name);
+        } else if (st.status === 'expired' || st.status === 'failed') {
+          stopQuickConnect();
+          $('signinError').textContent = st.status === 'expired'
+            ? "Quick Connect wasn't approved in time. Try again or use your password."
+            : 'Quick Connect sign-in failed. Try again or use your password.';
+        }
+      } catch {}
+    }, 2000);
+  } catch (err) { $('signinError').textContent = err.message; }
+});
+$('quickConnectCancel').addEventListener('click', () => { stopQuickConnect(); });
+
 $('signinForm').addEventListener('submit', async (e) => {
   e.preventDefault();
   $('signinError').textContent = '';
@@ -891,20 +1080,26 @@ $('signinForm').addEventListener('submit', async (e) => {
       throw new Error('Sign-in was rejected by Jellyfin, or the server could not be reached. Check the server URL, username, and password.' + detail);
     }
     const data = await res.json();
-    state.userId = data.userId; state.username = data.username;
-    state.settings = await api('/api/settings');
-    $('userLabel').textContent = state.username || '';
-    $('signoutBtn').hidden = false;
-    location.hash = '#/home';
+    await finishSignIn(data.userId, data.username);
   } catch (err) { $('signinError').textContent = err.message; }
 });
-$('signoutBtn').addEventListener('click', async () => {
+async function signOutToSignIn() {
   stopPlayback(true);
+  stopQuickConnect();
+  stopHomeAutoRefresh();
+  stopHeroRotation();
   await fetch('/api/auth/logout', { method: 'POST' }).catch(() => {});
-  state.userId = null; state.username = null;
+  // Clear every per-user remnant so the next account never sees a stale flash.
+  state.userId = null; state.username = null; state.settings = null;
+  state.heroList = []; state.heroIndex = 0; state.heroItem = null;
+  state.views = []; state.watchlistIds = [];
+  state.currentItem = null; state.allEpisodes = []; state.seasons = []; state.playTarget = null;
+  document.documentElement.style.setProperty('--card-w', POSTER_WIDTHS.Medium);
   $('signoutBtn').hidden = true; $('userLabel').textContent = '';
   location.hash = '#/signin';
-});
+}
+$('signoutBtn').addEventListener('click', signOutToSignIn);
+$('switchUserBtn').addEventListener('click', signOutToSignIn);
 $('searchForm').addEventListener('submit', (e) => { e.preventDefault(); location.hash = '#/search?q=' + encodeURIComponent($('searchInput').value.trim()); });
 $('kidsFilter').addEventListener('change', () => loadLibrary(libraryKind));
 $('librarySort').addEventListener('change', () => { saveSettingPatch({ librarySort: $('librarySort').value }); loadLibrary(libraryKind); });
@@ -912,8 +1107,9 @@ $('librarySortOrder').addEventListener('change', () => { saveSettingPatch({ libr
 $('settingsForm').addEventListener('submit', async (e) => {
   e.preventDefault();
   const f = $('settingsForm'); const payload = {};
-  for (const key of Object.keys(state.settings || {})) { if (f.elements[key]) payload[key] = f.elements[key].checked; }
+  for (const key of Object.keys(state.settings || {})) { const el = f.elements[key]; if (!el) continue; payload[key] = el.type === 'checkbox' ? el.checked : el.value; }
   state.settings = await api('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+  applyPosterSize();
   $('settingsSaved').textContent = 'Saved.';
 });
 $('player').addEventListener('timeupdate', () => {
