@@ -182,6 +182,32 @@ function cookieHeader(sessionId, maxAge) {
   if (maxAge !== undefined) c += `; Max-Age=${maxAge}`;
   return c;
 }
+// Device identity: a long-lived, HMAC-signed cookie gives each browser ONE stable
+// Jellyfin DeviceId across sign-ins. A repeat login from the same browser then
+// replaces only that browser's own previous token server-side (Jellyfin revokes
+// same user+DeviceId), instead of minting a new DeviceId per login and piling up
+// dead session rows (dashboard "Active Devices" cards) and registered devices.
+// The cookie is random, carries no user data, and survives sign-out and server
+// restarts; the HMAC stops a client from forging another browser's DeviceId.
+const DEVICE_COOKIE_MAX_AGE_SECONDS = 400 * 86400; // ~the browser cookie lifetime cap
+function deviceCookieHeader(deviceId, maxAge) {
+  let c = `driftfin_device=${deviceId}.${signSessionId(deviceId, sessionSecret())}; HttpOnly; SameSite=Lax; Path=/`;
+  if (COOKIE_SECURE) c += '; Secure';
+  if (maxAge !== undefined) c += `; Max-Age=${maxAge}`;
+  return c;
+}
+function browserDeviceId(req) {
+  const raw = parseCookies(req).driftfin_device;
+  if (!raw) return null;
+  const dot = raw.lastIndexOf('.');
+  if (dot <= 0) return null;
+  const id = raw.slice(0, dot);
+  const sig = raw.slice(dot + 1);
+  if (!/^driftfin-[a-f0-9]{24}$/.test(id)) return null;
+  const expected = signSessionId(id, sessionSecret());
+  if (sig.length !== expected.length || !crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) return null;
+  return id;
+}
 // Framing/referrer hardening applied to every response.
 const SEC_HEADERS = { 'X-Frame-Options': 'DENY', 'Referrer-Policy': 'no-referrer' };
 function sendJson(res, status, obj, extraHeaders) {
@@ -798,7 +824,7 @@ const server = http.createServer(async (req, res) => {
       loginIpInflight.set(clientIp, (loginIpInflight.get(clientIp) || 0) + 1);
       try {
       let result;
-      const sessionDeviceId = newDeviceId();
+      const sessionDeviceId = browserDeviceId(req) || newDeviceId();
       try { result = await jellyfinUnauthenticated(target, 'Users/AuthenticateByName', { Username: username, Pw: password }, sessionDeviceId); }
       catch (e) { console.error('Driftfin login unreachable', effectiveServer, String(e.message || e)); noteLoginFail(clientIp, loginPair); return sendJson(res, 502, { error: 'jellyfin_unreachable', detail: String(e.message || e).slice(0, 500) }); }
       let parsed = {};
@@ -818,7 +844,7 @@ const server = http.createServer(async (req, res) => {
       };
       saveSession(session);
       return sendJson(res, 200, { ok: true, username: session.username, userId: session.userId },
-        { 'Set-Cookie': cookieHeader(session.id, SESSION_COOKIE_MAX_AGE_SECONDS) });
+        { 'Set-Cookie': [cookieHeader(session.id, SESSION_COOKIE_MAX_AGE_SECONDS), deviceCookieHeader(sessionDeviceId, DEVICE_COOKIE_MAX_AGE_SECONDS)] });
       } finally {
         loginInflight.set(loginPair, Math.max(0, (loginInflight.get(loginPair) || 1) - 1));
         loginIpInflight.set(clientIp, Math.max(0, (loginIpInflight.get(clientIp) || 1) - 1));
@@ -848,7 +874,7 @@ const server = http.createServer(async (req, res) => {
       }
       const id = crypto.randomBytes(16).toString('hex');
       const browserKey = crypto.randomBytes(24).toString('hex');
-      quickConnectPending.set(id, { secret: parsed.Secret, server: effectiveServer, target, clientIp: qcIp, browserKey, deviceId: newDeviceId(), expiresAt: Date.now() + QUICKCONNECT_TTL_MS });
+      quickConnectPending.set(id, { secret: parsed.Secret, server: effectiveServer, target, clientIp: qcIp, browserKey, deviceId: browserDeviceId(req) || newDeviceId(), expiresAt: Date.now() + QUICKCONNECT_TTL_MS });
       return sendJson(res, 200, { id, code: parsed.Code, expiresInSeconds: QUICKCONNECT_TTL_MS / 1000 }, { 'Set-Cookie': qcCookieHeader(browserKey) });
     }
     if (pathname === '/api/quickconnect/status' && req.method === 'GET') {
@@ -883,7 +909,7 @@ const server = http.createServer(async (req, res) => {
       };
       saveSession(session);
       return sendJson(res, 200, { status: 'authorized', username: session.username, userId: session.userId },
-        { 'Set-Cookie': [cookieHeader(session.id, SESSION_COOKIE_MAX_AGE_SECONDS), qcCookieHeader('', 0)] });
+        { 'Set-Cookie': [cookieHeader(session.id, SESSION_COOKIE_MAX_AGE_SECONDS), qcCookieHeader('', 0), deviceCookieHeader(session.deviceId, DEVICE_COOKIE_MAX_AGE_SECONDS)] });
     }
     if (pathname === '/api/quickconnect/cancel' && req.method === 'POST') {
       const payload = await readJsonBody(req);
