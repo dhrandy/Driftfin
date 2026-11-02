@@ -1,1 +1,1 @@
-{"dependencies":{},"description":"Driftfin browser app v1: self-hosted Jellyfin client, no build step","engines":{"node":">=22"},"main":"src/server.js","name":"driftfin-browser","private":true,"scripts":{"start":"node src/server.js"},"type":"commonjs","version":"0.2.0"}
+{"dependencies":{},"description":"Driftfin browser app v1: self-hosted Jellyfin client, no build step","engines":{"node":">=22"},"main":"src/server.js","name":"driftfin-browser","private":true,"scripts":{"start":"node src/server.js"},"type":"commonjs","version":"0.3.0"}

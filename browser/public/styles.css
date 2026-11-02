@@ -254,8 +254,21 @@ body.signed-out .logo { font-size: 28px; }
 #pauseInfo.compact .pc img { width: 32px; height: 32px; }
 #pauseInfo.compact .pc-role { display: none; }
 #pauseInfo.tiny .pause-cast { display: none; }
-#pbPlay, #pbMute { min-width: 44px; min-height: 44px; padding: 0; display: inline-flex; align-items: center; justify-content: center; background: transparent; color: #fff; border-radius: 8px; flex: 0 0 auto; }
-#pbPlay:hover, #pbMute:hover { background: rgba(255,255,255,.15); }
+#pbPlay, #pbMute, #pbSubs, #pbSettings { min-width: 44px; min-height: 44px; padding: 0; display: inline-flex; align-items: center; justify-content: center; background: transparent; color: #fff; border-radius: 8px; flex: 0 0 auto; }
+#pbPlay:hover, #pbMute:hover, #pbSubs:hover, #pbSettings:hover { background: rgba(255,255,255,.15); }
+#pbSubs[aria-expanded="true"], #pbSettings[aria-expanded="true"] { background: rgba(255,255,255,.15); }
+/* Player bar sheets: CC (subtitles) and settings (audio + speed + stream note)
+   popovers anchored above the bar. Items mirror the native selects, which stay
+   the single source of truth for track/speed state. */
+#pbSheet { position: absolute; right: 14px; z-index: 5; min-width: 280px; max-width: min(360px, calc(100% - 28px)); max-height: min(60vh, 480px); overflow-y: auto; background: rgba(18,18,22,.96); backdrop-filter: blur(6px); border-radius: 12px; padding: 8px; box-shadow: 0 8px 30px rgba(0,0,0,.6); color: #eee; font-size: 13px; }
+#pbSheet[hidden] { display: none; }
+#pbSheet .ps-title { padding: 8px 10px 6px; font-weight: 700; color: #fff; }
+#pbSheet .ps-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 9px 10px; border-radius: 8px; background: none; border: 0; color: #eee; font: inherit; width: 100%; text-align: left; cursor: pointer; }
+#pbSheet .ps-row:hover, #pbSheet .ps-row:focus-visible { background: rgba(255,255,255,.1); }
+#pbSheet .ps-row .ps-val { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#pbSheet .ps-row .ps-check { color: var(--accent); flex: 0 0 auto; width: 16px; text-align: center; }
+#pbSheet .ps-sep { height: 1px; background: #2c2c34; margin: 4px 6px; }
+#pbSheet .ps-note { padding: 7px 10px; color: #888; font-size: 11px; }
 #pbTime { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
 #pbSeek { flex: 1; min-width: 60px; height: 28px; accent-color: var(--accent); }
 .player-controls label { min-width: 0; max-width: 100%; }
@@ -275,10 +288,10 @@ body.signed-out .logo { font-size: 28px; }
 
 /* Player seek: accent played portion, muted remainder (Chromium/Edge) */
 #pbSeek { -webkit-appearance: none; appearance: none; background: transparent; cursor: pointer; --fill: 0%; }
-#pbSeek::-webkit-slider-runnable-track { height: 5px; border-radius: 3px; background: linear-gradient(to right, var(--accent) var(--fill), #55555f var(--fill)); }
+#pbSeek::-webkit-slider-runnable-track { height: 3.5px; border-radius: 3px; background: linear-gradient(to right, var(--accent) var(--fill), #55555f var(--fill)); }
 #pbSeek::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 13px; height: 13px; border-radius: 50%; background: var(--accent); margin-top: -4px; border: none; }
-#pbSeek::-moz-range-track { height: 5px; border-radius: 3px; background: #55555f; }
-#pbSeek::-moz-range-progress { height: 5px; border-radius: 3px; background: var(--accent); }
+#pbSeek::-moz-range-track { height: 3.5px; border-radius: 3px; background: #55555f; }
+#pbSeek::-moz-range-progress { height: 3.5px; border-radius: 3px; background: var(--accent); }
 #pbSeek::-moz-range-thumb { width: 13px; height: 13px; border-radius: 50%; background: var(--accent); border: none; }
 
 /* Settings: profile picker + header label (display-only) */
@@ -290,8 +303,8 @@ body.signed-out .logo { font-size: 28px; }
 .user-avatar { width: 30px; height: 30px; border-radius: 50%; vertical-align: middle; margin-right: 6px; }
 
 /* Idle chrome fade: controls reveal on pointer activity and fade while playing. */
-#playerBack, #fsBtn, #playerBar, #skipIntroBtn, .player-controls, #playerNote { transition: opacity .4s; }
-.videowrap.hide-chrome #playerBack, .videowrap.hide-chrome #fsBtn, .videowrap.hide-chrome #playerBar, .videowrap.hide-chrome #skipIntroBtn, .videowrap.hide-chrome .player-controls, .videowrap.hide-chrome #playerNote, .videowrap.hide-chrome .player-controls label { opacity: 0; pointer-events: none; }
+#playerBack, #fsBtn, #playerBar, #skipIntroBtn, .player-controls, #playerNote, #pbSheet { transition: opacity .4s; }
+.videowrap.hide-chrome #playerBack, .videowrap.hide-chrome #fsBtn, .videowrap.hide-chrome #playerBar, .videowrap.hide-chrome #skipIntroBtn, .videowrap.hide-chrome .player-controls, .videowrap.hide-chrome #playerNote, .videowrap.hide-chrome .player-controls label, .videowrap.hide-chrome #pbSheet { opacity: 0; pointer-events: none; }
 .videowrap.hide-chrome, .videowrap.hide-chrome #player { cursor: none; }
 
 /* Touch 10-second skips: only where a coarse pointer makes arrow keys unavailable. */
@@ -307,14 +320,17 @@ body.signed-out .logo { font-size: 28px; }
 /* Narrow transport: seek + time get their own row so the touch buttons never
    squeeze the seek track or push mute off the bar (320/360/390 all fit). */
 @media (max-width: 560px) {
-  #playerBar { left: 6px; right: 6px; bottom: 6px; padding: 4px 6px; gap: 0 4px; display: grid; grid-template-columns: repeat(5, 44px) 1fr; align-items: center; }
-  #pbSeek { grid-row: 1; grid-column: 1 / 5; width: 100%; min-width: 0; }
-  #pbTime { grid-row: 1; grid-column: 5 / 7; justify-self: end; font-size: 12px; align-self: center; }
+  #playerBar { left: 6px; right: 6px; bottom: 6px; padding: 4px 6px; gap: 0 4px; display: grid; grid-template-columns: repeat(7, minmax(34px, 44px)); justify-content: center; align-items: center; }
+  #playerBar > button { min-width: 0; }
+  #pbSeek { grid-row: 1; grid-column: 1 / 6; width: 100%; min-width: 0; }
+  #pbTime { grid-row: 1; grid-column: 6 / 8; justify-self: end; font-size: 12px; align-self: center; }
   #pbPlay { grid-row: 2; grid-column: 1; }
   #pbBack10 { grid-row: 2; grid-column: 2; }
   #pbZoom { grid-row: 2; grid-column: 3; }
   #pbFwd10 { grid-row: 2; grid-column: 4; }
   #pbMute { grid-row: 2; grid-column: 5; }
+  #pbSubs { grid-row: 2; grid-column: 6; }
+  #pbSettings { grid-row: 2; grid-column: 7; }
 }
 
 /* Person placeholder tile sizing on the other actor surfaces (matches the img it replaces). */
@@ -341,37 +357,23 @@ body:has(#view-player:not([hidden])) #view-player { height: 100dvh; }
 body:has(#view-player:not([hidden])) #playerWrap:not(.landscape-fill) { max-width: none; margin: 0; width: 100%; height: 100%; display: flex; flex-direction: column; background: #000; }
 body:has(#view-player:not([hidden])) #playerWrap:not(.landscape-fill) .videowrap { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; }
 body:has(#view-player:not([hidden])) #playerWrap:not(.landscape-fill) #player { width: 100%; height: 100%; aspect-ratio: auto; object-fit: contain; border-radius: 0; }
-/* Theater bottom stack: the transport bar owns the very bottom edge. The
-   track/speed selectors and the stream note overlay the video just above it
-   and fade with the rest of the chrome while playing. The row is one slim
-   non-wrapping line at every width (scrolls sideways only when it must),
-   centered when it fits, click-through except on the labels so video
-   tap-to-pause keeps working, and clear of the Skip Intro corner. */
-body:has(#view-player:not([hidden])) #playerWrap .player-controls { position: absolute; left: 0; right: 0; bottom: 82px; z-index: 3; margin: 0 auto; padding: 6px 10px; gap: 10px; background: none; flex-direction: row; flex-wrap: nowrap; overflow-x: auto; align-items: center; justify-content: safe center; -webkit-overflow-scrolling: touch; pointer-events: none; }
-body:has(#view-player:not([hidden])) #playerWrap .player-controls label { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 6px; font-size: 13px; white-space: nowrap; pointer-events: auto; text-shadow: 0 1px 4px rgba(0,0,0,.8); }
-body:has(#view-player:not([hidden])) #playerWrap .player-controls select { width: auto; max-width: none; padding: 6px 8px; font-size: 13px; }
-body:has(#view-player:not([hidden])) #playerWrap #playerNote { position: absolute; left: 0; right: 0; bottom: 64px; z-index: 3; margin: 0; padding: 0 12px; text-align: center; font-size: 11px; pointer-events: none; text-shadow: 0 1px 4px rgba(0,0,0,.8); }
-@media (min-width: 561px) {
-  body:has(#view-player:not([hidden])) #playerWrap .player-controls { max-width: calc(100% - 48px); }
-  /* While Skip Intro is up the row narrows so its right corner stays clear,
-     the same way the cast strip reserves that corner. */
-  body:has(#view-player:not([hidden])) .videowrap:has(#skipIntroBtn:not([hidden])) .player-controls { max-width: calc(100% - 320px); }
+/* Theater bottom stack: the transport bar owns the very bottom edge and now
+   carries subtitles and playback settings as CC + gear icons whose sheets open
+   above it. The native selector row and stream note hide in theater - they stay
+   the data source for the sheets and still render in the legacy no-:has layout.
+   With the floating row gone, the pause cast strip sits right above the bar and
+   Skip Intro rides a little higher than the bar top. */
+body:has(#view-player:not([hidden])) #playerWrap .player-controls,
+body:has(#view-player:not([hidden])) #playerWrap #playerNote { display: none; }
+body:has(#view-player:not([hidden])) #pauseInfo:not(.compact):not(.tiny) .pause-cast { bottom: 76px; }
+body:has(#view-player:not([hidden])) #pauseInfo.compact .pause-cast { bottom: 72px; }
+body:has(#view-player:not([hidden])) #skipIntroBtn { bottom: 84px; }
+@media (max-width: 560px) {
+  body:has(#view-player:not([hidden])) #pauseInfo:not(.compact):not(.tiny) .pause-cast { bottom: 100px; }
+  body:has(#view-player:not([hidden])) #pauseInfo.compact .pause-cast { bottom: 96px; }
+  body:has(#view-player:not([hidden])) #skipIntroBtn { bottom: 108px; }
 }
 body:has(#view-player:not([hidden])) #playerWrap .up-next { margin: 0 12px 8px; }
-
-/* Theater: with the selectors and note overlaid above the bar, the pause cast
-   strip rises to clear the whole bottom stack at every width. */
-body:has(#view-player:not([hidden])) #pauseInfo:not(.compact):not(.tiny) .pause-cast { bottom: 134px; }
-body:has(#view-player:not([hidden])) #pauseInfo.compact .pause-cast { bottom: 128px; }
-/* Theater at <=560px: the two-row grid bar is taller, so the overlaid
-   selectors, note, cast strip and Skip Intro all rise one more notch. */
-@media (max-width: 560px) {
-  body:has(#view-player:not([hidden])) #playerWrap .player-controls { bottom: 130px; }
-  body:has(#view-player:not([hidden])) #playerWrap #playerNote { bottom: 112px; }
-  body:has(#view-player:not([hidden])) #skipIntroBtn { bottom: 180px; }
-  body:has(#view-player:not([hidden])) #pauseInfo:not(.compact):not(.tiny) .pause-cast { bottom: 180px; }
-  body:has(#view-player:not([hidden])) #pauseInfo.compact .pause-cast { bottom: 174px; }
-}
 
 /* Narrow transport bar is two rows: Skip Intro clears it too. */
 @media (max-width: 560px) {

@@ -1966,6 +1966,7 @@ let chromeIdleTimer = null;
 function setChromeHidden(hidden) {
   const w = document.querySelector('.videowrap');
   if (w) w.classList.toggle('hide-chrome', hidden);
+  if (hidden) closePbSheet();
 }
 function pokeChrome() {
   setChromeHidden(false);
@@ -1991,6 +1992,7 @@ document.addEventListener('keydown', (e) => {
   const t = e.target;
   const tag = t && t.tagName;
   if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (t && t.isContentEditable)) return;
+  if (e.key === 'Escape' && !pbSheet.hidden) { e.preventDefault(); closePbSheet(true); return; }
   const v = $('player');
   if (!v || !state.playingItem) return;
   if (e.key === ' ') {
@@ -2019,6 +2021,159 @@ $('pbSeek').addEventListener('change', () => {
   if (isFinite(d) && d > 0) v.currentTime = (parseInt($('pbSeek').value, 10) / 1000) * d;
 });
 $('pbMute').addEventListener('click', () => { $('player').muted = !$('player').muted; });
+
+// ---------- Player bar sheets: subtitles (CC) and playback settings ----------
+// The CC and gear buttons in the transport bar open sheets above it. Each item
+// drives the existing native select for that control, so picking a track or
+// speed flows through the same change handlers the selector row always used.
+// The row itself hides in theater mode but stays the single source of truth.
+const pbSheet = document.createElement('div');
+pbSheet.id = 'pbSheet';
+pbSheet.hidden = true;
+pbSheet.setAttribute('role', 'menu');
+pbSheet.setAttribute('aria-label', 'Playback options');
+(function () { const w = document.querySelector('.videowrap'); if (w) w.appendChild(pbSheet); })();
+let pbSheetKind = null;
+function closePbSheet(returnFocus) {
+  if (pbSheet.hidden) return;
+  const kind = pbSheetKind;
+  pbSheet.hidden = true;
+  pbSheetKind = null;
+  $('pbSubs').setAttribute('aria-expanded', 'false');
+  $('pbSettings').setAttribute('aria-expanded', 'false');
+  if (returnFocus && kind) $(kind === 'subs' ? 'pbSubs' : 'pbSettings').focus();
+}
+function openPbSheet(kind) {
+  const wrap = document.querySelector('.videowrap');
+  const bar = $('playerBar');
+  if (!wrap || !bar) return;
+  pbSheet.innerHTML = '';
+  const addTitle = (t) => {
+    const d = document.createElement('div');
+    d.className = 'ps-title';
+    d.textContent = t;
+    pbSheet.appendChild(d);
+  };
+  const pickSelect = (sel, value) => {
+    sel.value = value;
+    sel.dispatchEvent(new Event('change'));
+  };
+  const addRows = (sel) => {
+    Array.from(sel.options).forEach((o) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'ps-row';
+      b.setAttribute('role', 'menuitemradio');
+      const on = sel.value === o.value;
+      b.setAttribute('aria-checked', on ? 'true' : 'false');
+      b.title = o.textContent;
+      const val = document.createElement('span');
+      val.className = 'ps-val';
+      val.textContent = o.textContent;
+      const chk = document.createElement('span');
+      chk.className = 'ps-check';
+      chk.textContent = on ? '\u2713' : '';
+      chk.setAttribute('aria-hidden', 'true');
+      b.appendChild(val);
+      b.appendChild(chk);
+      b.addEventListener('click', () => { pickSelect(sel, o.value); closePbSheet(true); });
+      pbSheet.appendChild(b);
+    });
+  };
+  const addSep = () => {
+    const d = document.createElement('div');
+    d.className = 'ps-sep';
+    pbSheet.appendChild(d);
+  };
+  if (kind === 'subs') {
+    addTitle('Subtitles');
+    addRows($('subtitleSelect'));
+  } else {
+    addTitle('Audio');
+    addRows($('audioSelect'));
+    addSep();
+    addTitle('Speed');
+    addRows($('speedSelect'));
+    const note = ($('playerNote') || {}).textContent || '';
+    if (note.trim()) {
+      addSep();
+      const n = document.createElement('div');
+      n.className = 'ps-note';
+      n.textContent = note.trim();
+      pbSheet.appendChild(n);
+    }
+  }
+  // Anchor above the transport bar, and above Skip Intro whenever it is up.
+  const wr = wrap.getBoundingClientRect();
+  let bottom = wr.bottom - bar.getBoundingClientRect().top + 10;
+  const skip = $('skipIntroBtn');
+  if (skip && !skip.hidden) bottom = Math.max(bottom, wr.bottom - skip.getBoundingClientRect().top + 8);
+  pbSheet.style.bottom = Math.round(bottom) + 'px';
+  pbSheet.hidden = false;
+  pbSheetKind = kind;
+  $(kind === 'subs' ? 'pbSubs' : 'pbSettings').setAttribute('aria-expanded', 'true');
+  const focusRow = pbSheet.querySelector('.ps-row[aria-checked="true"]') || pbSheet.querySelector('.ps-row');
+  if (focusRow) focusRow.focus();
+}
+function togglePbSheet(kind) {
+  if (pbSheetKind === kind && !pbSheet.hidden) closePbSheet();
+  else openPbSheet(kind);
+}
+pbSheet.addEventListener('keydown', (e) => {
+  // Menu keyboard handling is self-contained: no key pressed while interacting
+  // with the menu reaches the player's transport shortcuts. Escape bubbles to the
+  // document handler, which closes the sheet and returns focus.
+  const rows = Array.from(pbSheet.querySelectorAll('.ps-row'));
+  if (!rows.length) return;
+  const i = rows.indexOf(document.activeElement);
+  if (e.key === ' ') {
+    // Space activates the focused menu item; it must not toggle play/pause.
+    e.preventDefault();
+    e.stopPropagation();
+    if (i >= 0) rows[i].click();
+    return;
+  }
+  let next = -1;
+  if (e.key === 'ArrowDown') next = i < 0 ? 0 : (i + 1) % rows.length;
+  else if (e.key === 'ArrowUp') next = i < 0 ? rows.length - 1 : (i - 1 + rows.length) % rows.length;
+  else if (e.key === 'Home') next = 0;
+  else if (e.key === 'End') next = rows.length - 1;
+  else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+    // Navigation keys never seek the video from inside a menu.
+    e.preventDefault();
+    e.stopPropagation();
+    return;
+  } else return;
+  e.preventDefault();
+  e.stopPropagation();
+  rows[next].focus();
+});
+$('pbSubs').addEventListener('click', () => togglePbSheet('subs'));
+$('pbSettings').addEventListener('click', () => togglePbSheet('settings'));
+(function () {
+  const w = document.querySelector('.videowrap');
+  if (!w) return;
+  let ateGesture = false;
+  // Tap outside the sheet dismisses it. Taps on explicit controls (transport bar,
+  // Skip Intro, cast strip) still reach their control while the sheet closes; a tap
+  // on the video or pause backdrop is consumed so dismissing never toggles
+  // play/pause. Ordinary video taps are untouched when no sheet is open.
+  w.addEventListener('pointerdown', (e) => {
+    if (pbSheet.hidden) { ateGesture = false; return; } // a stale flag never outlives its gesture
+    if (e.target.closest('#pbSheet, #pbSubs, #pbSettings')) return;
+    closePbSheet();
+    if (!e.target.closest('#playerBar, #skipIntroBtn, #pauseCast')) {
+      ateGesture = true;
+      e.preventDefault(); // also suppresses the compat click in most engines
+    }
+  }, true);
+  w.addEventListener('click', (e) => {
+    if (!ateGesture) return;
+    ateGesture = false;
+    e.preventDefault();
+    e.stopPropagation();
+  }, true);
+})();
 
 // ---------- Pause screen (TV PlayerOverlay parity) ----------
 // The dim, pause mark, and title show on any pause; the summary, Up next and the cast
