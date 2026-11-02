@@ -24,6 +24,10 @@
 #   DRIFTFIN_PORT   host port, default 8740.
 #   JELLYFIN_URL    optional server URL prefill on the sign-in page.
 #                   No username, password, or token goes here.
+#   JELLYFIN_LOCKED "1" locks sign-in to JELLYFIN_URL: the form's
+#                   server field is ignored and sessions for any other
+#                   server are rejected. Fails closed if JELLYFIN_URL
+#                   is empty. Leave unset to keep the open form.
 #   TZ              timezone, default America/New_York.
 #   COOKIE_SECURE   "true" ONLY behind an HTTPS reverse proxy.
 #                   Use "false" for plain LAN http, or the session
@@ -43,6 +47,7 @@ services:
       - PORT=8740
       - DATA_DIR=/data
       - JELLYFIN_URL=${JELLYFIN_URL:-}
+      - JELLYFIN_LOCKED=${JELLYFIN_LOCKED}
       - TZ=${TZ:-America/New_York}
       - COOKIE_SECURE=${COOKIE_SECURE:-false}
       - FORCE_UPDATE=${FORCE_UPDATE:-false}
