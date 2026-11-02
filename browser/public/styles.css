@@ -26,7 +26,7 @@ input, select { background: #22222e; color: var(--text); border: 1px solid #3333
 .topbar { display: flex; align-items: center; gap: 24px; padding: 14px 24px; position: sticky; top: 0; background: rgba(11,11,15,.95); z-index: 10; }
 .logo { font-weight: 800; font-size: 20px; letter-spacing: .08em; white-space: nowrap; color: var(--accent); line-height: 1; display: inline-flex; align-items: center; }
 .topnav { display: flex; gap: 6px; margin: 0 auto; background: #1c1c26; border-radius: 999px; padding: 4px; }
-.topnav a { padding: 8px 14px; border-radius: 999px; color: #b3b3b3; display: inline-flex; align-items: center; justify-content: center; line-height: 1.15; }
+.topnav a { padding: 8px 14px; border-radius: 999px; color: #b3b3b3; display: inline-flex; align-items: center; justify-content: center; line-height: 1.15; white-space: nowrap; }
 .topnav a:hover, .bottomnav a:hover { background: rgba(47,47,47,.7); color: #fff; }
 .topnav a:focus-visible, .bottomnav a:focus-visible { outline: 2px solid #fff; outline-offset: 2px; color: #fff; }
 .topnav a.active, .bottomnav a.active { background: #fff; color: #000; }
@@ -121,7 +121,14 @@ form label input:not([type="checkbox"]) { display: block; width: 100%; max-width
   :root { --card-w: 150px; --banner-height: clamp(280px, 46vh, 460px); }
   .topbar { padding: 12px 16px; gap: 12px; }
   main { padding: 0 16px 96px; }
+  .topnav { gap: 4px; flex-shrink: 0; }
   .topnav a { padding: 6px 10px; }
+  .user-label > span { display: none; }
+}
+/* Narrow tablet/large phone landscape: keep the pill to one line without overflow. */
+@media (max-width: 760px) and (min-width: 640px) {
+  .topbar { gap: 10px; padding: 12px 12px; }
+  .topnav a { padding: 6px 8px; }
 }
 /* Phone: bottom nav, top nav hidden except logo and sign-out. */
 @media (max-width: 639px) {
@@ -257,7 +264,7 @@ body.signed-out .logo { font-size: 28px; }
 }
 
 /* Landscape playback: fill the screen (fallback when real fullscreen is unavailable) */
-#playerWrap.landscape-fill { position: fixed; inset: 0; z-index: 80; width: 100vw; height: 100dvh; border-radius: 0; padding: 8px; }
+#playerWrap.landscape-fill { position: fixed; inset: 0; z-index: 80; width: 100vw; max-width: none; margin: 0; height: 100dvh; border-radius: 0; padding: 8px; background: #000; }
 #playerWrap.landscape-fill .videowrap { height: 100%; }
 #playerWrap.landscape-fill #player { max-height: none; height: 100%; }
 #playerWrap.landscape-fill .player-bar { position: absolute; left: 12px; right: 12px; bottom: 10px; background: rgba(12,12,16,0.72); border-radius: 10px; padding: 6px 10px; }
@@ -291,7 +298,6 @@ body.signed-out .logo { font-size: 28px; }
 
 /* Pinch-to-fill (matches the Android app): object-fit crop, not fullscreen. */
 .videowrap { touch-action: pan-y; }
-.videowrap.fill #player { object-fit: cover; }
 #pbZoom { display: none; min-width: 44px; min-height: 44px; padding: 0; align-items: center; justify-content: center; background: none; border: 0; color: #fff; }
 @media (pointer: coarse) { #pbZoom { display: inline-flex; } }
 #pbZoom[aria-pressed="true"] { color: var(--accent); }

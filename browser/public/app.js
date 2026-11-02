@@ -1809,32 +1809,87 @@ function seekPlayerBy(delta) {
   if (!v || !isFinite(v.duration)) return;
   v.currentTime = Math.min(Math.max(0, v.currentTime + delta), v.duration);
 }
-// Pinch-to-fill, matching the Android app's PlayerScreen: two fingers spread on the
-// video fills the screen (object-fit crop, NOT the Fullscreen API), pinch back in
-// fits again; the touch-only zoom button toggles the same state. touch-action:
-// pan-y keeps vertical scroll working over the video and stops page pinch-zoom.
-function setVideoFill(on) {
-  const w = document.querySelector('.videowrap');
-  if (!w) return;
-  w.classList.toggle('fill', !!on);
-  const z = $('pbZoom');
-  if (z) { z.setAttribute('aria-pressed', on ? 'true' : 'false'); z.setAttribute('aria-label', on ? 'Fit to screen' : 'Fill screen'); z.title = on ? 'Fit to screen' : 'Fill screen'; }
+// Pinch-to-fullscreen: two fingers spread on the video enters fullscreen with the
+// whole picture (contain, never a crop), pinch back in exits. The gesture is only
+// RECOGNIZED on touchmove; the fullscreen request fires on touchend because the
+// Fullscreen API needs a user-gesture event and touchmove does not count on every
+// engine. Enter order: element fullscreen (custom controls stay) -> the video's
+// native fullscreen -> an in-app viewport fill (NOT OS fullscreen: the status bar
+// and, outside standalone, browser chrome stay). The touch-only zoom button
+// toggles the same state. touch-action: pan-y keeps vertical scroll working over
+// the video and stops page pinch-zoom.
+function playerFullscreenActive() {
+  const v = $('player');
+  const pov = $('playerWrap');
+  return !!(document.fullscreenElement || document.webkitFullscreenElement ||
+    (v && v.webkitDisplayingFullscreen) ||
+    (pov && pov.classList.contains('landscape-fill')));
 }
-$('pbZoom').addEventListener('click', () => setVideoFill(!document.querySelector('.videowrap').classList.contains('fill')));
+function updatePbZoom() {
+  const z = $('pbZoom');
+  if (!z) return;
+  const on = playerFullscreenActive();
+  z.setAttribute('aria-pressed', on ? 'true' : 'false');
+  z.setAttribute('aria-label', on ? 'Exit full screen' : 'Full screen');
+  z.title = on ? 'Exit full screen' : 'Full screen';
+}
+function realFullscreenActive() {
+  const v = $('player');
+  return !!(document.fullscreenElement || document.webkitFullscreenElement || (v && v.webkitDisplayingFullscreen));
+}
+function enterPlayerFullscreen() {
+  const wrap = document.querySelector('.videowrap');
+  const video = $('player');
+  if (realFullscreenActive()) return;
+  autoFillSuppressed = false;
+  // Upgrade an in-app viewport fill (rotate or pinch fallback) to real fullscreen.
+  const pov = $('playerWrap');
+  if (pov) pov.classList.remove('landscape-fill');
+  const native = () => { if (video && video.webkitEnterFullscreen) { try { video.webkitEnterFullscreen(); return true; } catch {} } return false; };
+  const inApp = () => { if (pov) { pov.classList.add('landscape-fill'); updatePbZoom(); } };
+  if (wrap && wrap.requestFullscreen) {
+    try { wrap.requestFullscreen().then(updatePbZoom).catch(() => { if (!native()) inApp(); }); } catch { if (!native()) inApp(); }
+  } else if (!native()) inApp();
+}
+function exitPlayerFullscreen() {
+  autoFillSuppressed = true;
+  const video = $('player');
+  if (document.fullscreenElement || document.webkitFullscreenElement) {
+    const exit = document.exitFullscreen || document.webkitExitFullscreen;
+    if (exit) { try { const p = exit.call(document); if (p && p.catch) p.catch(() => {}); } catch {} }
+  } else if (video && video.webkitDisplayingFullscreen && video.webkitExitFullscreen) {
+    try { video.webkitExitFullscreen(); } catch {}
+  }
+  const pov = $('playerWrap');
+  if (pov) pov.classList.remove('landscape-fill');
+  updatePbZoom();
+}
+$('pbZoom').addEventListener('click', () => { if (playerFullscreenActive()) exitPlayerFullscreen(); else enterPlayerFullscreen(); });
+document.addEventListener('fullscreenchange', updatePbZoom);
+$('player').addEventListener('webkitbeginfullscreen', updatePbZoom);
+$('player').addEventListener('webkitendfullscreen', updatePbZoom);
 let pinchStartDistance = 0;
+let pinchPending = 0; // 1 = spread (enter fullscreen), -1 = pinch in (exit); applied on touchend
+let autoFillSuppressed = false; // a deliberate exit (pinch-in / zoom button) suppresses legacy rotate-to-fill re-entry until playback or orientation changes
 const pinchDist = (t) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
-document.querySelector('.videowrap').addEventListener('touchstart', (e) => { if (e.touches.length === 2) pinchStartDistance = pinchDist(e.touches); }, { passive: true });
+document.querySelector('.videowrap').addEventListener('touchstart', (e) => { if (e.touches.length === 2) { pinchStartDistance = pinchDist(e.touches); pinchPending = 0; } }, { passive: true });
 document.querySelector('.videowrap').addEventListener('touchmove', (e) => {
   if (e.touches.length !== 2 || pinchStartDistance <= 0) return;
   e.preventDefault();
   const d = pinchDist(e.touches);
   if (d <= 0) return;
   const ratio = d / pinchStartDistance;
-  const filling = document.querySelector('.videowrap').classList.contains('fill');
-  if (ratio > 1.25 && !filling) { setVideoFill(true); pinchStartDistance = d; }
-  else if (ratio < 0.8 && filling) { setVideoFill(false); pinchStartDistance = d; }
+  if (ratio > 1.25) { pinchPending = 1; pinchStartDistance = d; }
+  else if (ratio < 0.8) { pinchPending = -1; pinchStartDistance = d; }
 }, { passive: false });
-document.querySelector('.videowrap').addEventListener('touchend', (e) => { if (e.touches.length < 2) pinchStartDistance = 0; }, { passive: true });
+document.querySelector('.videowrap').addEventListener('touchend', (e) => {
+  if (e.touches.length < 2) {
+    if (pinchPending === 1 && !realFullscreenActive()) enterPlayerFullscreen();
+    else if (pinchPending === -1 && playerFullscreenActive()) exitPlayerFullscreen();
+    pinchPending = 0;
+    pinchStartDistance = 0;
+  }
+}, { passive: true });
 $('pbBack10').addEventListener('click', () => seekPlayerBy(-10));
 $('pbFwd10').addEventListener('click', () => seekPlayerBy(10));
 $('pbPlay').addEventListener('click', () => { const v = $('player'); if (v.paused) v.play().catch(() => {}); else v.pause(); });
@@ -2017,6 +2072,7 @@ function syncLandscapeFill() {
   const landscape = window.innerWidth > window.innerHeight;
   const playing = v && !v.paused && !v.ended;
   if (landscape && playing) {
+    if (autoFillSuppressed) { ov.classList.remove('landscape-fill'); return; }
     if (document.fullscreenElement) { ov.classList.remove('landscape-fill'); return; }
     if (wrap && wrap.requestFullscreen) {
       wrap.requestFullscreen()
@@ -2026,12 +2082,14 @@ function syncLandscapeFill() {
       ov.classList.add('landscape-fill');
     }
   } else {
+    if (!landscape) autoFillSuppressed = false; // portrait: a later landscape play auto-fills again
     ov.classList.remove('landscape-fill');
     if (!landscape && document.fullscreenElement) document.exitFullscreen().catch(() => {});
   }
 }
 ['play', 'pause', 'ended'].forEach((ev) => $('player').addEventListener(ev, syncLandscapeFill));
-window.addEventListener('orientationchange', () => setTimeout(syncLandscapeFill, 250));
+$('player').addEventListener('loadstart', () => { autoFillSuppressed = false; }); // a new item re-arms rotate-to-fill
+window.addEventListener('orientationchange', () => { autoFillSuppressed = false; setTimeout(syncLandscapeFill, 250); });
 window.addEventListener('resize', syncLandscapeFill);
 document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement) setTimeout(syncLandscapeFill, 60); });
 
