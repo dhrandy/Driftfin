@@ -30,6 +30,14 @@ input, select { background: #22222e; color: var(--text); border: 1px solid #3333
 .topnav a:hover, .bottomnav a:hover { background: rgba(47,47,47,.7); color: #fff; }
 .topnav a:focus-visible, .bottomnav a:focus-visible { outline: 2px solid #fff; outline-offset: 2px; color: #fff; }
 .topnav a.active, .bottomnav a.active { background: #fff; color: #000; }
+/* The search icon on the pill's left has no right-side counterpart, so the labels
+   lean right of the pill center. A matching-width spacer after the last item puts
+   the text cluster back on center at each topbar breakpoint. */
+.topnav > a { flex-shrink: 0; }
+.topnav::after { content: ''; width: 45px; flex-shrink: 1; min-width: 0; }
+@media (max-width: 1023px) {
+  .topnav::after { width: 37px; }
+}
 .top-actions { display: flex; gap: 12px; align-items: center; }
 .user-label { color: var(--muted); }
 main { padding: 0 24px 96px; max-width: 1400px; margin: 0 auto; }
@@ -99,7 +107,7 @@ main { padding: 0 24px 96px; max-width: 1400px; margin: 0 auto; }
 .videowrap:fullscreen { background: #000; display: flex; align-items: center; border-radius: 0; }
 .videowrap:fullscreen #player { width: 100%; height: 100%; aspect-ratio: auto; border-radius: 0; }
 /* Element fullscreen keeps its own chrome: the windowed selector row and stream note stay out of it. */
-.videowrap:fullscreen .player-controls, .videowrap:fullscreen #playerNote { display: none; }
+.videowrap:fullscreen .player-controls, .videowrap:fullscreen #playerNote, .videowrap:fullscreen #subError { display: none; }
 #player { width: 100%; aspect-ratio: 16/9; background: #000; border-radius: 12px; }
 .player-controls { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 12px; }
 .up-next { background: var(--card); border-radius: 10px; padding: 12px; margin-top: 12px; }
@@ -129,8 +137,11 @@ form label input:not([type="checkbox"]) { display: block; width: 100%; max-width
 }
 /* Narrow tablet/large phone landscape: keep the pill to one line without overflow. */
 @media (max-width: 760px) and (min-width: 640px) {
-  .topbar { gap: 10px; padding: 12px 12px; }
-  .topnav a { padding: 6px 8px; }
+  .topbar { gap: 8px; padding: 12px 10px; }
+  .logo { font-size: 18px; }
+  .topnav { flex-shrink: 1; }
+  .topnav a { padding: 6px 7px; }
+  .topnav::after { width: 31px; }
 }
 /* Phone: bottom nav, top nav hidden except logo and sign-out. */
 @media (max-width: 639px) {
@@ -284,7 +295,7 @@ body.signed-out .logo { font-size: 28px; }
 #playerWrap.landscape-fill #player { max-height: none; height: 100%; }
 #playerWrap.landscape-fill .player-bar { position: absolute; left: 12px; right: 12px; bottom: 10px; background: rgba(12,12,16,0.72); border-radius: 10px; padding: 6px 10px; }
 
-#playerWrap.landscape-fill .player-controls, #playerWrap.landscape-fill #playerNote { display: none; }
+#playerWrap.landscape-fill .player-controls, #playerWrap.landscape-fill #playerNote, #playerWrap.landscape-fill #subError { display: none; }
 
 /* Player seek: accent played portion, muted remainder (Chromium/Edge) */
 #pbSeek { -webkit-appearance: none; appearance: none; background: transparent; cursor: pointer; --fill: 0%; }
@@ -303,8 +314,8 @@ body.signed-out .logo { font-size: 28px; }
 .user-avatar { width: 30px; height: 30px; border-radius: 50%; vertical-align: middle; margin-right: 6px; }
 
 /* Idle chrome fade: controls reveal on pointer activity and fade while playing. */
-#playerBack, #fsBtn, #playerBar, #skipIntroBtn, .player-controls, #playerNote, #pbSheet { transition: opacity .4s; }
-.videowrap.hide-chrome #playerBack, .videowrap.hide-chrome #fsBtn, .videowrap.hide-chrome #playerBar, .videowrap.hide-chrome #skipIntroBtn, .videowrap.hide-chrome .player-controls, .videowrap.hide-chrome #playerNote, .videowrap.hide-chrome .player-controls label, .videowrap.hide-chrome #pbSheet { opacity: 0; pointer-events: none; }
+#playerBack, #fsBtn, #playerBar, #skipIntroBtn, .player-controls, #playerNote, #subError, #pbSheet { transition: opacity .4s; }
+.videowrap.hide-chrome #playerBack, .videowrap.hide-chrome #fsBtn, .videowrap.hide-chrome #playerBar, .videowrap.hide-chrome #skipIntroBtn, .videowrap.hide-chrome .player-controls, .videowrap.hide-chrome #playerNote, .videowrap.hide-chrome #subError, .videowrap.hide-chrome .player-controls label, .videowrap.hide-chrome #pbSheet { opacity: 0; pointer-events: none; }
 .videowrap.hide-chrome, .videowrap.hide-chrome #player { cursor: none; }
 
 /* Touch 10-second skips: only where a coarse pointer makes arrow keys unavailable. */
@@ -364,7 +375,7 @@ body:has(#view-player:not([hidden])) #playerWrap:not(.landscape-fill) #player { 
    With the floating row gone, the pause cast strip sits right above the bar and
    Skip Intro rides a little higher than the bar top. */
 body:has(#view-player:not([hidden])) #playerWrap .player-controls,
-body:has(#view-player:not([hidden])) #playerWrap #playerNote { display: none; }
+body:has(#view-player:not([hidden])) #playerWrap #playerNote, body:has(#view-player:not([hidden])) #playerWrap #subError { display: none; }
 body:has(#view-player:not([hidden])) #pauseInfo:not(.compact):not(.tiny) .pause-cast { bottom: 76px; }
 body:has(#view-player:not([hidden])) #pauseInfo.compact .pause-cast { bottom: 72px; }
 body:has(#view-player:not([hidden])) #skipIntroBtn { bottom: 84px; }

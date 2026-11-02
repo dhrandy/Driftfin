@@ -1343,13 +1343,12 @@ async function goPlayer(id, opts) {
       track.kind = 'subtitles';
       track.label = s.DisplayTitle || s.Language || 'Subtitle';
       track.srclang = (s.Language || 'en').slice(0, 2);
-      // External sidecars use the server's DeliveryUrl through the proxy; embedded text
-      // tracks use Jellyfin's standard subtitle stream endpoint. No token is in the page.
-      if (s.DeliveryUrl) {
-        track.src = '/api/jellyfin/' + String(s.DeliveryUrl).replace(/^\//, '');
-      } else {
-        track.src = `/api/jellyfin/Videos/${id}/${s.Index}/Subtitles/${s.Index}/Stream.vtt?MediaSourceId=${source.Id}`;
-      }
+      // Jellyfin's subtitle endpoint fetches and converts any text track -
+      // embedded, local sidecar, or remote (the encoder reads http sources
+      // itself): Videos/{item}/{mediaSourceId}/Subtitles/{index}/Stream.vtt.
+      // Always ask for VTT: a sidecar's DeliveryUrl keeps the original format
+      // (Stream.srt), which browser track elements cannot parse.
+      track.src = `/api/jellyfin/Videos/${encodeURIComponent(id)}/${encodeURIComponent(source.Id)}/Subtitles/${encodeURIComponent(s.Index)}/Stream.vtt`;
       video.appendChild(track);
     });
     // Default audio: remembered preference (English by default, like the TV apps), else first stream.
@@ -1423,6 +1422,7 @@ async function goPlayer(id, opts) {
         if (tts[opts.subtitleTrackIndex]) tts[opts.subtitleTrackIndex].mode = 'showing';
       }
     }
+    if (subSel.value !== '') startSubWatch();
     video.playbackRate = parseFloat($('speedSelect').value || '1');
     if (startTicks > 0) {
       video.addEventListener('loadedmetadata', function once() {
@@ -1558,6 +1558,8 @@ function stopPlayback(reportStopped) {
   }
   state.playFailed = false;
   stopProgress();
+  stopSubWatch();
+  setSubError('');
   const pb = $('playerBar'); if (pb) pb.hidden = true;
   state.playingItem = null; state.pauseCastRemote = null; hidePauseInfo();
   const pov = $('playerWrap'); if (pov) pov.classList.remove('landscape-fill');
@@ -1565,6 +1567,49 @@ function stopPlayback(reportStopped) {
   if (state.hls) { try { state.hls.destroy(); } catch {} state.hls = null; }
   if (video) { video.pause(); video.removeAttribute('src'); video.load(); }
   state.playingItemId = null;
+}
+function stopSubWatch() {
+  if (state.subWatchTimer) { clearInterval(state.subWatchTimer); state.subWatchTimer = null; }
+}
+// Track elements do not fire reliable load/error events in every browser, so poll
+// the showing track: surface a failed fetch (readyState 3), a loaded but empty
+// track (readyState 2 with zero cues) distinctly, and clear once a track has cues.
+function startSubWatch() {
+  stopSubWatch();
+  let ticks = 0;
+  state.subWatchTimer = setInterval(() => {
+    const v = $('player');
+    const sel = $('subtitleSelect');
+    if (!v || !sel || ++ticks > 30) { stopSubWatch(); return; }
+    const idx = parseInt(sel.value, 10);
+    if (Number.isNaN(idx)) { stopSubWatch(); return; }
+    const el = v.querySelectorAll('track')[idx];
+    if (!el) { stopSubWatch(); return; }
+    if (el.readyState === 3) {
+      setSubError('Subtitles failed to load for this track.');
+      stopSubWatch();
+    } else if (el.readyState === 2 && el.track && el.track.cues) {
+      setSubError(el.track.cues.length ? '' : 'This subtitle track loaded but contains no captions.');
+      stopSubWatch();
+    }
+  }, 1000);
+}
+function setSubError(msg) {
+  state.subError = msg || '';
+  const el = $('subError');
+  if (el) { el.textContent = msg || ''; el.hidden = !msg; }
+  // Theater hides the legacy controls row, so mirror the error into the open sheet.
+  const sheet = $('pbSheet');
+  if (sheet && !sheet.hidden) {
+    let row = sheet.querySelector('.ps-note-suberr');
+    if (!msg) { if (row) row.remove(); return; }
+    if (!row) {
+      row = document.createElement('div');
+      row.className = 'ps-note ps-note-suberr';
+      sheet.appendChild(row);
+    }
+    row.textContent = msg;
+  }
 }
 function applyPersistedSubtitle() {
   const pref = state.settings && state.settings.subtitleLanguage;
@@ -1802,12 +1847,14 @@ $('audioSelect').addEventListener('change', async () => {
   if (id) { await goPlayer(id, { audioStreamIndex: idx, mediaSourceId: state.mediaSourceId, preservePosition: pos }); }
 });
 $('subtitleSelect').addEventListener('change', () => {
+  setSubError('');
   const idx = $('subtitleSelect').value;
   const tracks = $('player').textTracks;
   for (let i = 0; i < tracks.length; i++) tracks[i].mode = 'disabled';
   if (idx !== '') {
     const track = tracks[parseInt(idx, 10)];
     if (track) track.mode = 'showing';
+    startSubWatch();
     const st = state.subtitleTracks[parseInt(idx, 10)];
     saveSettingPatch({ subtitleLanguage: (st && st.Language) || null });
   } else {
@@ -2103,6 +2150,13 @@ function openPbSheet(kind) {
       pbSheet.appendChild(n);
     }
   }
+  if (state.subError) {
+    addSep();
+    const n = document.createElement('div');
+    n.className = 'ps-note ps-note-suberr';
+    n.textContent = state.subError;
+    pbSheet.appendChild(n);
+  }
   // Anchor above the transport bar, and above Skip Intro whenever it is up.
   const wr = wrap.getBoundingClientRect();
   let bottom = wr.bottom - bar.getBoundingClientRect().top + 10;
@@ -2155,14 +2209,14 @@ $('pbSettings').addEventListener('click', () => togglePbSheet('settings'));
   if (!w) return;
   let ateGesture = false;
   // Tap outside the sheet dismisses it. Taps on explicit controls (transport bar,
-  // Skip Intro, cast strip) still reach their control while the sheet closes; a tap
-  // on the video or pause backdrop is consumed so dismissing never toggles
-  // play/pause. Ordinary video taps are untouched when no sheet is open.
+  // Skip Intro, cast strip, fullscreen, back) still reach their control while the
+  // sheet closes; a tap on the video or pause backdrop is consumed so dismissing
+  // never toggles play/pause. Ordinary video taps are untouched when no sheet is open.
   w.addEventListener('pointerdown', (e) => {
     if (pbSheet.hidden) { ateGesture = false; return; } // a stale flag never outlives its gesture
     if (e.target.closest('#pbSheet, #pbSubs, #pbSettings')) return;
     closePbSheet();
-    if (!e.target.closest('#playerBar, #skipIntroBtn, #pauseCast')) {
+    if (!e.target.closest('#playerBar, #skipIntroBtn, #pauseCast, #fsBtn, #playerBack')) {
       ateGesture = true;
       e.preventDefault(); // also suppresses the compat click in most engines
     }
