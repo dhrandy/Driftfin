@@ -1904,7 +1904,7 @@ function seekPlayerBy(delta) {
 // item IDs, account data or secrets. When off, log() is a no-op.
 const playerDiag = (() => {
   const MAX = 60;
-  const DIAG_IDS = ['player', 'playerBar', 'fsBtn', 'playerBack', 'pbZoom', 'pbPlay', 'pbBack10', 'pbFwd10', 'pbMute', 'pbSubs', 'pbSettings', 'pbSeek', 'pbTime', 'pbSheet', 'skipIntroBtn', 'pauseCast'];
+  const DIAG_IDS = ['player', 'playerBar', 'playerBack', 'pbZoom', 'pbPlay', 'pbBack10', 'pbFwd10', 'pbMute', 'pbSubs', 'pbSettings', 'pbSeek', 'pbTime', 'pbSheet', 'skipIntroBtn', 'pauseCast'];
   let active = false, box = null, logView = null, t0 = 0;
   let lines = [];
   let listeners = [];
@@ -2320,7 +2320,7 @@ $('pbSettings').addEventListener('click', () => togglePbSheet('settings'));
     if (pbSheet.hidden) { ateGesture = false; return; } // a stale flag never outlives its gesture
     if (e.target.closest('#pbSheet, #pbSubs, #pbSettings')) return;
     closePbSheet();
-    if (!e.target.closest('#playerBar, #skipIntroBtn, #pauseCast, #fsBtn, #playerBack')) {
+    if (!e.target.closest('#playerBar, #skipIntroBtn, #pauseCast, #playerBack')) {
       ateGesture = true;
       e.preventDefault(); // also suppresses the compat click in most engines
     }
@@ -2453,7 +2453,6 @@ function togglePlayerFullscreen() {
   if (playerFullscreenActive()) exitPlayerFullscreen();
   else enterPlayerFullscreen();
 }
-$('fsBtn').addEventListener('click', togglePlayerFullscreen);
 $('speedSelect').addEventListener('change', () => { $('player').playbackRate = parseFloat($('speedSelect').value); });
 
 function reportStoppedOnUnload() {
