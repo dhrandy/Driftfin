@@ -68,6 +68,10 @@ function runtimeLabel(item) {
   const h = Math.floor(total / 60), min = total % 60;
   return h > 0 ? h + 'h ' + min + 'm' : min + 'm';
 }
+const ICON_HEART = '<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true" focusable="false"><path d="M12 21s-7.5-4.9-10-9.3C.4 8.6 2.2 5 5.7 5c2 0 3.5 1.1 4.3 2.6h4c.8-1.5 2.3-2.6 4.3-2.6 3.5 0 5.3 3.6 3.7 6.7C19.5 16.1 12 21 12 21z"/></svg>';
+const ICON_STAR = '<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true" focusable="false"><path d="M12 2l2.9 6.3 6.9.8-5.1 4.7 1.4 6.8L12 17.3 5.9 20.6l1.4-6.8L2.2 9.1l6.9-.8z"/></svg>';
+const ICON_CHECK = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><polyline points="4 12.5 9.5 18 20 6.5"/></svg>';
+const ICON_TRAILER = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="9" x2="22" y2="9"/><line x1="7" y1="5" x2="5" y2="9"/><line x1="12" y1="5" x2="10" y2="9"/><line x1="17" y1="5" x2="15" y2="9"/><line x1="22" y1="5" x2="20" y2="9"/></svg>';
 function episodeLabel(ep) {
   if (!ep || ep.ParentIndexNumber == null || ep.IndexNumber == null) return null;
   return 'S' + ep.ParentIndexNumber + ':E' + ep.IndexNumber;
@@ -398,8 +402,11 @@ function renderHero(item) {
 
 // ---------- Library (Shows / Movies) ----------
 let libraryKind = 'shows';
-async function loadLibrary(kind) {
+async function loadLibrary(kind, fresh) {
   libraryKind = kind;
+  // TV LibraryScreen: the watched filter is in-memory per screen - a fresh library
+  // navigation starts at All, while sort/order stay persisted settings.
+  if (fresh) $('watchedFilter').value = '';
   if (!(await ensureSignedIn())) return;
   showView('library', kind);
   $('libraryTitle').textContent = kind === 'shows' ? 'Shows' : 'Movies';
@@ -421,6 +428,7 @@ async function loadLibrary(kind) {
     state.libraryPaging = {
       views: viewsToUse, type,
       sort: $('librarySort').value, order: $('librarySortOrder').value,
+      watch: $('watchedFilter').value,
       offsets: {}, totals: {}, done: {},
     };
     const items = await fetchLibraryPage();
@@ -441,7 +449,7 @@ async function fetchLibraryPage() {
   const uid = state.userId;
   const jobs = pg.views.filter((v) => !pg.done[v.Id]).map(async (view) => {
     const start = pg.offsets[view.Id] || 0;
-    const res = await jf(`Items?userId=${uid}&ParentId=${view.Id}&IncludeItemTypes=${pg.type}&Recursive=true&SortBy=${encodeURIComponent(pg.sort)}&SortOrder=${encodeURIComponent(pg.order)}&limit=${LIBRARY_PAGE}&StartIndex=${start}&fields=Overview,Genres,MediaStreams`);
+    const res = await jf(`Items?userId=${uid}&ParentId=${view.Id}&IncludeItemTypes=${pg.type}&Recursive=true&SortBy=${encodeURIComponent(pg.sort)}&SortOrder=${encodeURIComponent(pg.order)}${pg.watch ? `&Filters=${pg.watch}` : ''}&limit=${LIBRARY_PAGE}&StartIndex=${start}&fields=Overview,Genres,MediaStreams`);
     const got = res.Items || [];
     const total = typeof res.TotalRecordCount === 'number' ? res.TotalRecordCount : (start + got.length);
     pg.totals[view.Id] = total;
@@ -477,6 +485,111 @@ $('libraryMore').addEventListener('click', async () => {
 });
 
 // ---------- Details (full season switching) ----------
+/* TV DetailsScreen MetaRow: year (movies, or a series with no premiere date), the play-target
+   episode's air date + runtime (else the series premiere date), content-rating badge,
+   N Seasons / runtime, community rating, then the 4K/HDR badges. */
+function detailMetaHtml(item, target) {
+  const parts = [];
+  const series = item.Type === 'Series';
+  const air = formatAirDate(item.PremiereDate);
+  if (!(series && air) && item.ProductionYear) parts.push(`<span>${esc(String(item.ProductionYear))}</span>`);
+  if (series) {
+    const ep = target && target.Type === 'Episode' ? target : null;
+    const epAir = ep ? formatAirDate(ep.PremiereDate) : null;
+    if (epAir) parts.push(`<span>Aired ${esc(epAir)}${runtimeLabel(ep) ? ' · ' + esc(runtimeLabel(ep)) : ''}</span>`);
+    else if (air) parts.push(`<span>Premiered ${esc(air)}</span>`);
+  }
+  if (item.OfficialRating) parts.push(`<span class="badge">${esc(item.OfficialRating)}</span>`);
+  const duration = series
+    ? (item.ChildCount != null ? (item.ChildCount === 1 ? '1 Season' : item.ChildCount + ' Seasons') : '')
+    : runtimeLabel(item);
+  if (duration) parts.push(`<span>${esc(duration)}</span>`);
+  if (typeof item.CommunityRating === 'number') parts.push(`<span>★ ${esc(item.CommunityRating.toFixed(1))}</span>`);
+  const badges = formatBadges(item);
+  return parts.join(' ') + (badges ? ' ' + badges : '');
+}
+/* TV genreLine: a series leads with its premiere date when the episode air date took the
+   meta-row slot, then the series status, then genres. Movies and episodes show genres only. */
+function genreLineHtml(item, target) {
+  const segs = [];
+  if (item.Type === 'Series') {
+    const epAired = target && target.Type === 'Episode' ? formatAirDate(target.PremiereDate) : null;
+    const air = formatAirDate(item.PremiereDate);
+    if (epAired && air) segs.push('Premiered ' + air);
+    const st = String(item.SeriesStatus || '').trim().toLowerCase();
+    const status = st === 'continuing' ? 'Continuing' : st === 'ended' ? 'Ended' : (st === 'canceled' || st === 'cancelled') ? 'Canceled' : null;
+    if (status) segs.push(status);
+  }
+  const genres = (item.Genres || []).join(' · ');
+  if (genres) segs.push(genres);
+  return segs.length ? `<p class="detail-genres muted">${segs.map(esc).join('  ·  ')}</p>` : '';
+}
+/* TV Trailers.youtubeVideoId: the 11-char video id from the common YouTube link shapes. */
+function youtubeVideoId(url) {
+  if (!url || !String(url).trim()) return null;
+  let u;
+  try { u = new URL(String(url).trim()); } catch { return null; }
+  if (u.protocol !== 'https:' && u.protocol !== 'http:') return null;
+  const host = u.hostname.toLowerCase();
+  const hosts = ['youtube.com', 'www.youtube.com', 'm.youtube.com', 'music.youtube.com', 'youtube-nocookie.com', 'www.youtube-nocookie.com'];
+  let id = null;
+  if (host === 'youtu.be') id = u.pathname.replace(/^\//, '').split('/')[0];
+  else if (hosts.includes(host)) {
+    const p = u.pathname;
+    if (p === '/watch') id = u.searchParams.get('v');
+    else if (p.startsWith('/embed/') || p.startsWith('/shorts/') || p.startsWith('/v/')) id = p.slice(p.indexOf('/', 1) + 1).split('/')[0];
+  }
+  return id && /^[A-Za-z0-9_-]{11}$/.test(id) ? id : null;
+}
+/* TV RelatedItems.filter: same type, shares a genre with the source, at least 4 left -
+   otherwise the row stays hidden rather than vouching for loose matches. */
+function relatedItemsFilter(source, candidates) {
+  const genres = (source.Genres || []).map((g) => String(g).toLowerCase());
+  if (!genres.length) return [];
+  const wanted = new Set(genres);
+  const kept = (candidates || []).filter((c) => c.Id !== source.Id && c.Type === source.Type && (c.Genres || []).some((g) => wanted.has(String(g).toLowerCase())));
+  return kept.length >= 4 ? kept : [];
+}
+/* TV DetailsScreen.load: trailer, similar items and episode 4K badges fill in after the page
+   shows; a failed lookup hides that control/row instead of erroring the page. */
+async function fillDetailExtras(item, seriesId) {
+  const uid = state.userId;
+  const still = () => state.currentItem && state.currentItem.Id === item.Id;
+  const jobs = [];
+  jobs.push((async () => {
+    try {
+      // Server trailer files first (TV Trailers.pick; some servers count remote trailers in
+      // LocalTrailerCount, so an empty local list falls through), then the YouTube links.
+      if ((item.LocalTrailerCount || 0) > 0) {
+        const local = await jf(`Items/${item.Id}/LocalTrailers?userId=${uid}`).catch(() => null);
+        const first = Array.isArray(local) && local[0] && local[0].Id ? local[0] : null;
+        if (first) { state.detailTrailer = { kind: 'local', id: first.Id }; return; }
+      }
+      for (const r of (item.RemoteTrailers || [])) {
+        const vid = youtubeVideoId(r && r.Url);
+        if (vid) { state.detailTrailer = { kind: 'youtube', id: vid }; return; }
+      }
+    } catch { /* hidden */ }
+  })());
+  if (seriesId) {
+    jobs.push((async () => {
+      // The server's own is4K filter, ids only; failure just means no episode badges.
+      try {
+        const res = await jf(`Items?userId=${uid}&parentId=${seriesId}&includeItemTypes=Episode&recursive=true&is4K=true&enableImages=false&enableUserData=false&limit=2000`);
+        state.fourKEpisodeIds = new Set((res.Items || []).map((i) => i.Id));
+      } catch { /* no badges */ }
+    })());
+  }
+  jobs.push((async () => {
+    try {
+      const sim = await jf(`Items/${item.Id}/Similar?userId=${uid}&limit=24&fields=Genres`);
+      state.detailSimilar = relatedItemsFilter(item, sim.Items || []);
+    } catch { /* row hidden */ }
+  })());
+  await Promise.all(jobs);
+  if (still()) renderDetails();
+}
+
 async function goDetails(id, keepSeasonId) {
   if (!(await ensureSignedIn())) return;
   showView('details');
@@ -487,22 +600,27 @@ async function goDetails(id, keepSeasonId) {
     const item = await jf(`Items/${id}?userId=${uid}`);
     state.currentItem = item;
     state.allEpisodes = []; state.seasons = []; state.playTarget = item; state.selectedSeasonId = null;
+    state.detailTrailer = null; state.detailSimilar = []; state.fourKEpisodeIds = new Set();
     if (item.Type === 'Movie' || item.Type === 'Series') {
       try { state.watchlistIds = ((await api('/api/watchlist')) || {}).ids || []; } catch { state.watchlistIds = []; }
     }
-    if (item.Type === 'Series') {
+    const seriesId = item.Type === 'Series' ? item.Id : (item.Type === 'Episode' && item.SeriesId ? item.SeriesId : null);
+    if (seriesId) {
       // TV DetailsScreen: seasons via Items (parentId + IncludeItemTypes=Season, SortName),
       // all episodes in one call (limit 2000, fields Overview,PremiereDate,People), filtered client-side.
+      // Episode entries (Continue Watching / Next Up) get the same season+episode browsing
+      // WITHOUT losing the requested episode as the Play/Resume target.
       const [seasonsRes, episodesRes] = await Promise.all([
-        jf(`Items?userId=${uid}&parentId=${item.Id}&includeItemTypes=Season&sortBy=SortName`),
-        jf(`Shows/${item.Id}/Episodes?userId=${uid}&fields=Overview,PremiereDate,People&limit=2000`),
+        jf(`Items?userId=${uid}&parentId=${seriesId}&includeItemTypes=Season&sortBy=SortName`),
+        jf(`Shows/${seriesId}/Episodes?userId=${uid}&fields=Overview,PremiereDate,People&limit=2000`),
       ]);
       state.seasons = seasonsRes.Items || [];
       state.allEpisodes = episodesRes.Items || [];
-      state.playTarget = pickEpisodeTarget(state.allEpisodes) || item;
+      state.playTarget = item.Type === 'Episode' ? item : (pickEpisodeTarget(state.allEpisodes) || item);
       state.selectedSeasonId = keepSeasonId || (state.playTarget && state.playTarget.SeasonId) || (state.seasons[0] && state.seasons[0].Id) || null;
     }
     renderDetails();
+    fillDetailExtras(item, seriesId);
   } catch (e) {
     el.innerHTML = `<p class="error">Could not load details from Jellyfin: ${esc(e.message)}</p>`;
   }
@@ -513,24 +631,32 @@ function renderDetails() {
   if (!item) return;
   const uid = state.userId;
   const isSeries = item.Type === 'Series';
+  // Episode entries carry their series' season/episode browsing (loaded in goDetails).
+  const hasSeasons = isSeries || (item.Type === 'Episode' && state.seasons.length > 0);
   const target = state.playTarget || item;
   const isFav = item.UserData && item.UserData.IsFavorite;
   // Watched button acts on the play-target episode for a series, never the series id
   // (marking the series id would mark every episode watched on the server).
-  const watchedTarget = isSeries && target.Type === 'Episode' ? target : item;
+  const watchedTarget = hasSeasons && target.Type === 'Episode' ? target : item;
   const watchedPlayed = watchedTarget.UserData && watchedTarget.UserData.Played;
   let seasonsHtml = '';
-  if (isSeries) {
+  if (hasSeasons) {
     const shown = state.allEpisodes.filter((ep) => ep.SeasonId === state.selectedSeasonId);
     const list = shown.length ? shown : state.allEpisodes;
-    const chips = state.seasons.map((s) => `<button type="button" class="season-chip${s.Id === state.selectedSeasonId ? ' active' : ''}" data-season="${esc(s.Id)}">${esc(s.Name)}</button>`).join(' ');
+    const chips = state.seasons.length > 1 ? state.seasons.map((s) => `<button type="button" class="season-chip${s.Id === state.selectedSeasonId ? ' active' : ''}" data-season="${esc(s.Id)}">${esc(s.Name)}</button>`).join(' ') : '';
     const episodesHtml = list.map((ep) => {
       const pct = ep.UserData && ep.UserData.PlayedPercentage ? Math.round(ep.UserData.PlayedPercentage) : 0;
       const air = formatAirDate(ep.PremiereDate);
-      return `<div class="episode" data-id="${esc(ep.Id)}">
+      const ethumb = ep.ImageTags && ep.ImageTags.Primary
+        ? `/api/jellyfin/Items/${ep.Id}/Images/Primary?maxWidth=480&quality=90`
+        : (ep.ParentBackdropItemId ? `/api/jellyfin/Items/${ep.ParentBackdropItemId}/Images/Backdrop?maxWidth=480&quality=90` : '');
+      const ep4k = state.fourKEpisodeIds && state.fourKEpisodeIds.has(ep.Id);
+      return `<div class="episode${ep.Id === item.Id ? ' current' : ''}" data-id="${esc(ep.Id)}">
+        ${ethumb ? `<img class="episode-thumb" src="${ethumb}" alt="" loading="lazy" onerror="this.remove()">` : ''}
         <div class="episode-main">
-          <span><strong>${esc(episodeLabel(ep) || '')}</strong> ${esc(ep.Name)}</span>
+          <span><strong>${esc(episodeLabel(ep) || '')}</strong> ${esc(ep.Name)}${ep4k ? ' <span class="badge">4K</span>' : ''}</span>
           <span class="muted">${air ? esc(air) + ' · ' : ''}${runtimeLabel(ep)}${ep.UserData && ep.UserData.Played ? ' · ✓ Watched' : ''}</span>
+          ${ep.Overview ? `<div class="episode-overview muted">${esc(ep.Overview)}</div>` : ''}
           ${pct ? `<div class="progress"><div style="width:${pct}%"></div></div>` : ''}
         </div>
         <div class="episode-actions">
@@ -539,7 +665,7 @@ function renderDetails() {
         </div>
       </div>`;
     }).join('') || '<p class="muted">No episodes returned for this season.</p>';
-    seasonsHtml = `<h2>Seasons and Episodes</h2><div class="season-chips">${chips}</div>${episodesHtml}`;
+    seasonsHtml = `<h2>Seasons and Episodes</h2>${chips ? `<div class="season-chips">${chips}</div>` : ''}${episodesHtml}`;
   }
   // TV DetailsScreen cast rules:
   // - Series with a selected season: actors of THAT season's episodes, episode order,
@@ -553,8 +679,8 @@ function renderDetails() {
     for (const p of list) { const k = p.Id || 'name:' + (p.Name || ''); if (!seen.has(k)) { seen.add(k); out.push(p); } }
     return out;
   };
-  const seasonEps = isSeries ? state.allEpisodes.filter((ep) => ep.SeasonId === state.selectedSeasonId) : [];
-  const cast = isSeries
+  const seasonEps = hasSeasons ? state.allEpisodes.filter((ep) => ep.SeasonId === state.selectedSeasonId) : [];
+  const cast = hasSeasons
     ? dedupPeople((seasonEps.length ? seasonEps : state.allEpisodes).flatMap((ep) => actorsOf(ep.People))).slice(0, 15)
     : dedupPeople([...actorsOf(item.People), ...(target && target !== item ? actorsOf(target.People) : [])]).slice(0, 15);
   const castHtml = cast.length
@@ -565,24 +691,43 @@ function renderDetails() {
           ${p.Role ? `<div class="cast-role">${esc(p.Role)}</div>` : ''}
         </button>`).join('')}</div>`
     : '';
-  state.detailBackdropList = detailBackdropCandidates(item);
-  state.detailBackdropIdx = 0;
+  const similarHtml = state.detailSimilar && state.detailSimilar.length ? rowHtml('More Like This', state.detailSimilar, false) : '';
+  // Async fills re-render this page; keep the already-advanced backdrop candidate
+  // for the same item instead of restarting the chain (and re-firing 404s).
+  if (state.detailBackdropItemId !== item.Id) {
+    state.detailBackdropItemId = item.Id;
+    state.detailBackdropList = detailBackdropCandidates(item);
+    state.detailBackdropIdx = 0;
+  }
   el.innerHTML = `
-    ${state.detailBackdropList.length ? `<img class="details-backdrop" src="${state.detailBackdropList[0]}" alt="" onerror="window.__dfbNextBackdrop(this)">` : ''}
+    ${state.detailBackdropList.length && state.detailBackdropIdx < state.detailBackdropList.length ? `<img class="details-backdrop" src="${state.detailBackdropList[state.detailBackdropIdx]}" alt="" onerror="window.__dfbNextBackdrop(this)">` : ''}
     ${titleHtml(item)}
-    <div class="hero-meta">${metaLine(item)} ${formatBadges(item)}</div>
+    <div class="hero-meta">${detailMetaHtml(item, target)}</div>
     <p>${esc(item.Overview || '')}</p>
-    <button type="button" id="detailPlay">${playLabel(target)}</button>
-    ${isResumeable(target) ? `<button type="button" class="secondary" id="detailFromStart">Play from start</button>` : ''}
-    <button type="button" class="secondary" id="detailFav">${isFav ? 'Remove from My List' : 'Add to My List'}</button>
-    ${(item.Type === 'Movie' || item.Type === 'Series') && (!state.settings || state.settings.showWatchlist !== false) ? `<button type="button" class="secondary" id="detailStar">${(state.watchlistIds || []).includes(item.Id) ? '\u2605 On Watchlist' : '\u2606 Watchlist'}</button>` : ''}
-    <button type="button" class="secondary" id="detailWatched">${watchedPlayed ? 'Mark unwatched' : 'Mark watched'}${isSeries && target.Type === 'Episode' ? ' (' + esc(episodeLabel(target) || target.Name) + ')' : ''}</button>
+    ${genreLineHtml(item, target)}
+    <div class="detail-actions">
+      <button type="button" id="detailPlay">${playLabel(target)}</button>
+      ${isResumeable(target) ? `<button type="button" class="secondary" id="detailFromStart">Play from start</button>` : ''}
+      <button type="button" class="icon-btn" id="detailTrailer" aria-label="Watch trailer" title="Watch trailer"${state.detailTrailer ? '' : ' hidden'}>${ICON_TRAILER}</button>
+      <button type="button" class="icon-btn${watchedPlayed ? ' on' : ''}" id="detailWatched" aria-label="${watchedPlayed ? 'Mark unwatched' : 'Mark watched'}${target.Type === 'Episode' ? ' (' + esc(episodeLabel(target) || target.Name) + ')' : ''}" title="${watchedPlayed ? 'Mark unwatched' : 'Mark watched'}" aria-pressed="${watchedPlayed ? 'true' : 'false'}">${ICON_CHECK}</button>
+      ${(() => { const wlId = (item.Type === 'Episode' && item.SeriesId) ? item.SeriesId : item.Id; const wlOn = (state.watchlistIds || []).includes(wlId); return (item.Type === 'Movie' || item.Type === 'Series' || item.Type === 'Episode') && (!state.settings || state.settings.showWatchlist !== false) ? `<button type="button" class="icon-btn${wlOn ? ' on' : ''}" id="detailStar" aria-label="${wlOn ? 'On Watchlist - remove' : 'Add to Watchlist'}${item.Type === 'Episode' ? ' (series)' : ''}" title="${wlOn ? 'On Watchlist' : 'Add to Watchlist'}" aria-pressed="${wlOn ? 'true' : 'false'}">${ICON_STAR}</button>` : ''; })()}
+      <button type="button" class="icon-btn${isFav ? ' on' : ''}" id="detailFav" aria-label="${isFav ? 'Remove from My List' : 'Add to My List'}" title="${isFav ? 'Remove from My List' : 'Add to My List'}" aria-pressed="${isFav ? 'true' : 'false'}">${ICON_HEART}</button>
+      <span id="detailActionNote" class="muted" role="status"></span>
+    </div>
     ${castHtml}
-    ${seasonsHtml}`;
+    ${seasonsHtml}
+    ${similarHtml}`;
   el.querySelectorAll('.cast-person').forEach((btn) => btn.addEventListener('click', () => { location.hash = '#/actor?id=' + encodeURIComponent(btn.dataset.person); }));
+  bindCards(el);
   $('detailPlay').addEventListener('click', () => { location.hash = '#/player?id=' + encodeURIComponent(target.Id); });
   const fromStart = $('detailFromStart');
   if (fromStart) fromStart.addEventListener('click', () => { location.hash = '#/player?id=' + encodeURIComponent(target.Id) + '&start=1'; });
+  const trailerBtn = $('detailTrailer');
+  if (trailerBtn && state.detailTrailer) trailerBtn.addEventListener('click', () => {
+    // Local trailer files play in the app player; YouTube opens in a new tab.
+    if (state.detailTrailer.kind === 'local') location.hash = '#/player?id=' + encodeURIComponent(state.detailTrailer.id);
+    else window.open('https://www.youtube.com/watch?v=' + state.detailTrailer.id, '_blank', 'noopener');
+  });
   $('detailFav').addEventListener('click', async () => {
     const method = isFav ? 'DELETE' : 'POST';
     const updated = await api(`/api/jellyfin/UserFavoriteItems/${item.Id}?userId=${uid}`, { method });
@@ -594,11 +739,12 @@ function renderDetails() {
   });
   const starBtn = $('detailStar');
   if (starBtn) starBtn.addEventListener('click', async () => {
-    const r = await api('/api/watchlist', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: item.Id }) });
-    if (r && r.capped) { starBtn.textContent = 'Watchlist full (500 titles)'; return; }
+    const wlId = (item.Type === 'Episode' && item.SeriesId) ? item.SeriesId : item.Id;
+    const r = await api('/api/watchlist', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: wlId }) });
+    if (r && r.capped) { const note = $('detailActionNote'); if (note) note.textContent = 'Watchlist full (500 titles)'; return; }
     if (r) {
       const ids = new Set(state.watchlistIds || []);
-      if (r.starred) ids.add(item.Id); else ids.delete(item.Id);
+      if (r.starred) ids.add(wlId); else ids.delete(wlId);
       state.watchlistIds = [...ids];
     }
     renderDetails();
@@ -855,7 +1001,24 @@ async function goPlayer(id, opts) {
       note.textContent = 'Playing via direct stream through the server proxy.';
     } else if (source.SupportsTranscoding === true) {
       state.playMethod = 'Transcode';
-      const hlsUrl = `/api/hls/${id}/${source.Id}/master.m3u8?PlaySessionId=${state.playSessionId || ''}${audioParam}`;
+      // TV PlaybackNegotiator.choose: the transcode URL is the server's own TranscodingUrl. Its
+      // params (VideoCodec=h264, AudioCodec=aac, ...) are what make the server transcode to a
+      // browser-playable format; a bare master.m3u8 request lets Jellyfin fall back to defaults
+      // (it picked HEVC for an HEVC source), which Chrome cannot decode, leaving a stuck 0:00 player.
+      // Credentials are stripped - the token stays server-side in the proxy.
+      const tq = new URLSearchParams();
+      const tRaw = String(source.TranscodingUrl || '');
+      const qIdx = tRaw.indexOf('?');
+      if (qIdx >= 0) {
+        for (const [k, v] of new URLSearchParams(tRaw.slice(qIdx + 1))) {
+          if (k.toLowerCase() === 'api_key' || k.toLowerCase() === 'apikey') continue;
+          tq.set(k, v);
+        }
+      }
+      tq.set('PlaySessionId', state.playSessionId || '');
+      if (chosenAudio != null) tq.set('AudioStreamIndex', String(chosenAudio));
+      const tFile = (qIdx >= 0 ? tRaw.slice(0, qIdx) : tRaw).split('/').filter(Boolean).pop() || 'master.m3u8';
+      const hlsUrl = `/api/hls/${id}/${source.Id}/${tFile}?${tq.toString()}`;
       if (video.canPlayType('application/vnd.apple.mpegurl')) {
         video.src = hlsUrl;
       } else if (window.Hls && window.Hls.isSupported()) {
@@ -869,6 +1032,8 @@ async function goPlayer(id, opts) {
     } else {
       throw new Error('This file cannot be played or converted for this browser.');
     }
+    $('playerBar').hidden = false;
+    pbSync();
     applyPersistedSubtitle();
     video.playbackRate = parseFloat($('speedSelect').value || '1');
     if (startTicks > 0) {
@@ -907,14 +1072,24 @@ function startProgress(itemId, mediaSourceId) {
   stopProgress();
   state.playingItemId = itemId;
   const video = $('player');
+  if (state.playFailed !== true) state.playFailed = !!(video && video.error);
   const report = (kind) => {
     const ticks = Math.round(video.currentTime * 10000000);
     const endpoint = kind === 'start' ? 'Sessions/Playing' : kind === 'stopped' ? 'Sessions/Playing/Stopped' : 'Sessions/Playing/Progress';
     const body = { ItemId: itemId, MediaSourceId: mediaSourceId, PlaySessionId: state.playSessionId, PositionTicks: ticks, IsPaused: video.paused, PlayMethod: state.playMethod };
-    if (kind === 'stopped') body.Failed = false;
+    if (kind === 'stopped') body.Failed = state.playFailed === true;
     jf(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).catch(() => {});
   };
   report('start');
+  if (state.playFailed) {
+    // Media errored before the session report: close it immediately as failed.
+    report('stopped');
+    state.playingItemId = null;
+    state.playFailed = false;
+    const note = $('playerNote');
+    if (note) note.textContent = 'Playback failed: this video could not be decoded by the browser.';
+    return;
+  }
   state.progressTimer = setInterval(() => report('progress'), 10000);
   video.onpause = () => report('progress');
   video.onended = () => {
@@ -935,6 +1110,17 @@ function startProgress(itemId, mediaSourceId) {
     }
   };
 }
+$('player').addEventListener('error', () => {
+  const video = $('player');
+  if (!video.error) return; // emptied src on teardown also fires error; ignore those
+  if ($('view-player').hidden) return;
+  // The error can fire before startProgress opens the session; record it either way.
+  state.playFailed = true;
+  if (state.playingItemId != null) stopPlayback(true);
+  const note = $('playerNote');
+  if (note) note.textContent = 'Playback failed: this video could not be decoded by the browser.';
+});
+
 // Leaving the player (nav, new title, sign-out) must actually end playback:
 // pause, report Stopped once, tear down hls.js, and release the element.
 function stopPlayback(reportStopped) {
@@ -943,10 +1129,14 @@ function stopPlayback(reportStopped) {
     const ticks = Math.round((video.currentTime || 0) * 10000000);
     jf('Sessions/Playing/Stopped', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ItemId: state.playingItemId, MediaSourceId: state.mediaSourceId, PlaySessionId: state.playSessionId, PositionTicks: ticks, Failed: false }),
+      body: JSON.stringify({ ItemId: state.playingItemId, MediaSourceId: state.mediaSourceId, PlaySessionId: state.playSessionId, PositionTicks: ticks, Failed: state.playFailed === true }),
     }).catch(() => {});
   }
+  state.playFailed = false;
   stopProgress();
+  const pb = $('playerBar'); if (pb) pb.hidden = true;
+  const pov = $('playerWrap'); if (pov) pov.classList.remove('landscape-fill');
+  if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
   if (state.hls) { try { state.hls.destroy(); } catch {} state.hls = null; }
   if (video) { video.pause(); video.removeAttribute('src'); video.load(); }
   state.playingItemId = null;
@@ -988,8 +1178,8 @@ function route() {
   if (pathPart !== 'home') stopHeroRotation();
   if (pathPart !== 'search') clearSearch();
   if (pathPart === 'home') loadHome();
-  else if (pathPart === 'shows') loadLibrary('shows');
-  else if (pathPart === 'movies') loadLibrary('movies');
+  else if (pathPart === 'shows') loadLibrary('shows', true);
+  else if (pathPart === 'movies') loadLibrary('movies', true);
   else if (pathPart === 'mystuff') loadMyStuff();
   else if (pathPart === 'search') { showView('search'); if (params.get('q')) { $('searchInput').value = params.get('q'); loadSearch(params.get('q')); } else loadSearchRecommendations(); }
   else if (pathPart === 'settings') { ensureSignedIn().then((ok) => { if (ok) { showView('settings'); const f = $('settingsForm'); for (const key of Object.keys(state.settings || {})) { const el = f.elements[key]; if (!el) continue; if (el.type === 'checkbox') el.checked = Boolean(state.settings[key]); else el.value = state.settings[key]; } } }); }
@@ -1104,6 +1294,7 @@ $('searchForm').addEventListener('submit', (e) => { e.preventDefault(); location
 $('kidsFilter').addEventListener('change', () => loadLibrary(libraryKind));
 $('librarySort').addEventListener('change', () => { saveSettingPatch({ librarySort: $('librarySort').value }); loadLibrary(libraryKind); });
 $('librarySortOrder').addEventListener('change', () => { saveSettingPatch({ librarySortOrder: $('librarySortOrder').value }); loadLibrary(libraryKind); });
+$('watchedFilter').addEventListener('change', () => loadLibrary(libraryKind));
 $('settingsForm').addEventListener('submit', async (e) => {
   e.preventDefault();
   const f = $('settingsForm'); const payload = {};
@@ -1146,6 +1337,78 @@ $('subtitleSelect').addEventListener('change', () => {
 });
 $('playerBack').addEventListener('click', () => { if (history.length > 1) history.back(); else location.hash = '#/home'; });
 // Fullscreen the wrapper (not the bare video) so Back and Skip Intro stay usable.
+// Custom player bar: browser-native controls render as an unthemed white strip on
+// mobile browsers; these keep pause/seek/mute in the app's accent style. Fullscreen
+// stays on the existing overlay button.
+const PB_PLAY = '<svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor" aria-hidden="true" focusable="false"><path d="M8 5v14l11-7z"/></svg>';
+const PB_PAUSE = '<svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor" aria-hidden="true" focusable="false"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>';
+const PB_VOL = '<svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor" aria-hidden="true" focusable="false"><path d="M3 9v6h4l5 5V4L7 9H3z"/><path d="M16 8a5 5 0 0 1 0 8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
+const PB_MUTED = '<svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor" aria-hidden="true" focusable="false"><path d="M3 9v6h4l5 5V4L7 9H3z"/><path d="M16 9l6 6M22 9l-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
+function pbFmt(sec) {
+  if (!isFinite(sec) || sec < 0) sec = 0;
+  const t = Math.floor(sec);
+  const h = Math.floor(t / 3600), m = Math.floor((t % 3600) / 60), ss = String(t % 60).padStart(2, '0');
+  return h > 0 ? h + ':' + String(m).padStart(2, '0') + ':' + ss : m + ':' + ss;
+}
+function pbSync() {
+  const v = $('player');
+  if (!v || $('playerBar').hidden) return;
+  const d = v.duration;
+  $('pbPlay').innerHTML = v.paused ? PB_PLAY : PB_PAUSE;
+  $('pbPlay').setAttribute('aria-label', v.paused ? 'Play' : 'Pause');
+  $('pbTime').textContent = pbFmt(v.currentTime) + ' / ' + pbFmt(d);
+  if (isFinite(d) && d > 0 && !$('pbSeek').matches(':active')) $('pbSeek').value = String(Math.round((v.currentTime / d) * 1000));
+  $('pbSeek').style.setProperty('--fill', (parseInt($('pbSeek').value, 10) / 10) + '%');
+  const muted = v.muted || v.volume === 0;
+  $('pbMute').innerHTML = muted ? PB_MUTED : PB_VOL;
+  $('pbMute').setAttribute('aria-label', muted ? 'Unmute' : 'Mute');
+}
+['play', 'pause', 'timeupdate', 'durationchange', 'volumechange', 'loadedmetadata'].forEach((ev) => $('player').addEventListener(ev, pbSync));
+$('pbPlay').addEventListener('click', () => { const v = $('player'); if (v.paused) v.play().catch(() => {}); else v.pause(); });
+$('player').addEventListener('click', () => { const v = $('player'); if (v.paused) v.play().catch(() => {}); else v.pause(); });
+$('pbSeek').addEventListener('input', () => {
+  const d = $('player').duration;
+  if (isFinite(d) && d > 0) $('pbTime').textContent = pbFmt((parseInt($('pbSeek').value, 10) / 1000) * d) + ' / ' + pbFmt(d);
+  $('pbSeek').style.setProperty('--fill', (parseInt($('pbSeek').value, 10) / 10) + '%');
+});
+$('pbSeek').addEventListener('change', () => {
+  const v = $('player'); const d = v.duration;
+  if (isFinite(d) && d > 0) v.currentTime = (parseInt($('pbSeek').value, 10) / 1000) * d;
+});
+$('pbMute').addEventListener('click', () => { $('player').muted = !$('player').muted; });
+
+// Rotate-to-fullscreen: on mobile, turning to landscape during playback fills the screen.
+// Real requestFullscreen() needs a user gesture on most mobile browsers, so when it is
+// rejected or unavailable, fall back to a fixed-viewport "landscape-fill" presentation.
+function syncLandscapeFill() {
+  const ov = $('playerWrap');
+  const view = $('view-player');
+  if (!ov || !view || view.hidden) return;
+  // Rotate-to-fill is a touch-device behavior; never reshape desktop playback.
+  if (!window.matchMedia('(pointer: coarse)').matches) return;
+  const wrap = document.querySelector('.videowrap');
+  const v = $('player');
+  const landscape = window.innerWidth > window.innerHeight;
+  const playing = v && !v.paused && !v.ended;
+  if (landscape && playing) {
+    if (document.fullscreenElement) { ov.classList.remove('landscape-fill'); return; }
+    if (wrap && wrap.requestFullscreen) {
+      wrap.requestFullscreen()
+        .then(() => ov.classList.remove('landscape-fill'))
+        .catch(() => ov.classList.add('landscape-fill'));
+    } else {
+      ov.classList.add('landscape-fill');
+    }
+  } else {
+    ov.classList.remove('landscape-fill');
+    if (!landscape && document.fullscreenElement) document.exitFullscreen().catch(() => {});
+  }
+}
+['play', 'pause', 'ended'].forEach((ev) => $('player').addEventListener(ev, syncLandscapeFill));
+window.addEventListener('orientationchange', () => setTimeout(syncLandscapeFill, 250));
+window.addEventListener('resize', syncLandscapeFill);
+document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement) setTimeout(syncLandscapeFill, 60); });
+
 $('fsBtn').addEventListener('click', () => {
   const wrap = document.querySelector('.videowrap');
   if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
@@ -1153,14 +1416,16 @@ $('fsBtn').addEventListener('click', () => {
 });
 $('speedSelect').addEventListener('change', () => { $('player').playbackRate = parseFloat($('speedSelect').value); });
 
-window.addEventListener('beforeunload', () => {
+function reportStoppedOnUnload() {
   if (state.playingItemId == null) return;
   const ticks = Math.round((($('player') || {}).currentTime || 0) * 10000000);
   fetch('/api/jellyfin/Sessions/Playing/Stopped', {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, keepalive: true,
-    body: JSON.stringify({ ItemId: state.playingItemId, MediaSourceId: state.mediaSourceId, PlaySessionId: state.playSessionId, PositionTicks: ticks, Failed: false }),
+    body: JSON.stringify({ ItemId: state.playingItemId, MediaSourceId: state.mediaSourceId, PlaySessionId: state.playSessionId, PositionTicks: ticks, Failed: state.playFailed === true }),
   }).catch(() => {});
-});
+}
+window.addEventListener('beforeunload', reportStoppedOnUnload);
+window.addEventListener('pagehide', reportStoppedOnUnload);
 
 (async () => {
   try {
@@ -1169,6 +1434,7 @@ window.addEventListener('beforeunload', () => {
     if (state.config && state.config.serverLocked) {
       $('serverInput').readOnly = true;
       $('serverInput').setAttribute('aria-readonly', 'true');
+      $('signinForm').classList.add('locked');
       $('serverLockedNote').hidden = false;
     }
   } catch {}

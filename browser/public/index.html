@@ -30,10 +30,10 @@
   <section id="view-signin" class="view" hidden>
     <h1>Sign in to your Jellyfin server</h1>
     <p class="muted">Your Jellyfin token is held on this server, not in browser JavaScript.</p>
+    <p id="serverLockedNote" class="muted" hidden>Server is fixed by the administrator of this installation.</p>
     <form id="signinForm">
-      <label>Server URL
+      <label class="server-field">Server URL
         <input id="serverInput" name="server" type="url" placeholder="https://jellyfin.example.com" autocomplete="off" required>
-        <p id="serverLockedNote" class="muted" hidden>Server is fixed by the administrator of this installation.</p>
       </label>
       <label>Username
         <input id="usernameInput" name="username" type="text" autocomplete="username" required>
@@ -67,6 +67,13 @@
         <option value="all">All</option>
         <option value="kids">Kids only</option>
         <option value="nokids">No kids</option>
+      </select>
+    </label>
+    <label class="filter">Watched
+      <select id="watchedFilter">
+        <option value="">All</option>
+        <option value="IsUnplayed">Unwatched</option>
+        <option value="IsPlayed">Watched</option>
       </select>
     </label>
     <label class="filter">Sort
@@ -154,9 +161,15 @@
   <section id="view-player" class="view" hidden>
     <div id="playerWrap">
       <div class="videowrap">
-        <video id="player" controls playsinline controlslist="nofullscreen"></video>
-        <button id="playerBack" type="button" class="overlay-btn back-btn">&larr; Back</button>
+        <video id="player" playsinline></video>
+        <button id="playerBack" type="button" class="overlay-btn back-btn"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M15 18l-6-6 6-6"/></svg> Back</button>
         <button id="fsBtn" type="button" class="overlay-btn" title="Fullscreen" aria-label="Fullscreen"><svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M3 7V3h4M13 3h4v4M17 13v4h-4M7 17H3v-4"/></svg></button>
+        <div id="playerBar" hidden>
+          <button id="pbPlay" type="button" aria-label="Pause"></button>
+          <span id="pbTime">0:00 / 0:00</span>
+          <input id="pbSeek" type="range" min="0" max="1000" value="0" step="1" aria-label="Seek">
+          <button id="pbMute" type="button" aria-label="Mute"></button>
+        </div>
         <button id="skipIntroBtn" type="button" hidden>Skip Intro</button>
       </div>
       <div id="upNext" class="up-next" hidden></div>
