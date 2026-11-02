@@ -1895,6 +1895,110 @@ function seekPlayerBy(delta) {
   if (!v || !isFinite(v.duration)) return;
   v.currentTime = Math.min(Math.max(0, v.currentTime + delta), v.duration);
 }
+// Player gesture/fullscreen diagnostics, opt-in only: an on-screen in-memory log
+// for investigating device-specific tap and fullscreen behavior. Activation: the
+// Settings > Diagnostics toggle (session only) or the ?playerdiag=1 query. No
+// network, no storage, no persistence: off by default, reload clears it, and the
+// toggle removes the overlay and every listener. Log lines carry only allowlisted
+// control labels, booleans, relative timestamps and fullscreen outcomes - no URLs,
+// item IDs, account data or secrets. When off, log() is a no-op.
+const playerDiag = (() => {
+  const MAX = 60;
+  const DIAG_IDS = ['player', 'playerBar', 'fsBtn', 'playerBack', 'pbZoom', 'pbPlay', 'pbBack10', 'pbFwd10', 'pbMute', 'pbSubs', 'pbSettings', 'pbSeek', 'pbTime', 'pbSheet', 'skipIntroBtn', 'pauseCast'];
+  let active = false, box = null, logView = null, t0 = 0;
+  let lines = [];
+  let listeners = [];
+  const labelFor = (t) => {
+    for (let el = t; el && el !== document.body; el = el.parentElement) {
+      if (el.id && DIAG_IDS.indexOf(el.id) >= 0) return el.id;
+      if (el.classList && el.classList.contains('videowrap')) return 'videowrap';
+    }
+    return 'other';
+  };
+  const fsMode = () => {
+    const v = $('player'), pov = $('playerWrap');
+    if (document.fullscreenElement || document.webkitFullscreenElement) return 'element';
+    if (v && v.webkitDisplayingFullscreen) return 'native';
+    if (pov && pov.classList.contains('landscape-fill')) return 'inapp';
+    return 'none';
+  };
+  const render = () => { if (logView) logView.textContent = lines.join('\n'); };
+  const log = (msg) => {
+    if (!active) return;
+    const w = document.querySelector('.videowrap');
+    const chrome = w && w.classList.contains('hide-chrome') ? 'hidden' : 'visible';
+    const sheet = $('pbSheet') && !$('pbSheet').hidden ? 'open' : 'closed';
+    lines.push('T+' + Math.round(performance.now() - t0) + ' ' + msg + ' chrome=' + chrome + ' fs=' + fsMode() + ' sheet=' + sheet);
+    if (lines.length > MAX) lines.shift();
+    render();
+  };
+  const listen = (target, type, fn) => { target.addEventListener(type, fn, { passive: true }); listeners.push([target, type, fn]); };
+  const syncToggle = () => { const b = $('diagToggleBtn'); if (b) b.textContent = 'Player diagnostics: ' + (active ? 'on' : 'off'); };
+  const enable = () => {
+    if (active) return;
+    active = true;
+    t0 = performance.now();
+    lines = [];
+    const wrap = document.querySelector('.videowrap');
+    box = document.createElement('div');
+    box.id = 'playerDiag';
+    box.style.cssText = 'position:absolute;top:8px;left:50%;transform:translateX(-50%);z-index:6;max-width:62%;max-height:44%;display:flex;flex-direction:column;background:rgba(10,10,14,.85);color:#9fdc9f;font:11px/1.45 monospace;padding:6px 8px;border-radius:8px;pointer-events:none;';
+    logView = document.createElement('div');
+    logView.style.cssText = 'overflow:auto;white-space:pre-wrap;';
+    const copyBtn = document.createElement('button');
+    copyBtn.type = 'button';
+    copyBtn.textContent = 'Copy diag log';
+    copyBtn.style.cssText = 'pointer-events:auto;margin:6px auto 0;display:block;font:11px monospace;padding:3px 10px;flex-shrink:0;';
+    box.appendChild(logView);
+    box.appendChild(copyBtn);
+    if (wrap) wrap.appendChild(box);
+    // Keyboard: the player-level keydown map treats Space as play/pause even on a
+    // focused button; keep Copy's own Enter/Space activation local to the button.
+    copyBtn.addEventListener('keydown', (e) => {
+      if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); copyBtn.click(); }
+    });
+    copyBtn.addEventListener('click', () => {
+      const text = lines.join('\n');
+      const fallback = () => {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        document.body.appendChild(ta);
+        ta.select();
+        try { document.execCommand('copy'); } catch {}
+        ta.remove();
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).catch(fallback);
+      else fallback();
+      log('log copied by user');
+    });
+    if (wrap) ['touchstart', 'pointerdown', 'click'].forEach((ev) =>
+      listen(wrap, ev, (e) => { if (box && box.contains(e.target)) return; log(ev + ' target=' + labelFor(e.target)); }));
+    const v0 = $('player');
+    if (v0) ['play', 'pause', 'webkitbeginfullscreen', 'webkitendfullscreen'].forEach((ev) =>
+      listen(v0, ev, () => log('video ' + ev)));
+    ['fullscreenchange', 'webkitfullscreenchange'].forEach((ev) =>
+      listen(document, ev, () => log('document ' + ev)));
+    const dm = (m) => !!(window.matchMedia && window.matchMedia('(display-mode: ' + m + ')').matches);
+    log('diag on display-standalone=' + dm('standalone') + ' display-fullscreen=' + dm('fullscreen') + ' display-browser=' + dm('browser') + ' navigator-standalone=' + !!window.navigator.standalone);
+    syncToggle();
+  };
+  const disable = () => {
+    if (!active) return;
+    active = false;
+    listeners.forEach(([target, type, fn]) => target.removeEventListener(type, fn));
+    listeners = [];
+    if (box) box.remove();
+    box = null;
+    logView = null;
+    lines = [];
+    syncToggle();
+  };
+  if (/[?&]playerdiag=1\b/.test(location.search)) enable();
+  const toggleBtn = $('diagToggleBtn');
+  if (toggleBtn) toggleBtn.addEventListener('click', () => { if (active) disable(); else enable(); });
+  return { log, enable, disable, isActive: () => active };
+})();
+
 // Pinch-to-fullscreen: two fingers spread on the video enters fullscreen with the
 // whole picture (contain, never a crop), pinch back in exits. The gesture is only
 // RECOGNIZED on touchmove; the fullscreen request fires on touchend because the
@@ -1934,7 +2038,7 @@ function enterPlayerFullscreen() {
   const native = () => { if (video && video.webkitEnterFullscreen) { try { video.webkitEnterFullscreen(); return true; } catch {} } return false; };
   const inApp = () => { if (pov) { pov.classList.add('landscape-fill'); updatePbZoom(); } };
   if (wrap && wrap.requestFullscreen) {
-    try { wrap.requestFullscreen().then(updatePbZoom).catch(() => { if (!native()) inApp(); }); } catch { if (!native()) inApp(); }
+    try { wrap.requestFullscreen().then(() => { playerDiag.log('requestFullscreen resolved'); updatePbZoom(); }).catch(() => { playerDiag.log('requestFullscreen rejected'); if (!native()) inApp(); }); } catch { playerDiag.log('requestFullscreen threw'); if (!native()) inApp(); }
   } else if (!native()) inApp();
 }
 function exitPlayerFullscreen() {
