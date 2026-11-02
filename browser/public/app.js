@@ -232,11 +232,23 @@ function cardImageWide(item) {
   return img(item, 'Primary', 360);
 }
 function cardHtml(item, wide) {
-  const watched = item.UserData && item.UserData.Played === true;
+  // A resume position wins over the watched flag: an item can be marked watched and
+  // still carry a resume position (mark-watched does not always clear it), and the
+  // server's Continue Watching list is driven by the position. The card must agree
+  // with the details page (which keys Resume off the position), so such a card shows
+  // its progress bar, not the check mark.
+  const ud = item.UserData || {};
+  const resuming = (ud.PlaybackPositionTicks || 0) > 0;
+  const watched = ud.Played === true && !resuming;
   // A full red bar under an already-watched card is noise (the check mark says it);
   // progress shows only for real partial progress, e.g. Continue Watching.
-  const pct = !watched && item.UserData && item.UserData.PlayedPercentage && item.UserData.PlayedPercentage < 100
-    ? Math.round(item.UserData.PlayedPercentage) : 0;
+  let pct = 0;
+  if (resuming) {
+    if (ud.PlayedPercentage && ud.PlayedPercentage < 100) pct = Math.round(ud.PlayedPercentage);
+    else if (item.RunTimeTicks) pct = Math.min(99, Math.max(1, Math.round((ud.PlaybackPositionTicks / item.RunTimeTicks) * 100)));
+  } else if (!watched && ud.PlayedPercentage && ud.PlayedPercentage < 100) {
+    pct = Math.round(ud.PlayedPercentage);
+  }
   const title = item.SeriesName ? `${item.SeriesName} - ${item.Name}` : item.Name;
   const label = episodeLabel(item) ? episodeLabel(item) + ' ' : '';
   return `<button class="card${wide ? ' wide' : ''}" data-id="${esc(item.Id)}" data-type="${esc(item.Type || '')}">
@@ -1932,8 +1944,24 @@ document.addEventListener('fullscreenchange', () => { if (!document.fullscreenEl
 // F toggles the same fullscreen as the on-screen button; Esc stays browser-native.
 function togglePlayerFullscreen() {
   const wrap = document.querySelector('.videowrap');
-  if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
-  else if (wrap && wrap.requestFullscreen) wrap.requestFullscreen().catch(() => {});
+  const video = $('player');
+  // iPadOS home-screen apps can expose requestFullscreen but reject every call (and
+  // older iOS webviews lack it entirely); a swallowed rejection leaves the button
+  // dead. Fall back to the video element's native fullscreen so the button always
+  // does something; native fullscreen keeps its own contain fit (no crop).
+  const nativeFallback = () => {
+    if (video && video.webkitEnterFullscreen) { try { video.webkitEnterFullscreen(); } catch {} }
+  };
+  if (document.fullscreenElement || document.webkitFullscreenElement) {
+    const exit = document.exitFullscreen || document.webkitExitFullscreen;
+    // Old webkit exit returns void, not a promise - guard before .catch.
+    if (exit) { try { const p = exit.call(document); if (p && p.catch) p.catch(() => {}); } catch {} }
+  } else if (wrap && wrap.requestFullscreen) {
+    // Older engines can throw synchronously instead of rejecting.
+    try { wrap.requestFullscreen().catch(nativeFallback); } catch { nativeFallback(); }
+  } else {
+    nativeFallback();
+  }
 }
 $('fsBtn').addEventListener('click', togglePlayerFullscreen);
 $('speedSelect').addEventListener('change', () => { $('player').playbackRate = parseFloat($('speedSelect').value); });
