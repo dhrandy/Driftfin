@@ -35,6 +35,21 @@ async function api(path, options) {
 }
 const jf = (path, options) => api('/api/jellyfin/' + path.replace(/^\//, ''), options);
 // 1x1 transparent GIF used when an image is missing, so cards keep their shape.
+// Artwork fallback: Jellyfin items/people without artwork 404 their image; swap in a
+// titled placeholder tile instead of a blank box. Capture phase, before the per-img handlers.
+document.addEventListener('error', (e) => {
+  const img = e.target;
+  if (!(img instanceof HTMLImageElement)) return;
+  const inCard = img.closest('.card');
+  const inPerson = img.closest('.cast-person');
+  if (!inCard && !inPerson) return;
+  if (img.dataset.fbDone) return;
+  img.dataset.fbDone = '1';
+  const holder = document.createElement('div');
+  holder.className = 'img-fallback' + (inPerson ? ' person' : '');
+  holder.setAttribute('aria-hidden', 'true');
+  img.replaceWith(holder);
+}, true);
 const PIXEL = 'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==';
 
 /* ---------- Jellyfin helpers, mirroring TV Models.kt ---------- */
@@ -182,7 +197,7 @@ function cardHtml(item, wide) {
   const title = item.SeriesName ? `${item.SeriesName} - ${item.Name}` : item.Name;
   const label = episodeLabel(item) ? episodeLabel(item) + ' ' : '';
   return `<button class="card${wide ? ' wide' : ''}" data-id="${esc(item.Id)}" data-type="${esc(item.Type || '')}">
-    <img src="${wide ? cardImageWide(item) : cardImage(item)}" alt="" loading="lazy" onerror="this.src='data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=='">
+    <img src="${wide ? cardImageWide(item) : cardImage(item)}" alt="" loading="lazy">
     ${watched ? '<span class="watched">&#10003;</span>' : ''}
     <div class="card-title">${esc(label + title)}</div>
     ${pct ? `<div class="progress"><div style="width:${pct}%"></div></div>` : ''}
@@ -190,7 +205,7 @@ function cardHtml(item, wide) {
 }
 function bindCards(container) {
   container.querySelectorAll('.card').forEach((el) => {
-    el.addEventListener('click', () => goDetails(el.dataset.id));
+    el.addEventListener('click', () => { location.hash = '#/details?id=' + encodeURIComponent(el.dataset.id); });
   });
 }
 function rowHtml(title, items, wide) {
@@ -284,6 +299,13 @@ function stopHeroRotation() {
   if (state.heroTimer) clearInterval(state.heroTimer);
   state.heroTimer = null;
 }
+function truncateOverview(text) {
+  const t = String(text || '');
+  if (t.length <= 300) return t;
+  const cut = t.slice(0, 300);
+  const lastSpace = cut.lastIndexOf(' ');
+  return (lastSpace > 200 ? cut.slice(0, lastSpace) : cut).trimEnd() + ' \u2026';
+}
 function renderHero(item) {
   const hero = $('hero');
   if (!item) { hero.innerHTML = '<div class="hero-empty">No unwatched movie found for the home banner.</div>'; return; }
@@ -292,12 +314,12 @@ function renderHero(item) {
     <div class="hero-body">
       ${titleHtml(item)}
       <div class="hero-meta">${metaLine(item)} ${formatBadges(item)}</div>
-      <p>${esc((item.Overview || '').slice(0, 300))}</p>
+      <p>${esc(truncateOverview(item.Overview))}</p>
       <button type="button" id="heroPlay">${isResumeable(item) ? 'Resume' : 'Play'}</button>
       <button type="button" class="secondary" id="heroInfo">More Info</button>
     </div>`;
-  $('heroPlay').addEventListener('click', () => goPlayer(item.Id));
-  $('heroInfo').addEventListener('click', () => goDetails(item.Id));
+  $('heroPlay').addEventListener('click', () => { location.hash = '#/player?id=' + encodeURIComponent(item.Id); });
+  $('heroInfo').addEventListener('click', () => { location.hash = '#/details?id=' + encodeURIComponent(item.Id); });
 }
 
 // ---------- Library (Shows / Movies) ----------
@@ -468,9 +490,9 @@ function renderDetails() {
     ${castHtml}
     ${seasonsHtml}`;
   el.querySelectorAll('.cast-person').forEach((btn) => btn.addEventListener('click', () => { location.hash = '#/actor?id=' + encodeURIComponent(btn.dataset.person); }));
-  $('detailPlay').addEventListener('click', () => goPlayer(target.Id));
+  $('detailPlay').addEventListener('click', () => { location.hash = '#/player?id=' + encodeURIComponent(target.Id); });
   const fromStart = $('detailFromStart');
-  if (fromStart) fromStart.addEventListener('click', () => goPlayer(target.Id, { fromStart: true }));
+  if (fromStart) fromStart.addEventListener('click', () => { location.hash = '#/player?id=' + encodeURIComponent(target.Id) + '&start=1'; });
   $('detailFav').addEventListener('click', async () => {
     const method = isFav ? 'DELETE' : 'POST';
     const updated = await api(`/api/jellyfin/UserFavoriteItems/${item.Id}?userId=${uid}`, { method });
@@ -496,7 +518,7 @@ function renderDetails() {
     state.selectedSeasonId = btn.dataset.season;
     renderDetails();
   }));
-  el.querySelectorAll('.episode-play').forEach((btn) => btn.addEventListener('click', (e) => { e.stopPropagation(); goPlayer(btn.dataset.id); }));
+  el.querySelectorAll('.episode-play').forEach((btn) => btn.addEventListener('click', (e) => { e.stopPropagation(); location.hash = '#/player?id=' + encodeURIComponent(btn.dataset.id); }));
   el.querySelectorAll('.episode-watched').forEach((btn) => btn.addEventListener('click', async (e) => {
     e.stopPropagation();
     const ep = state.allEpisodes.find((x) => x.Id === btn.dataset.id);
@@ -504,7 +526,7 @@ function renderDetails() {
   }));
   el.querySelectorAll('.episode').forEach((node) => node.addEventListener('click', (e) => {
     if (e.target.closest('button')) return;
-    goPlayer(node.dataset.id);
+    location.hash = '#/player?id=' + encodeURIComponent(node.dataset.id);
   }));
 }
 async function toggleWatched(target) {
@@ -548,7 +570,7 @@ async function loadSearch(term) {
     if (peopleWrap) {
       peopleWrap.innerHTML = people.length ? `<div class="search-people"><h2>People</h2><div class="cast-row">${people.map((p) => `
         <button type="button" class="cast-person" data-person="${esc(p.Id)}">
-          <img src="/api/jellyfin/Items/${esc(p.Id)}/Images/Primary?maxWidth=220&quality=90" alt="" loading="lazy" onerror="this.src='${PIXEL}'">
+          <img src="/api/jellyfin/Items/${esc(p.Id)}/Images/Primary?maxWidth=220&quality=90" alt="" loading="lazy">
           <div class="cast-name">${esc(p.Name)}</div>
         </button>`).join('')}</div></div>` : '';
       peopleWrap.querySelectorAll('.cast-person').forEach((btn) => btn.addEventListener('click', () => { location.hash = '#/actor?id=' + encodeURIComponent(btn.dataset.person); }));
@@ -780,12 +802,12 @@ function startProgress(itemId, mediaSourceId) {
       box.hidden = false;
       let left = 5;
       box.innerHTML = `<strong>Up next:</strong> ${esc(state.nextEpisode.Name)} in <span id="upNextCount">${left}</span>s <button type="button" id="upNextPlay">Play now</button> <button type="button" id="upNextCancel">Cancel</button>`;
-      $('upNextPlay').addEventListener('click', () => { clearInterval(state.upNextTimer); goPlayer(state.nextEpisode.Id); });
+      $('upNextPlay').addEventListener('click', () => { clearInterval(state.upNextTimer); location.replace('#/player?id=' + encodeURIComponent(state.nextEpisode.Id)); });
       $('upNextCancel').addEventListener('click', () => { clearInterval(state.upNextTimer); box.hidden = true; });
       state.upNextTimer = setInterval(() => {
         left -= 1;
         const c = $('upNextCount'); if (c) c.textContent = left;
-        if (left <= 0) { clearInterval(state.upNextTimer); goPlayer(state.nextEpisode.Id); }
+        if (left <= 0) { clearInterval(state.upNextTimer); location.replace('#/player?id=' + encodeURIComponent(state.nextEpisode.Id)); }
       }, 1000);
     }
   };
@@ -850,7 +872,7 @@ function route() {
   else if (pathPart === 'settings') { ensureSignedIn().then((ok) => { if (ok) { showView('settings'); const f = $('settingsForm'); for (const key of Object.keys(state.settings || {})) { if (f.elements[key]) f.elements[key].checked = Boolean(state.settings[key]); } } }); }
   else if (pathPart === 'details' && params.get('id')) goDetails(params.get('id'));
   else if (pathPart === 'actor' && params.get('id')) goActor(params.get('id'));
-  else if (pathPart === 'player' && params.get('id')) goPlayer(params.get('id'));
+  else if (pathPart === 'player' && params.get('id')) goPlayer(params.get('id'), { fromStart: params.get('start') === '1' });
   else if (pathPart === 'signin') showView('signin');
   else loadHome();
 }

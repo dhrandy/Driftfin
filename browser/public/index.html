@@ -27,7 +27,7 @@
 <main id="app" aria-live="polite">
   <section id="view-signin" class="view" hidden>
     <h1>Sign in to your Jellyfin server</h1>
-    <p class="muted">Your Jellyfin token is held on this server, not in browser JavaScript. Nothing here is pre-filled with a server, username, or password.</p>
+    <p class="muted">Your Jellyfin token is held on this server, not in browser JavaScript.</p>
     <form id="signinForm">
       <label>Server URL
         <input id="serverInput" name="server" type="url" placeholder="https://jellyfin.example.com" autocomplete="off" required>
@@ -126,7 +126,7 @@
       <div class="videowrap">
         <video id="player" controls playsinline controlslist="nofullscreen"></video>
         <button id="playerBack" type="button" class="overlay-btn back-btn">&larr; Back</button>
-        <button id="fsBtn" type="button" class="overlay-btn" title="Fullscreen">&#x26F6;</button>
+        <button id="fsBtn" type="button" class="overlay-btn" title="Fullscreen" aria-label="Fullscreen"><svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M3 7V3h4M13 3h4v4M17 13v4h-4M7 17H3v-4"/></svg></button>
         <button id="skipIntroBtn" type="button" hidden>Skip Intro</button>
       </div>
       <div id="upNext" class="up-next" hidden></div>
