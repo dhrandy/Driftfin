@@ -51,7 +51,7 @@ Driftfin is still in alpha. Its focus is making your Jellyfin library feel good 
 - HDR and Dolby Vision tags beside the 4K tag on a movie's Details page, read from the file's video stream metadata (shows what the file contains, not what the TV outputs; hidden when the metadata is missing or only says the Dolby Vision data is invalid). Switchable in Settings.
 - Actors: select a cast member on Details to see their movies and shows on your server (as the signed-in user sees them) and their Jellyfin biography when there is one. While a video is paused, press Down to browse the cast and OK to open an actor; Back returns to the paused video. Switchable in Settings ("Cast while paused"). The paused-video handoff has been checked only by unit tests of the key logic and renders, not on a TV.
 - Saved profiles: a profile you signed in with stays on the TV (encrypted) so you can switch back without the password. "Sign out and forget this profile" removes it. It does not revoke the token on the server.
-- Check for updates (bottom of Settings): only when you ask. It reads the latest GitHub release, downloads the APK, checks its checksum, package name, version and signing certificate, and then opens Android's installer, which asks you to confirm. Android may first ask you to allow installs from Driftfin. The installer step has not been tested on a TV.
+- Check for updates (bottom of Settings): only when you ask. It reads the latest GitHub release, downloads the APK, checks its checksum, package name, version and signing certificate, and then opens Android's installer, which asks you to confirm. Android may first ask you to allow installs from Driftfin. The installer step has been tested on a Sony Google TV and a 1st-gen Fire TV Stick 4K.
 
 ## Requirements
 
