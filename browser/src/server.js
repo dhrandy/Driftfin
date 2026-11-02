@@ -439,6 +439,7 @@ const MIME = {
   '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8', '.json': 'application/json',
   '.png': 'image/png', '.jpg': 'image/jpeg', '.svg': 'image/svg+xml', '.ico': 'image/x-icon',
+  '.webmanifest': 'application/manifest+json',
 };
 // ---- TVMaze verified season cast (TV TvmazeCast.kt parity) ----
 // Some seasons carry no Actor People on the Jellyfin server because the provider splits
@@ -486,6 +487,12 @@ const UPDATE_CHECK_FILES = [
   'public/index.html',
   'public/styles.css',
   'public/favicon.png',
+  'public/manifest.webmanifest',
+  'public/sw.js',
+  'public/icons/icon-192.png',
+  'public/icons/icon-512.png',
+  'public/icons/icon-maskable-512.png',
+  'public/icons/apple-touch-icon.png',
   'public/vendor/hls.min.js',
   ...Array.from({ length: 20 }, (_, i) => `public/avatars/avatar_${String(i + 1).padStart(2, '0')}.png`),
   'src/server.js',
@@ -503,8 +510,8 @@ const UPDATE_CHECK_SET = new Set(UPDATE_CHECK_FILES);
 // Fixed bounded dirs that make up the runtime tree. Subdirs of public/ are served
 // and subdirs of src/ are server code, so an unknown one there means unknown coverage;
 // anything else at the repo root (e.g. the untracked runtime data/ dir) is ignored.
-const UPDATE_CHECK_DIRS = ['', 'public', 'public/vendor', 'public/avatars', 'src'];
-const UPDATE_CHECK_SUBDIRS = new Set(['public', 'public/vendor', 'public/avatars', 'src']);
+const UPDATE_CHECK_DIRS = ['', 'public', 'public/vendor', 'public/avatars', 'public/icons', 'src'];
+const UPDATE_CHECK_SUBDIRS = new Set(['public', 'public/vendor', 'public/avatars', 'public/icons', 'src']);
 function updateCheckLocalFingerprints() {
   const hashes = {};
   let uncovered = false;
@@ -1010,7 +1017,7 @@ const server = http.createServer(async (req, res) => {
         const commits = await githubApiFetch('/repos/' + GITHUB_REPO + '/commits?path=browser&per_page=1');
         const commit = Array.isArray(commits) && commits[0];
         if (commit && commit.sha && commit.html_url) {
-          const dirs = await Promise.all(['', 'public', 'public/vendor', 'public/avatars', 'src'].map((dir) =>
+          const dirs = await Promise.all(['', 'public', 'public/vendor', 'public/avatars', 'public/icons', 'src'].map((dir) =>
             githubApiFetch(`/repos/${GITHUB_REPO}/contents/browser${dir ? '/' + dir : ''}?ref=${commit.sha}`)));
           if (dirs.every(Array.isArray)) {
             const remote = { files: {}, uncovered: false };

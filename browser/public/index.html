@@ -5,7 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Driftfin Browser</title>
 <link rel="icon" type="image/png" href="/favicon.png">
-<link rel="apple-touch-icon" href="/favicon.png">
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#0b0b0f">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Driftfin">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
 <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
@@ -224,6 +230,9 @@
         <button id="fsBtn" type="button" class="overlay-btn" title="Fullscreen" aria-label="Fullscreen"><svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M3 7V3h4M13 3h4v4M17 13v4h-4M7 17H3v-4"/></svg></button>
         <div id="playerBar" hidden>
           <button id="pbPlay" type="button" aria-label="Pause"></button>
+          <button id="pbBack10" type="button" class="skip10" aria-label="Back 10 seconds" title="Back 10 seconds"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 5V2L7.5 6 12 10V7c2.76 0 5 2.24 5 5s-2.24 5-5 5-5-2.24-5-5H5c0 3.87 3.13 7 7 7s7-3.13 7-7-3.13-7-7-7z" fill="currentColor" stroke="none"/><text x="12" y="15.4" text-anchor="middle" font-size="7" font-weight="700" fill="currentColor" stroke="none">10</text></svg></button>
+          <button id="pbZoom" type="button" aria-label="Fill screen" aria-pressed="false" title="Fill screen"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg></button>
+          <button id="pbFwd10" type="button" class="skip10" aria-label="Forward 10 seconds" title="Forward 10 seconds"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><g transform="translate(24,0) scale(-1,1)"><path d="M12 5V2L7.5 6 12 10V7c2.76 0 5 2.24 5 5s-2.24 5-5 5-5-2.24-5-5H5c0 3.87 3.13 7 7 7s7-3.13 7-7-3.13-7-7-7z" fill="currentColor" stroke="none"/></g><text x="12" y="15.4" text-anchor="middle" font-size="7" font-weight="700" fill="currentColor" stroke="none">10</text></svg></button>
           <span id="pbTime">0:00 / 0:00</span>
           <input id="pbSeek" type="range" min="0" max="1000" value="0" step="1" aria-label="Seek">
           <button id="pbMute" type="button" aria-label="Mute"></button>
@@ -275,6 +284,11 @@
 </nav>
 
 <script src="/vendor/hls.min.js"></script>
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => { navigator.serviceWorker.register('/sw.js').catch(() => {}); });
+}
+</script>
 <script src="/app.js"></script>
 </body>
 </html>

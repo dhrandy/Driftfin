@@ -24,9 +24,9 @@ input, select { background: #22222e; color: var(--text); border: 1px solid #3333
 .muted { color: var(--muted); }
 .error { color: #ff8a8a; }
 .topbar { display: flex; align-items: center; gap: 24px; padding: 14px 24px; position: sticky; top: 0; background: rgba(11,11,15,.95); z-index: 10; }
-.logo { font-weight: 800; font-size: 20px; letter-spacing: .08em; white-space: nowrap; color: var(--accent); }
+.logo { font-weight: 800; font-size: 20px; letter-spacing: .08em; white-space: nowrap; color: var(--accent); line-height: 1; display: inline-flex; align-items: center; }
 .topnav { display: flex; gap: 6px; margin: 0 auto; background: #1c1c26; border-radius: 999px; padding: 4px; }
-.topnav a { padding: 8px 14px; border-radius: 999px; color: #b3b3b3; display: inline-flex; align-items: center; justify-content: center; }
+.topnav a { padding: 8px 14px; border-radius: 999px; color: #b3b3b3; display: inline-flex; align-items: center; justify-content: center; line-height: 1.15; }
 .topnav a:hover, .bottomnav a:hover { background: rgba(47,47,47,.7); color: #fff; }
 .topnav a:focus-visible, .bottomnav a:focus-visible { outline: 2px solid #fff; outline-offset: 2px; color: #fff; }
 .topnav a.active, .bottomnav a.active { background: #fff; color: #000; }
@@ -135,6 +135,7 @@ form label input:not([type="checkbox"]) { display: block; width: 100%; max-width
   .hero-body { padding: 18px; }
   .actor-head { flex-direction: column; gap: 12px; }
   .actor-head img { width: 120px; }
+  .actor-head .img-fallback.person { width: 120px; }
 }
 
 .section-tabs { display: flex; gap: 8px; margin: 8px 0 16px; }
@@ -283,3 +284,33 @@ body.signed-out .logo { font-size: 28px; }
 #playerBack, #fsBtn, #playerBar, #skipIntroBtn { transition: opacity .4s; }
 .videowrap.hide-chrome #playerBack, .videowrap.hide-chrome #fsBtn, .videowrap.hide-chrome #playerBar, .videowrap.hide-chrome #skipIntroBtn { opacity: 0; pointer-events: none; }
 .videowrap.hide-chrome, .videowrap.hide-chrome #player { cursor: none; }
+
+/* Touch 10-second skips: only where a coarse pointer makes arrow keys unavailable. */
+#pbBack10, #pbFwd10 { display: none; min-width: 44px; min-height: 44px; padding: 0; align-items: center; justify-content: center; background: none; border: 0; color: #fff; }
+@media (pointer: coarse) { #pbBack10, #pbFwd10 { display: inline-flex; } }
+
+/* Pinch-to-fill (matches the Android app): object-fit crop, not fullscreen. */
+.videowrap { touch-action: pan-y; }
+.videowrap.fill #player { object-fit: cover; }
+#pbZoom { display: none; min-width: 44px; min-height: 44px; padding: 0; align-items: center; justify-content: center; background: none; border: 0; color: #fff; }
+@media (pointer: coarse) { #pbZoom { display: inline-flex; } }
+#pbZoom[aria-pressed="true"] { color: var(--accent); }
+
+/* Narrow transport: seek + time get their own row so the touch buttons never
+   squeeze the seek track or push mute off the bar (320/360/390 all fit). */
+@media (max-width: 560px) {
+  #playerBar { left: 6px; right: 6px; bottom: 6px; padding: 4px 6px; gap: 0 4px; display: grid; grid-template-columns: repeat(5, 44px) 1fr; align-items: center; }
+  #pbSeek { grid-row: 1; grid-column: 1 / 5; width: 100%; min-width: 0; }
+  #pbTime { grid-row: 1; grid-column: 5 / 7; justify-self: end; font-size: 12px; align-self: center; }
+  #pbPlay { grid-row: 2; grid-column: 1; }
+  #pbBack10 { grid-row: 2; grid-column: 2; }
+  #pbZoom { grid-row: 2; grid-column: 3; }
+  #pbFwd10 { grid-row: 2; grid-column: 4; }
+  #pbMute { grid-row: 2; grid-column: 5; }
+}
+
+/* Person placeholder tile sizing on the other actor surfaces (matches the img it replaces). */
+.actor-head .img-fallback.person { width: 160px; height: auto; aspect-ratio: 2/3; border-radius: 12px; flex: 0 0 auto; }
+#pauseInfo .pc .img-fallback.person { width: 56px; height: 56px; aspect-ratio: auto; border-radius: 8px; margin: 0 auto; }
+#pauseInfo.tiny .pc .img-fallback.person { width: 44px; height: 44px; }
+#pauseInfo.compact .pc .img-fallback.person { width: 32px; height: 32px; }

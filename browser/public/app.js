@@ -41,7 +41,7 @@ document.addEventListener('error', (e) => {
   const img = e.target;
   if (!(img instanceof HTMLImageElement)) return;
   const inCard = img.closest('.card');
-  const inPerson = img.closest('.cast-person');
+  const inPerson = img.closest('.cast-person') || img.closest('.pc') || img.closest('.actor-head');
   if (!inCard && !inPerson) return;
   if (img.dataset.fbDone) return;
   img.dataset.fbDone = '1';
@@ -821,7 +821,7 @@ function renderDetails() {
   const castHtml = cast.length
     ? `<h2>Cast</h2><div class="cast-row">${cast.map((p) => p.Remote ? `
         <span class="cast-person remote" title="Guest credit via TVMaze">
-          <img src="${esc(p.RemoteImageUrl || '')}" alt="" loading="lazy" onerror="this.src='data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=='">
+          ${p.RemoteImageUrl ? `<img src="${esc(p.RemoteImageUrl)}" alt="" loading="lazy">` : '<div class="img-fallback person" aria-hidden="true"></div>'}
           <div class="cast-name">${esc(p.Name || '')}</div>
           ${p.Role ? `<div class="cast-role">${esc(p.Role)}</div>` : ''}
         </span>` : `
@@ -1141,7 +1141,7 @@ async function goActor(personId) {
     const dates = lifeDatesLabel(person.PremiereDate, person.EndDate);
     el.innerHTML = `
       <div class="actor-head">
-        <img src="/api/jellyfin/Items/${esc(personId)}/Images/Primary?maxWidth=320&quality=90" alt="" onerror="this.src='data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=='">
+        <img src="/api/jellyfin/Items/${esc(personId)}/Images/Primary?maxWidth=320&quality=90" alt="">
         <div>
           <h1>${esc(person.Name || '')}</h1>
           ${dates ? `<p class="muted actor-dates">${esc(dates)}</p>` : ''}
@@ -1635,7 +1635,16 @@ $('player').addEventListener('timeupdate', () => {
 });
 $('skipIntroBtn').addEventListener('click', () => {
   const seg = activeIntroSegment();
-  if (seg) $('player').currentTime = seg.EndTicks / 10000;
+  if (!seg) return;
+  const v = $('player');
+  // Jellyfin ticks are 100ns units: /10000000 for seconds (the old /10000 was
+  // milliseconds, which clamped to duration and skipped the whole episode).
+  const endSec = seg.EndTicks / 10000000;
+  const dur = v.duration;
+  // Guards: never rewind, and never trust a marker that lands at/past the end.
+  if (!isFinite(endSec) || endSec <= v.currentTime) return;
+  if (isFinite(dur) && dur > 0 && endSec >= dur - 1) return;
+  v.currentTime = endSec;
 });
 $('audioSelect').addEventListener('change', async () => {
   const video = $('player');
@@ -1689,6 +1698,39 @@ function pbSync() {
   $('pbMute').setAttribute('aria-label', muted ? 'Unmute' : 'Mute');
 }
 ['play', 'pause', 'timeupdate', 'durationchange', 'volumechange', 'loadedmetadata'].forEach((ev) => $('player').addEventListener(ev, pbSync));
+function seekPlayerBy(delta) {
+  const v = $('player');
+  if (!v || !isFinite(v.duration)) return;
+  v.currentTime = Math.min(Math.max(0, v.currentTime + delta), v.duration);
+}
+// Pinch-to-fill, matching the Android app's PlayerScreen: two fingers spread on the
+// video fills the screen (object-fit crop, NOT the Fullscreen API), pinch back in
+// fits again; the touch-only zoom button toggles the same state. touch-action:
+// pan-y keeps vertical scroll working over the video and stops page pinch-zoom.
+function setVideoFill(on) {
+  const w = document.querySelector('.videowrap');
+  if (!w) return;
+  w.classList.toggle('fill', !!on);
+  const z = $('pbZoom');
+  if (z) { z.setAttribute('aria-pressed', on ? 'true' : 'false'); z.setAttribute('aria-label', on ? 'Fit to screen' : 'Fill screen'); z.title = on ? 'Fit to screen' : 'Fill screen'; }
+}
+$('pbZoom').addEventListener('click', () => setVideoFill(!document.querySelector('.videowrap').classList.contains('fill')));
+let pinchStartDistance = 0;
+const pinchDist = (t) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+document.querySelector('.videowrap').addEventListener('touchstart', (e) => { if (e.touches.length === 2) pinchStartDistance = pinchDist(e.touches); }, { passive: true });
+document.querySelector('.videowrap').addEventListener('touchmove', (e) => {
+  if (e.touches.length !== 2 || pinchStartDistance <= 0) return;
+  e.preventDefault();
+  const d = pinchDist(e.touches);
+  if (d <= 0) return;
+  const ratio = d / pinchStartDistance;
+  const filling = document.querySelector('.videowrap').classList.contains('fill');
+  if (ratio > 1.25 && !filling) { setVideoFill(true); pinchStartDistance = d; }
+  else if (ratio < 0.8 && filling) { setVideoFill(false); pinchStartDistance = d; }
+}, { passive: false });
+document.querySelector('.videowrap').addEventListener('touchend', (e) => { if (e.touches.length < 2) pinchStartDistance = 0; }, { passive: true });
+$('pbBack10').addEventListener('click', () => seekPlayerBy(-10));
+$('pbFwd10').addEventListener('click', () => seekPlayerBy(10));
 $('pbPlay').addEventListener('click', () => { const v = $('player'); if (v.paused) v.play().catch(() => {}); else v.pause(); });
 $('player').addEventListener('click', () => { const v = $('player'); if (v.paused) v.play().catch(() => {}); else v.pause(); });
 
@@ -1760,8 +1802,11 @@ document.addEventListener('keydown', (e) => {
   } else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
     if (!isFinite(v.duration)) return;
     e.preventDefault();
-    const delta = e.key === 'ArrowRight' ? 10 : -10;
-    v.currentTime = Math.min(Math.max(0, v.currentTime + delta), v.duration);
+    seekPlayerBy(e.key === 'ArrowRight' ? 10 : -10);
+  } else if (e.key === 'f' || e.key === 'F') {
+    if (e.repeat) return;
+    e.preventDefault();
+    togglePlayerFullscreen();
   }
 });
 $('pbSeek').addEventListener('input', () => {
@@ -1797,12 +1842,12 @@ function renderPauseInfo() {
   const cast = infoOn ? mergeCastPeople(local, state.pauseCastRemote || []).slice(0, 15) : [];
   $('pauseCast').innerHTML = cast.map((p) => p.Remote ? `
     <span class="pc" title="Guest credit via TVMaze">
-      <img src="${esc(p.RemoteImageUrl || '')}" alt="" loading="lazy" onerror="this.src='data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=='">
+      ${p.RemoteImageUrl ? `<img src="${esc(p.RemoteImageUrl)}" alt="" loading="lazy">` : '<div class="img-fallback person" aria-hidden="true"></div>'}
       <div class="pc-name">${esc(p.Name || '')}</div>
       ${p.Role ? `<div class="pc-role">${esc(p.Role)}</div>` : ''}
     </span>` : `
     <button type="button" class="pc" data-person="${esc(p.Id)}" title="Open ${esc(p.Name || 'actor')} details">
-      <img src="/api/jellyfin/Items/${esc(p.Id)}/Images/Primary?maxWidth=120&quality=90" alt="" loading="lazy" onerror="this.src='data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=='">
+      <img src="/api/jellyfin/Items/${esc(p.Id)}/Images/Primary?maxWidth=120&quality=90" alt="" loading="lazy">
       <div class="pc-name">${esc(p.Name || '')}</div>
       ${p.Role ? `<div class="pc-role">${esc(p.Role)}</div>` : ''}
     </button>`).join('');
@@ -1884,11 +1929,13 @@ window.addEventListener('orientationchange', () => setTimeout(syncLandscapeFill,
 window.addEventListener('resize', syncLandscapeFill);
 document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement) setTimeout(syncLandscapeFill, 60); });
 
-$('fsBtn').addEventListener('click', () => {
+// F toggles the same fullscreen as the on-screen button; Esc stays browser-native.
+function togglePlayerFullscreen() {
   const wrap = document.querySelector('.videowrap');
   if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
   else if (wrap && wrap.requestFullscreen) wrap.requestFullscreen().catch(() => {});
-});
+}
+$('fsBtn').addEventListener('click', togglePlayerFullscreen);
 $('speedSelect').addEventListener('change', () => { $('player').playbackRate = parseFloat($('speedSelect').value); });
 
 function reportStoppedOnUnload() {
