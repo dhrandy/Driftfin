@@ -516,7 +516,13 @@ function updateCheckLocalFingerprints() {
         continue;
       }
       if (!e.isFile()) continue;
-      if (!UPDATE_CHECK_SET.has(rel)) { uncovered = true; continue; }
+      if (!UPDATE_CHECK_SET.has(rel)) {
+        // Only the served (public/) and server (src/) trees prove uncovered runtime code.
+        // The app root also carries the container's own install artifacts (the
+        // .driftfin-installed marker, node_modules/) which are not runtime code.
+        if (dir !== '') uncovered = true;
+        continue;
+      }
       try { hashes[rel] = gitBlobSha(fs.readFileSync(path.join(__dirname, '..', rel))); }
       catch { return null; }
     }

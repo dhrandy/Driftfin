@@ -79,7 +79,7 @@ function runtimeLabel(item) {
   const h = Math.floor(total / 60), min = total % 60;
   return h > 0 ? h + 'h ' + min + 'm' : min + 'm';
 }
-const ICON_HEART = '<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true" focusable="false"><path d="M12 21s-7.5-4.9-10-9.3C.4 8.6 2.2 5 5.7 5c2 0 3.5 1.1 4.3 2.6h4c.8-1.5 2.3-2.6 4.3-2.6 3.5 0 5.3 3.6 3.7 6.7C19.5 16.1 12 21 12 21z"/></svg>';
+const ICON_HEART = '<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true" focusable="false"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>';
 const ICON_STAR = '<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true" focusable="false"><path d="M12 2l2.9 6.3 6.9.8-5.1 4.7 1.4 6.8L12 17.3 5.9 20.6l1.4-6.8L2.2 9.1l6.9-.8z"/></svg>';
 const ICON_CHECK = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><polyline points="4 12.5 9.5 18 20 6.5"/></svg>';
 const ICON_TRAILER = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="9" x2="22" y2="9"/><line x1="7" y1="5" x2="5" y2="9"/><line x1="12" y1="5" x2="10" y2="9"/><line x1="17" y1="5" x2="15" y2="9"/><line x1="22" y1="5" x2="20" y2="9"/></svg>';
@@ -905,11 +905,9 @@ function renderDetails() {
     if (e.target.closest('button')) return;
     location.hash = '#/player?id=' + encodeURIComponent(node.dataset.id);
   }));
-  // Land the focused episode on screen when arriving from an episode entry (TV focus parity).
-  if (state.focusEpisodeId) {
-    const cur = el.querySelector('.episode.current');
-    if (cur) cur.scrollIntoView({ block: 'center' });
-  }
+  // Episode entries keep the episode highlighted and as the play target, but the page
+  // always opens at the TOP - the hero and metadata are the landing view (user report:
+  // auto-scrolling to the episode lost the top of the page).
 }
 async function toggleWatched(target) {
   const uid = state.userId;
@@ -1158,9 +1156,35 @@ async function goActor(personId) {
   }
 }
 
+// Codec capability probe, same approach as jellyfin-web: advertise only what this
+// browser reports it can decode, so the server DirectPlays or remuxes (container
+// copy) instead of re-encoding. HEVC is advertised only when the browser says it
+// supports it; a browser without HEVC still needs a video transcode (browser
+// limit, not something the server profile can force around).
+function browserCanPlayVideo(mime) {
+  try { return document.createElement('video').canPlayType(mime) !== ''; } catch { return false; }
+}
+function browserSupportsHevc() {
+  return browserCanPlayVideo('video/mp4; codecs="hvc1.1.6.L120.90"') || browserCanPlayVideo('video/mp4; codecs="hev1.1.6.L120.90"');
+}
+function browserVideoDirectPlayProfiles() {
+  const mp4Video = 'h264,vp9,av1' + (browserSupportsHevc() ? ',hevc' : '');
+  return [
+    { Type: 'Video', Container: 'mp4,m4v', VideoCodec: mp4Video, AudioCodec: 'aac,mp3,opus' },
+    { Type: 'Video', Container: 'webm', VideoCodec: 'vp9,av1', AudioCodec: 'opus' },
+  ];
+}
+function browserVideoTranscodeCodecs() {
+  // HLS remux target: including hevc when supported lets the server remux
+  // MKV -> TS with a container copy instead of re-encoding the video.
+  return browserSupportsHevc() ? 'h264,hevc' : 'h264';
+}
+
 // ---------- Player ----------
 async function goPlayer(id, opts) {
   opts = opts || {};
+  let resumePaused = false;
+  try { resumePaused = sessionStorage.getItem('driftfinResumePaused') === '1'; sessionStorage.removeItem('driftfinResumePaused'); } catch {}
   if (!(await ensureSignedIn())) return;
   stopPlayback(true); // end any previous session cleanly before starting a new one
   showView('player');
@@ -1186,8 +1210,8 @@ async function goPlayer(id, opts) {
         Name: 'Driftfin Browser',
         MaxStreamingBitrate: 100000000,
         MaxStaticBitrate: 100000000,
-        DirectPlayProfiles: [{ Type: 'Video', Container: 'mp4,m4v,webm', VideoCodec: 'h264,vp9,av1', AudioCodec: 'aac,mp3,opus' }],
-        TranscodingProfiles: [{ Type: 'Video', Container: 'ts', Protocol: 'hls', VideoCodec: 'h264', AudioCodec: 'aac,mp3', Context: 'Streaming', MaxAudioChannels: '6', BreakOnNonKeyFrames: true }],
+        DirectPlayProfiles: browserVideoDirectPlayProfiles(),
+        TranscodingProfiles: [{ Type: 'Video', Container: 'ts', Protocol: 'hls', VideoCodec: browserVideoTranscodeCodecs(), AudioCodec: 'aac,mp3', Context: 'Streaming', MaxAudioChannels: '6', BreakOnNonKeyFrames: true }],
         SubtitleProfiles: ['srt', 'subrip', 'vtt', 'webvtt', 'ass', 'ssa'].map((f) => ({ Format: f, Method: 'External' })),
       },
     };
@@ -1280,6 +1304,10 @@ async function goPlayer(id, opts) {
       });
     }
     video.play().catch(() => {});
+    if (resumePaused) {
+      video.addEventListener('seeked', function hold() { video.removeEventListener('seeked', hold); video.pause(); });
+      if (startTicks === 0) video.addEventListener('playing', function hold0() { video.removeEventListener('playing', hold0); video.pause(); });
+    }
     // Skip Intro: only where Jellyfin reports an intro segment (TV MediaSegments, 10.10+).
     state.introSegments = [];
     if (state.settings && state.settings.skipIntro) {
@@ -1365,6 +1393,7 @@ $('player').addEventListener('error', () => {
 // Leaving the player (nav, new title, sign-out) must actually end playback:
 // pause, report Stopped once, tear down hls.js, and release the element.
 function stopPlayback(reportStopped) {
+  clearTimeout(chromeIdleTimer); setChromeHidden(false); dropWakeLock();
   const video = $('player');
   if (reportStopped && state.playingItemId != null) {
     const ticks = Math.round((video.currentTime || 0) * 10000000);
@@ -1653,6 +1682,79 @@ function pbSync() {
 ['play', 'pause', 'timeupdate', 'durationchange', 'volumechange', 'loadedmetadata'].forEach((ev) => $('player').addEventListener(ev, pbSync));
 $('pbPlay').addEventListener('click', () => { const v = $('player'); if (v.paused) v.play().catch(() => {}); else v.pause(); });
 $('player').addEventListener('click', () => { const v = $('player'); if (v.paused) v.play().catch(() => {}); else v.pause(); });
+
+// Screen wake lock while playing (windowed or fullscreen): keeps the display awake
+// during playback, releases on pause/end and when leaving the player. Best-effort:
+// needs browser support (Chrome/Edge/Safari 16.4+), a secure context, and the OS
+// allowing it; unsupported browsers silently keep current behavior.
+let screenWakeLock = null;
+async function holdWakeLock() {
+  if (!('wakeLock' in navigator)) return;
+  try {
+    if (!screenWakeLock) {
+      screenWakeLock = await navigator.wakeLock.request('screen');
+      screenWakeLock.addEventListener('release', () => { screenWakeLock = null; state.wakeLockHeld = false; });
+      state.wakeLockHeld = true;
+    }
+  } catch {}
+}
+function dropWakeLock() { const l = screenWakeLock; screenWakeLock = null; state.wakeLockHeld = false; if (l) l.release().catch(() => {}); }
+$('player').addEventListener('playing', holdWakeLock);
+$('player').addEventListener('pause', dropWakeLock);
+$('player').addEventListener('ended', dropWakeLock);
+document.addEventListener('visibilitychange', () => {
+  const v = $('player');
+  if (document.visibilityState === 'visible' && v && !v.paused && !v.ended && !$('view-player').hidden) holdWakeLock();
+});
+
+// Idle chrome/cursor fade in BOTH windowed and fullscreen: any pointer activity
+// over the player reveals Back/fullscreen/transport, which fade after 3s of
+// stillness while playing. Paused playback never fades: the pause overlay and its
+// actor strip stay up and clickable.
+let chromeIdleTimer = null;
+function setChromeHidden(hidden) {
+  const w = document.querySelector('.videowrap');
+  if (w) w.classList.toggle('hide-chrome', hidden);
+}
+function pokeChrome() {
+  setChromeHidden(false);
+  clearTimeout(chromeIdleTimer);
+  const v = $('player');
+  if (v && !v.paused && !v.ended && !$('view-player').hidden) chromeIdleTimer = setTimeout(() => setChromeHidden(true), 3000);
+}
+(function () {
+  const w = document.querySelector('.videowrap');
+  if (w) ['mousemove', 'pointerdown', 'touchstart'].forEach((ev) => w.addEventListener(ev, pokeChrome, { passive: true }));
+})();
+$('player').addEventListener('play', pokeChrome);
+$('player').addEventListener('pause', () => { clearTimeout(chromeIdleTimer); setChromeHidden(false); });
+$('player').addEventListener('ended', () => { clearTimeout(chromeIdleTimer); setChromeHidden(false); });
+
+// Keyboard transport while the player is open: Space toggles play/pause, Left and
+// Right seek 10s (clamped to the stream). Text fields, selects and the seek slider
+// keep their native keys; a focused button keeps its own Space activation so
+// Space never double-toggles. Works windowed and fullscreen.
+document.addEventListener('keydown', (e) => {
+  const view = $('view-player');
+  if (!view || view.hidden || e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey) return;
+  const t = e.target;
+  const tag = t && t.tagName;
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (t && t.isContentEditable)) return;
+  const v = $('player');
+  if (!v || !state.playingItem) return;
+  if (e.key === ' ') {
+    // Space always toggles play/pause in the player (preventDefault also stops a
+    // focused button's own Space activation); Enter stays the button activator.
+    if (e.repeat) return;
+    e.preventDefault();
+    if (v.paused) v.play().catch(() => {}); else v.pause();
+  } else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+    if (!isFinite(v.duration)) return;
+    e.preventDefault();
+    const delta = e.key === 'ArrowRight' ? 10 : -10;
+    v.currentTime = Math.min(Math.max(0, v.currentTime + delta), v.duration);
+  }
+});
 $('pbSeek').addEventListener('input', () => {
   const d = $('player').duration;
   if (isFinite(d) && d > 0) $('pbTime').textContent = pbFmt((parseInt($('pbSeek').value, 10) / 1000) * d) + ' / ' + pbFmt(d);
@@ -1690,11 +1792,11 @@ function renderPauseInfo() {
       <div class="pc-name">${esc(p.Name || '')}</div>
       ${p.Role ? `<div class="pc-role">${esc(p.Role)}</div>` : ''}
     </span>` : `
-    <span class="pc">
+    <button type="button" class="pc" data-person="${esc(p.Id)}" title="Open ${esc(p.Name || 'actor')} details">
       <img src="/api/jellyfin/Items/${esc(p.Id)}/Images/Primary?maxWidth=120&quality=90" alt="" loading="lazy" onerror="this.src='data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=='">
       <div class="pc-name">${esc(p.Name || '')}</div>
       ${p.Role ? `<div class="pc-role">${esc(p.Role)}</div>` : ''}
-    </span>`).join('');
+    </button>`).join('');
   $('pauseCast').hidden = !cast.length;
 }
 function showPauseInfo() {
@@ -1717,6 +1819,16 @@ window.addEventListener('resize', () => {
 });
 function hidePauseInfo() { const p = $('pauseInfo'); if (p) p.hidden = true; }
 $('player').addEventListener('pause', showPauseInfo);
+// Local pause-strip actors open their actor page (remote TVMaze guests stay display-only
+// spans, same as the details Cast row). The one-shot flag makes the player RETURN to the
+// paused state at the same position: leaving reports Stopped with the current ticks, and
+// goPlayer seeks back to them from server resume data, then holds the pause.
+$('pauseCast').addEventListener('click', (e) => {
+  const btn = e.target.closest('button.pc[data-person]');
+  if (!btn) return;
+  try { sessionStorage.setItem('driftfinResumePaused', '1'); } catch {}
+  location.hash = '#/actor?id=' + encodeURIComponent(btn.dataset.person);
+});
 $('player').addEventListener('play', hidePauseInfo);
 // Verified TVMaze guests for the playing episode, fetched once per playback (TV loads
 // its pause cast once at start); re-renders only when still paused on the same item.
