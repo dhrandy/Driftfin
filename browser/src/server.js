@@ -14,8 +14,8 @@
  *    The Jellyfin access token is held server-side only, keyed by a
  *    signed session cookie. Browser JS never sees the Jellyfin token.
  *  - Stores sessions, the session secret, and per-user app settings
- *    in DATA_DIR (default /data). In Dockhand that directory is the
- *    bind volume /DATA/AppData/driftfin-browser:/data, so sessions
+ *    in DATA_DIR (default /data). In the compose stack that directory
+ *    is a persistent bind volume mounted at /data, so sessions
  *    and settings survive container restarts and recreates. The
  *    session secret file is created on first start if it is missing.
  *  - Streams video through /api/direct/... and /api/hls/... so a
@@ -41,6 +41,8 @@
 
 const http = require('http');
 const https = require('https');
+const dns = require('dns');
+const net = require('net');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
@@ -110,6 +112,13 @@ function getSession(req) {
   if (sess && Date.parse(sess.createdAt || '') + 30 * 86400000 < Date.now()) { delete sessions[id]; writeJsonFile(path.join(DATA_DIR, 'sessions.json'), sessions, 0o600); return null; }
   return sess;
 }
+// When the operator locks the deployment to one Jellyfin target, sessions
+// created against any other server (e.g. before the lock was enabled) are no
+// longer honored - the fixed target cannot be bypassed through old sessions.
+function sessionAllowedForTarget(session) {
+  if (process.env.JELLYFIN_LOCKED !== '1') return true;
+  return session.server === String(process.env.JELLYFIN_URL || '').trim();
+}
 function saveSession(session) {
   const file = path.join(DATA_DIR, 'sessions.json');
   const all = readJsonFile(file, {});
@@ -131,9 +140,11 @@ function cookieHeader(sessionId, maxAge) {
   if (maxAge !== undefined) c += `; Max-Age=${maxAge}`;
   return c;
 }
+// Framing/referrer hardening applied to every response.
+const SEC_HEADERS = { 'X-Frame-Options': 'DENY', 'Referrer-Policy': 'no-referrer' };
 function sendJson(res, status, obj, extraHeaders) {
   const body = Buffer.from(JSON.stringify(obj), 'utf8');
-  res.writeHead(status, { 'Content-Type': 'application/json', 'Content-Length': body.length, 'X-Content-Type-Options': 'nosniff', ...(extraHeaders || {}) });
+  res.writeHead(status, { 'Content-Type': 'application/json', 'Content-Length': body.length, 'X-Content-Type-Options': 'nosniff', ...SEC_HEADERS, ...(extraHeaders || {}) });
   res.end(body);
 }
 const MAX_BODY = 1024 * 1024; // 1 MB - API payloads are small; no unbounded buffering.
@@ -159,18 +170,155 @@ function readJsonBody(req) {
   });
 }
 
-/** One upstream call to the user's Jellyfin server. Resolves to {status, headers, body}. */
-function jellyfinRequest(session, targetPath, method, body, contentType) {
+// Login abuse guard: sliding window of failed sign-ins. Two layers:
+//  - 10 failures per client IP + username pair in 10 minutes -> 429 with
+//    Retry-After for that pair only. Behind a reverse proxy where every
+//    client shares the proxy's socket IP, one person's failures (or an
+//    attacker guessing one account) can never lock out other usernames.
+//  - 50 failures per client IP in 10 minutes -> 429 for the IP, so an
+//    attacker rotating usernames is still capped.
+// A successful sign-in clears the pair's record and the windows expire on
+// their own, so a real user who mistypes a few times is never locked out
+// permanently. For per-client accuracy behind a proxy the operator must set
+// TRUST_PROXY=1 (only when the proxy strips client-supplied forwarding
+// headers); without it the pair key pools by proxy IP, which stays safe.
+const LOGIN_WINDOW_MS = parseInt(process.env.LOGIN_WINDOW_MS || '', 10) || 10 * 60 * 1000; // env override is for tests
+const LOGIN_MAX_FAILS = 10;
+const LOGIN_IP_MAX_FAILS = 50;
+const loginFails = new Map(); // "ip|username" -> failure timestamps (ms)
+const loginIpFails = new Map(); // ip -> failure timestamps (ms)
+const loginInflight = new Map(); // "ip|username" -> attempts being verified upstream
+const loginIpInflight = new Map(); // ip -> attempts being verified upstream
+function trimLoginWindow(map, key, now) {
+  const rec = (map.get(key) || []).filter((t) => now - t < LOGIN_WINDOW_MS);
+  if (rec.length) map.set(key, rec); else map.delete(key);
+  return rec;
+}
+function loginBlockedSeconds(ip, pair) {
+  const now = Date.now();
+  const pairRec = trimLoginWindow(loginFails, pair, now);
+  const ipRec = trimLoginWindow(loginIpFails, ip, now);
+  // In-flight attempts count against both budgets so a concurrent burst
+  // cannot all pass the check before the first failure is recorded (check
+  // and reservation happen in one synchronous block).
+  const pairUsed = pairRec.length + (loginInflight.get(pair) || 0);
+  const ipUsed = ipRec.length + (loginIpInflight.get(ip) || 0);
+  if (pairUsed < LOGIN_MAX_FAILS && ipUsed < LOGIN_IP_MAX_FAILS) return 0;
+  const oldest = (pairUsed >= LOGIN_MAX_FAILS ? pairRec[0] : 0) || ipRec[0] || now;
+  return Math.max(1, Math.ceil((oldest + LOGIN_WINDOW_MS - now) / 1000));
+}
+function noteLoginFail(ip, pair) {
+  const now = Date.now();
+  const a = trimLoginWindow(loginFails, pair, now); a.push(now); loginFails.set(pair, a);
+  const b = trimLoginWindow(loginIpFails, ip, now); b.push(now); loginIpFails.set(ip, b);
+}
+
+// SSRF guard for the user-supplied Jellyfin address. The product requires
+// reaching self-hosted servers on private LAN and loopback addresses, so
+// those stay allowed; what is blocked is link-local (169.254.0.0/16, which
+// includes cloud instance metadata endpoints), the unspecified address,
+// multicast, and their IPv6 forms. The hostname is resolved and every
+// answer must be safe. Node's http client never follows redirects, so a
+// hostile server cannot bounce the request to a second target; upstream
+// responses are size-capped and time out.
+function expandV6(addr) {
+  let a = addr.toLowerCase();
+  if (a.includes('.')) { // embedded dotted-quad tail -> two hex quads
+    const v4 = a.split(':').pop().split('.').map((x) => parseInt(x, 10));
+    if (v4.length !== 4 || v4.some((n) => isNaN(n) || n > 255)) return null;
+    const hex = ((v4[0] << 8) | v4[1]).toString(16) + ':' + ((v4[2] << 8) | v4[3]).toString(16);
+    a = a.slice(0, a.lastIndexOf(':') + 1) + hex;
+  }
+  const sides = a.split('::');
+  if (sides.length > 2) return null;
+  const head = sides[0] ? sides[0].split(':') : [];
+  const tail = sides.length === 2 && sides[1] ? sides[1].split(':') : [];
+  if (sides.length === 1) return head.length === 8 ? head : null;
+  const missing = 8 - head.length - tail.length;
+  if (missing < 1) return null;
+  return [...head, ...Array(missing).fill('0'), ...tail];
+}
+function isBlockedV4(p) {
+  return p[0] === 0 || (p[0] === 169 && p[1] === 254) || p[0] >= 224;
+}
+function isBlockedUpstreamAddr(addr) {
+  if (!addr.includes(':')) {
+    const p = addr.split('.').map((x) => parseInt(x, 10));
+    if (p.length !== 4 || p.some((n) => isNaN(n))) return true;
+    return isBlockedV4(p);
+  }
+  const q = expandV6(addr);
+  if (!q) return true;
+  const n = q.map((x) => parseInt(x, 16));
+  if (n.some((x) => isNaN(x))) return true;
+  if (n.every((x) => x === 0)) return true; // :: unspecified
+  if (n.slice(0, 7).every((x) => x === 0) && n[7] === 1) return false; // ::1 loopback: allowed, same as 127.0.0.1
+  if (n[0] >= 0xff00) return true; // multicast ff00::/8
+  if ((n[0] & 0xffc0) === 0xfe80) return true; // link-local fe80::/10
+  if (n.slice(0, 5).every((x) => x === 0) && n[5] === 0xffff) { // v4-mapped ::ffff:a.b.c.d, any notation
+    return isBlockedV4([n[6] >> 8, n[6] & 255, n[7] >> 8, n[7] & 255]);
+  }
+  return false; // global or ULA (LAN) v6: allowed
+}
+// DRIFTFIN_TEST_DNS_FILE (test harness only, never set in deployment): path to a
+// JSON file {hostname: [addresses]} consulted instead of live DNS, re-read on
+// every lookup so tests can simulate mixed answers and rebinding.
+async function lookupAllAddresses(hostname) {
+  const hook = process.env.DRIFTFIN_TEST_DNS_FILE;
+  if (hook) {
+    try {
+      const map = JSON.parse(fs.readFileSync(hook, 'utf8'));
+      if (Array.isArray(map[hostname])) return map[hostname].map(String);
+    } catch {}
+  }
+  if (net.isIP(hostname)) return [hostname];
+  const answers = await dns.promises.lookup(hostname, { all: true }).catch(() => []);
+  return answers.map((a) => a.address);
+}
+
+// Resolve and validate a user-supplied Jellyfin address. Returns
+// { tls, hostname, port, addrs } on success, null when the target is not
+// allowed. ANY unsafe answer poisons the whole target (mixed-answer DNS is a
+// known rebinding shape), and the returned addrs are what every later
+// connection is pinned to - DNS is never re-asked for a live session.
+async function resolveJellyfinTarget(serverUrl) {
+  let u;
+  try { u = new URL(serverUrl); } catch { return null; }
+  if (u.protocol !== 'http:' && u.protocol !== 'https:') return null;
+  const hostname = u.hostname.replace(/^\[|\]$/g, '');
+  const port = parseInt(u.port || '', 10) || (u.protocol === 'https:' ? 443 : 80);
+  const all = await lookupAllAddresses(hostname);
+  if (!all.length) return null;
+  if (all.some((a) => isBlockedUpstreamAddr(a))) return null;
+  return { tls: u.protocol === 'https:', hostname, port, addrs: all };
+}
+
+// Addresses this session may actually connect to. Sessions created at login
+// carry pinnedAddrs (validated then); older sessions resolve on demand and
+// use only the safe answers. Either way every entry is re-checked against the
+// blocklist at connection time.
+async function pinnedAddrsFor(session, hostname) {
+  const pinned = (session.pinnedAddrs || []).filter((a) => !isBlockedUpstreamAddr(a));
+  if (pinned.length) return pinned;
+  const all = await lookupAllAddresses(hostname);
+  return all.filter((a) => !isBlockedUpstreamAddr(a));
+}
+
+// One upstream connection to a pinned address. TLS certificate verification
+// stays anchored to the ORIGINAL hostname (servername + Host header), only
+// the dial target is the validated IP.
+function rawUpstreamRequest({ tls, addr, hostname, port, path: p, method, headers, body, timeoutMs, stream }) {
   return new Promise((resolve, reject) => {
-    const base = session.server.replace(/\/$/, '');
-    const url = new URL(base + '/' + targetPath.replace(/^\//, ''));
-    const lib = url.protocol === 'https:' ? https : http;
-    // TV Session.kt uses the standard Authorization header (Jellyfin 12 default).
-    const headers = { 'Authorization': `${CLIENT}, Token="${session.token}"` };
-    if (body && body.length) headers['Content-Type'] = contentType || 'application/json';
-    const req = lib.request(url, { method, headers, timeout: 60000 }, (resp) => {
+    const lib = tls ? https : http;
+    const defaultPort = tls ? 443 : 80;
+    const hostHeader = hostname + (port && port !== defaultPort ? ':' + port : '');
+    const opts = { host: addr, port: port || defaultPort, path: p, method, headers: { ...headers, Host: hostHeader }, timeout: timeoutMs };
+    if (tls) opts.servername = hostname;
+    const req = lib.request(opts, (resp) => {
+      if (stream) return resolve({ streamResp: resp });
       const chunks = [];
-      resp.on('data', (c) => chunks.push(c));
+      let size = 0;
+      resp.on('data', (c) => { size += c.length; if (size > MAX_UPSTREAM_BYTES) { req.destroy(new Error('upstream response too large')); return; } chunks.push(c); });
       resp.on('end', () => resolve({ status: resp.statusCode, headers: resp.headers, body: Buffer.concat(chunks) }));
     });
     req.on('timeout', () => req.destroy(new Error('Jellyfin request timed out')));
@@ -179,25 +327,39 @@ function jellyfinRequest(session, targetPath, method, body, contentType) {
     req.end();
   });
 }
-function jellyfinUnauthenticated(server, targetPath, body) {
-  return new Promise((resolve, reject) => {
-    const url = new URL(server.replace(/\/$/, '') + '/' + targetPath);
-    const lib = url.protocol === 'https:' ? https : http;
-    const payload = Buffer.from(JSON.stringify(body), 'utf8');
-    const req = lib.request(url, {
-      method: 'POST',
-      headers: { 'Authorization': CLIENT, 'Content-Type': 'application/json', 'Content-Length': payload.length },
-      timeout: 30000,
-    }, (resp) => {
-      const chunks = [];
-      resp.on('data', (c) => chunks.push(c));
-      resp.on('end', () => resolve({ status: resp.statusCode, body: Buffer.concat(chunks) }));
-    });
-    req.on('timeout', () => req.destroy(new Error('Jellyfin request timed out')));
-    req.on('error', reject);
-    req.write(payload);
-    req.end();
-  });
+
+const MAX_UPSTREAM_BYTES = 32 * 1024 * 1024; // 32 MB - API payloads are small; video streams bypass this path.
+/** One upstream call to the user's Jellyfin server, pinned to the addresses
+ *  validated at sign-in. Resolves to {status, headers, body}. */
+async function jellyfinRequest(session, targetPath, method, body, contentType) {
+  const base = session.server.replace(/\/$/, '');
+  const url = new URL(base + '/' + targetPath.replace(/^\//, ''));
+  const tls = url.protocol === 'https:';
+  const hostname = url.hostname.replace(/^\[|\]$/g, '');
+  const port = parseInt(url.port || '', 10) || (tls ? 443 : 80);
+  const addrs = await pinnedAddrsFor(session, hostname);
+  if (!addrs.length) throw new Error('no allowed upstream address for Jellyfin server');
+  // TV Session.kt uses the standard Authorization header (Jellyfin 12 default).
+  const headers = { 'Authorization': `${CLIENT}, Token="${session.token}"` };
+  if (body && body.length) headers['Content-Type'] = contentType || 'application/json';
+  let lastErr = null;
+  for (const addr of addrs) {
+    try {
+      return await rawUpstreamRequest({ tls, addr, hostname, port, path: url.pathname + url.search, method, headers, body, timeoutMs: 60000 });
+    } catch (e) { lastErr = e; }
+  }
+  throw lastErr;
+}
+async function jellyfinUnauthenticated(target, targetPath, body) {
+  const payload = Buffer.from(JSON.stringify(body), 'utf8');
+  const headers = { 'Authorization': CLIENT, 'Content-Type': 'application/json', 'Content-Length': payload.length };
+  let lastErr = null;
+  for (const addr of target.addrs) {
+    try {
+      return await rawUpstreamRequest({ tls: target.tls, addr, hostname: target.hostname, port: target.port, path: '/' + targetPath, method: 'POST', headers, body: payload, timeoutMs: 30000 });
+    } catch (e) { lastErr = e; }
+  }
+  throw lastErr;
 }
 
 const MIME = {
@@ -208,11 +370,12 @@ const MIME = {
 function serveStatic(req, res, pathname) {
   let filePath = pathname === '/' ? path.join(PUBLIC_DIR, 'index.html') : path.join(PUBLIC_DIR, pathname);
   const root = path.resolve(PUBLIC_DIR);
-  if (!path.resolve(filePath).startsWith(root)) { res.writeHead(403); return res.end('forbidden'); }
+  const resolved = path.resolve(filePath);
+  if (resolved !== root && !resolved.startsWith(root + path.sep)) { res.writeHead(403); return res.end('forbidden'); }
   fs.readFile(filePath, (err, data) => {
     if (err) { res.writeHead(404, { 'Content-Type': 'text/plain' }); return res.end('not found'); }
     const ext = path.extname(filePath).toLowerCase();
-    res.writeHead(200, { 'Content-Type': MIME[ext] || 'application/octet-stream', 'Content-Length': data.length, 'X-Content-Type-Options': 'nosniff' });
+    res.writeHead(200, { 'Content-Type': MIME[ext] || 'application/octet-stream', 'Content-Length': data.length, 'X-Content-Type-Options': 'nosniff', ...SEC_HEADERS });
     res.end(data);
   });
 }
@@ -229,11 +392,28 @@ const server = http.createServer(async (req, res) => {
     if (pathname === '/api/config') {
       return sendJson(res, 200, {
         jellyfinUrl: process.env.JELLYFIN_URL || '',
+        serverLocked: process.env.JELLYFIN_LOCKED === '1',
         cookieSecure: COOKIE_SECURE,
         version: VERSION,
       });
     }
+    // CSRF boundary: every mutating API call with an Origin header must be
+    // same-origin. The session cookie is SameSite=Lax (no cross-site POST
+    // carries it) and API clients that send no Origin are unaffected.
+    if (req.method !== 'GET' && req.method !== 'HEAD' && pathname.startsWith('/api/') && req.headers.origin) {
+      let originHost = null;
+      try { originHost = new URL(String(req.headers.origin)).host; } catch {}
+      if (originHost !== req.headers.host) return sendJson(res, 403, { error: 'origin_not_allowed' });
+    }
     if (pathname === '/api/auth/login' && req.method === 'POST') {
+      // Client key for the rate limit: the socket peer by default. X-Forwarded-For
+      // is honored only when the operator sets TRUST_PROXY=1, i.e. the app sits
+      // behind a reverse proxy that strips client-supplied forwarding headers.
+      // Otherwise every user would share the proxy's IP (one block bans all) and
+      // a spoofed header could reset or target counters.
+      const clientIp = process.env.TRUST_PROXY === '1'
+        ? String(req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.socket.remoteAddress || 'unknown'
+        : req.socket.remoteAddress || 'unknown';
       const payload = await readJsonBody(req);
       const serverUrl = String(payload.server || '').trim().replace(/\/$/, '');
       const username = String(payload.username || '').trim();
@@ -241,24 +421,45 @@ const server = http.createServer(async (req, res) => {
       if (!serverUrl || !/^https?:\/\//.test(serverUrl) || !username) {
         return sendJson(res, 400, { error: 'server must start with http:// or https://, and username is required' });
       }
+      // JELLYFIN_LOCKED=1 (opt-in): the operator fixes the Jellyfin target via
+      // JELLYFIN_URL and the sign-in form's server field is ignored, so
+      // sign-in can never be aimed at another host.
+      const effectiveServer = process.env.JELLYFIN_LOCKED === '1' ? String(process.env.JELLYFIN_URL || '').trim() : serverUrl;
+      if (!effectiveServer) return sendJson(res, 500, { error: 'JELLYFIN_LOCKED is set but JELLYFIN_URL is empty' });
+      const target = await resolveJellyfinTarget(effectiveServer);
+      if (!target) {
+        return sendJson(res, 400, { error: 'server address is not allowed (link-local, metadata, multicast, or unresolvable addresses are rejected)' });
+      }
+      const loginPair = clientIp + '|' + username.toLowerCase();
+      const blockedFor = loginBlockedSeconds(clientIp, loginPair);
+      if (blockedFor) return sendJson(res, 429, { error: 'too_many_attempts', retryAfterSeconds: blockedFor }, { 'Retry-After': String(blockedFor) });
+      loginInflight.set(loginPair, (loginInflight.get(loginPair) || 0) + 1);
+      loginIpInflight.set(clientIp, (loginIpInflight.get(clientIp) || 0) + 1);
+      try {
       let result;
-      try { result = await jellyfinUnauthenticated(serverUrl, 'Users/AuthenticateByName', { Username: username, Pw: password }); }
-      catch (e) { console.error('Driftfin login unreachable', serverUrl, String(e.message || e)); return sendJson(res, 502, { error: 'jellyfin_unreachable', detail: String(e.message || e).slice(0, 500) }); }
+      try { result = await jellyfinUnauthenticated(target, 'Users/AuthenticateByName', { Username: username, Pw: password }); }
+      catch (e) { console.error('Driftfin login unreachable', effectiveServer, String(e.message || e)); noteLoginFail(clientIp, loginPair); return sendJson(res, 502, { error: 'jellyfin_unreachable', detail: String(e.message || e).slice(0, 500) }); }
       let parsed = {};
       try { parsed = JSON.parse(result.body.toString('utf8')); } catch {}
       if (result.status >= 400 || !parsed.AccessToken || !parsed.User || !parsed.User.Id) {
-        console.error('Driftfin login rejected', serverUrl, 'status', result.status, result.body.toString('utf8').slice(0, 300));
+        console.error('Driftfin login rejected', effectiveServer, 'status', result.status, result.body.toString('utf8').slice(0, 300));
+        noteLoginFail(clientIp, loginPair);
         return sendJson(res, result.status >= 400 ? result.status : 502, { error: 'jellyfin_rejected_sign_in', jellyfinStatus: result.status });
       }
+      loginFails.delete(loginPair);
       const session = {
         id: crypto.randomBytes(32).toString('hex'),
-        server: serverUrl, token: parsed.AccessToken,
+        server: effectiveServer, token: parsed.AccessToken, pinnedAddrs: target.addrs,
         userId: parsed.User.Id, username: parsed.User.Name || username,
         createdAt: new Date().toISOString(),
       };
       saveSession(session);
       return sendJson(res, 200, { ok: true, username: session.username, userId: session.userId },
         { 'Set-Cookie': cookieHeader(session.id) });
+      } finally {
+        loginInflight.set(loginPair, Math.max(0, (loginInflight.get(loginPair) || 1) - 1));
+        loginIpInflight.set(clientIp, Math.max(0, (loginIpInflight.get(clientIp) || 1) - 1));
+      }
     }
     if (pathname === '/api/auth/logout') {
       dropSession(req);
@@ -267,14 +468,14 @@ const server = http.createServer(async (req, res) => {
 
     const session = getSession(req);
     if (pathname === '/api/auth/me') {
-      if (!session) return sendJson(res, 401, { error: 'not_signed_in' });
+      if (!session || !sessionAllowedForTarget(session)) return sendJson(res, 401, { error: 'not_signed_in' });
       // TV SessionManager.validateToken uses Users/Me, not Users/{id}.
       const r = await jellyfinRequest(session, 'Users/Me', 'GET');
-      res.writeHead(r.status, { 'Content-Type': r.headers['content-type'] || 'application/json', 'Content-Length': r.body.length });
+      res.writeHead(r.status, { 'Content-Type': r.headers['content-type'] || 'application/json', 'Content-Length': r.body.length, 'X-Content-Type-Options': 'nosniff', ...SEC_HEADERS });
       return res.end(r.body);
     }
     if (pathname === '/api/settings') {
-      if (!session) return sendJson(res, 401, { error: 'not_signed_in' });
+      if (!session || !sessionAllowedForTarget(session)) return sendJson(res, 401, { error: 'not_signed_in' });
       const file = path.join(DATA_DIR, 'settings.json');
       if (req.method === 'GET') {
         const all = readJsonFile(file, {});
@@ -302,42 +503,85 @@ const server = http.createServer(async (req, res) => {
       }
       return sendJson(res, 405, { error: 'method_not_allowed' });
     }
+    // Driftfin's own Watchlist (TV Watchlist.kt parity): starred movie/series ids,
+    // newest first, 500-title cap, keyed by server+user so profiles and servers
+    // never see each other's list. Separate from Jellyfin favorites (My List).
+    const WATCHLIST_MAX = 500;
+    const watchlistFile = () => path.join(DATA_DIR, 'watchlist.json');
+    const watchlistKey = (sess) => `${sess.server}#${sess.userId}`;
+    if (pathname === '/api/watchlist' || pathname.startsWith('/api/watchlist/')) {
+      if (!session || !sessionAllowedForTarget(session)) return sendJson(res, 401, { error: 'not_signed_in' });
+      const all = readJsonFile(watchlistFile(), {});
+      const key = watchlistKey(session);
+      const ids = Array.isArray(all[key]) ? all[key] : [];
+      if (pathname === '/api/watchlist' && req.method === 'GET') return sendJson(res, 200, { ids });
+      if (pathname === '/api/watchlist' && req.method === 'POST') {
+        const payload = await readJsonBody(req);
+        const id = String(payload.id || '').trim();
+        if (!id) return sendJson(res, 400, { error: 'id_required' });
+        let next, starred;
+        if (ids.includes(id)) { next = ids.filter((x) => x !== id); starred = false; }
+        else {
+          if (ids.length >= WATCHLIST_MAX) return sendJson(res, 200, { starred: false, capped: true });
+          next = [id, ...ids]; starred = true;
+        }
+        all[key] = next;
+        writeJsonFile(watchlistFile(), all, 0o600);
+        return sendJson(res, 200, { starred });
+      }
+      const delMatch = pathname.match(/^\/api\/watchlist\/([^/]+)$/);
+      if (delMatch && req.method === 'DELETE') {
+        all[key] = ids.filter((x) => x !== delMatch[1]);
+        writeJsonFile(watchlistFile(), all, 0o600);
+        return sendJson(res, 200, { ok: true });
+      }
+      return sendJson(res, 405, { error: 'method_not_allowed' });
+    }
     if (pathname.startsWith('/api/jellyfin/')) {
-      if (!session) return sendJson(res, 401, { error: 'not_signed_in' });
+      if (!session || !sessionAllowedForTarget(session)) return sendJson(res, 401, { error: 'not_signed_in' });
       const sub = pathname.slice('/api/jellyfin/'.length);
       const target = sub + (url.search || '');
       const body = (req.method === 'POST' || req.method === 'DELETE') ? await readBody(req) : null;
       const r = await jellyfinRequest(session, target, req.method, body && body.length ? body : null, req.headers['content-type']);
-      res.writeHead(r.status, { 'Content-Type': r.headers['content-type'] || 'application/json', 'Content-Length': r.body.length });
+      res.writeHead(r.status, { 'Content-Type': r.headers['content-type'] || 'application/json', 'Content-Length': r.body.length, 'X-Content-Type-Options': 'nosniff', ...SEC_HEADERS });
       return res.end(r.body);
     }
     if (pathname.startsWith('/api/direct/')) {
-      if (!session) return sendJson(res, 401, { error: 'not_signed_in' });
+      if (!session || !sessionAllowedForTarget(session)) return sendJson(res, 401, { error: 'not_signed_in' });
       const itemId = pathname.slice('/api/direct/'.length).replace(/\//g, '');
       if (!itemId) return sendJson(res, 400, { error: 'bad_item_id' });
       // TV JellyfinRepository.streamUrl: Videos/{id}/stream?static=true&mediaSourceId={id}.
       const directParams = new URLSearchParams(url.search);
       if (!directParams.has('static')) directParams.set('static', 'true');
       const target = `Videos/${itemId}/stream?${directParams.toString()}`;
-      const base = session.server.replace(/\/$/, '');
-      const upstream = new URL(base + '/' + target);
-      const lib = upstream.protocol === 'https:' ? https : http;
+      const base = new URL(session.server.replace(/\/$/, '') + '/' + target);
+      const tls = base.protocol === 'https:';
+      const hostname = base.hostname.replace(/^\[|\]$/g, '');
+      const port = parseInt(base.port || '', 10) || (tls ? 443 : 80);
+      const addrs = await pinnedAddrsFor(session, hostname);
+      if (!addrs.length) return sendJson(res, 502, { error: 'jellyfin_unreachable' });
       const headers = { 'Authorization': `${CLIENT}, Token="${session.token}"` };
       if (req.headers.range) headers.Range = req.headers.range;
-      const up = lib.request(upstream, { method: 'GET', headers }, (resp) => {
-        const out = {};
-        for (const k of ['content-type', 'content-length', 'accept-ranges', 'content-range']) {
-          if (resp.headers[k]) out[k] = resp.headers[k];
-        }
-        res.writeHead(resp.statusCode, out);
-        resp.pipe(res);
-      });
-      up.on('error', () => sendJson(res, 502, { error: 'jellyfin_unreachable' }));
-      up.end();
+      let streamed = false, lastErr = null;
+      for (const addr of addrs) {
+        try {
+          const r = await rawUpstreamRequest({ tls, addr, hostname, port, path: base.pathname + base.search, method: 'GET', headers, timeoutMs: 60000, stream: true });
+          const resp = r.streamResp;
+          const out = {};
+          for (const k of ['content-type', 'content-length', 'accept-ranges', 'content-range']) {
+            if (resp.headers[k]) out[k] = resp.headers[k];
+          }
+          res.writeHead(resp.statusCode, { ...out, 'X-Content-Type-Options': 'nosniff', ...SEC_HEADERS });
+          resp.pipe(res);
+          streamed = true;
+          break;
+        } catch (e) { lastErr = e; }
+      }
+      if (!streamed) { console.error('Driftfin stream unreachable', String(lastErr && lastErr.message || lastErr)); sendJson(res, 502, { error: 'jellyfin_unreachable' }); }
       return;
     }
     if (pathname.startsWith('/api/hls/')) {
-      if (!session) return sendJson(res, 401, { error: 'not_signed_in' });
+      if (!session || !sessionAllowedForTarget(session)) return sendJson(res, 401, { error: 'not_signed_in' });
       const parts = pathname.slice('/api/hls/'.length).split('/').filter(Boolean);
       if (parts.length < 3) return sendJson(res, 400, { error: 'expected /api/hls/<itemId>/<mediaSourceId>/<playlist-or-segment>' });
       const [itemId, mediaSourceId, ...rest] = parts;
@@ -357,7 +601,7 @@ const server = http.createServer(async (req, res) => {
         body = Buffer.from(lines.join('\n'), 'utf8');
         contentType = 'application/vnd.apple.mpegurl';
       }
-      res.writeHead(r.status, { 'Content-Type': contentType, 'Content-Length': body.length });
+      res.writeHead(r.status, { 'Content-Type': contentType, 'Content-Length': body.length, 'X-Content-Type-Options': 'nosniff', ...SEC_HEADERS });
       return res.end(body);
     }
     if (req.method === 'GET') return serveStatic(req, res, pathname);

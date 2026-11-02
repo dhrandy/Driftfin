@@ -15,7 +15,7 @@ body { margin: 0; background: var(--bg); color: var(--text); font-family: system
 a { color: var(--text); text-decoration: none; }
 button, select, input { font: inherit; }
 button { background: var(--accent); color: #fff; border: 0; border-radius: 8px; padding: 10px 16px; cursor: pointer; }
-button[hidden] { display: none !important; }
+[hidden] { display: none !important; }
 input, select { background: #22222e; color: var(--text); border: 1px solid #33333f; border-radius: 8px; padding: 10px; }
 .muted { color: var(--muted); }
 .error { color: #ff8a8a; }
@@ -27,11 +27,18 @@ input, select { background: #22222e; color: var(--text); border: 1px solid #3333
 .top-actions { display: flex; gap: 12px; align-items: center; }
 .user-label { color: var(--muted); }
 main { padding: 0 24px 96px; max-width: 1400px; margin: 0 auto; }
-.hero { position: relative; min-height: var(--banner-height); border-radius: 16px; overflow: hidden; background: #1c1c26; display: flex; align-items: flex-end; }
-.hero img.hero-backdrop { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
-.hero-body { position: relative; padding: 28px; background: linear-gradient(transparent, rgba(0,0,0,.85)); width: 100%; }
-.hero-body h1 { margin: 0 0 8px; font-size: clamp(28px, 4vw, 52px); }
-.hero-meta { color: #ddd; display: flex; gap: 10px; flex-wrap: wrap; }
+.hero { position: relative; min-height: var(--banner-height); display: flex; align-items: flex-end; }
+.hero img.hero-backdrop { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover;
+  -webkit-mask-image: linear-gradient(180deg, #000 45%, transparent 97%), linear-gradient(90deg, transparent, #000 5%, #000 95%, transparent);
+  -webkit-mask-composite: source-in;
+  mask-image: linear-gradient(180deg, #000 45%, transparent 97%), linear-gradient(90deg, transparent, #000 5%, #000 95%, transparent);
+  mask-composite: intersect; }
+.hero::before { content: ''; position: absolute; inset: 0; z-index: 1;
+  background: linear-gradient(180deg, rgba(11,11,15,0) 0%, rgba(11,11,15,.38) 55%, rgba(11,11,15,.92) 100%), linear-gradient(90deg, rgba(11,11,15,.55) 0%, rgba(11,11,15,0) 62%); }
+.hero-body { position: relative; z-index: 2; padding: 28px 40px; width: 100%; }
+.hero-body h1 { margin: 0 0 8px; font-size: clamp(28px, 4vw, 52px); text-shadow: 0 2px 14px rgba(0,0,0,.9); }
+.hero-meta { color: #ddd; display: flex; gap: 10px; flex-wrap: wrap; text-shadow: 0 1px 8px rgba(0,0,0,.9); }
+.hero-body p { max-width: 720px; text-shadow: 0 1px 8px rgba(0,0,0,.9); }
 .badge { border: 1px solid #666; border-radius: 4px; padding: 1px 6px; font-size: 12px; }
 .row { margin-top: 28px; }
 .row h2 { margin: 0 0 12px; }
@@ -46,9 +53,14 @@ main { padding: 0 24px 96px; max-width: 1400px; margin: 0 auto; }
 .progress { height: 4px; background: #333; }
 .progress > div { height: 100%; background: var(--accent); }
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 14px; margin-top: 16px; }
+.grid > p { grid-column: 1 / -1; }
+.row-scroll > p { flex: 0 0 100%; }
 .grid .card { flex: none; width: auto; }
 .filter { display: inline-flex; gap: 8px; align-items: center; }
-.details-backdrop { width: 100%; max-height: 420px; object-fit: cover; border-radius: 16px; }
+.details-backdrop { width: 100%; max-height: 420px; object-fit: cover; border-radius: 16px 16px 0 0; display: block;
+  -webkit-mask-image: linear-gradient(180deg, #000 55%, transparent 100%); mask-image: linear-gradient(180deg, #000 55%, transparent 100%);
+  margin-bottom: -72px; position: relative; z-index: 0; }
+#details > h1, #details > .title-logo { position: relative; z-index: 1; }
 .episode { display: flex; justify-content: space-between; gap: 12px; background: var(--card); border-radius: 10px; padding: 12px; margin: 8px 0; cursor: pointer; }
 .episode-main { flex: 1; display: flex; flex-direction: column; gap: 4px; }
 .episode-actions { display: flex; gap: 8px; align-items: flex-start; flex-shrink: 0; }
@@ -58,6 +70,11 @@ main { padding: 0 24px 96px; max-width: 1400px; margin: 0 auto; }
 .season-chip.active { background: #fff; color: #111; }
 #playerWrap { max-width: 960px; margin: 0 auto; position: relative; }
 .back-btn { background: #22222e; margin-bottom: 10px; padding: 8px 14px; }
+.overlay-btn { position: absolute; z-index: 3; margin: 0; background: rgba(20,20,28,.78); backdrop-filter: blur(4px); border-radius: 8px; padding: 8px 14px; }
+#playerBack.overlay-btn { top: 10px; left: 10px; }
+#fsBtn.overlay-btn { top: 10px; right: 10px; font-size: 18px; line-height: 1; }
+.videowrap:fullscreen { background: #000; display: flex; align-items: center; border-radius: 0; }
+.videowrap:fullscreen #player { width: 100%; height: 100%; aspect-ratio: auto; border-radius: 0; }
 #player { width: 100%; aspect-ratio: 16/9; background: #000; border-radius: 12px; }
 .player-controls { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 12px; }
 .up-next { background: var(--card); border-radius: 10px; padding: 12px; margin-top: 12px; }
@@ -69,7 +86,7 @@ main { padding: 0 24px 96px; max-width: 1400px; margin: 0 auto; }
 .actor-head { display: flex; gap: 20px; align-items: flex-start; margin: 16px 0; }
 .actor-head img { width: 160px; border-radius: 12px; background: #22222e; }
 .videowrap { position: relative; }
-#skipIntroBtn { position: absolute; right: 16px; bottom: 56px; z-index: 2; box-shadow: 0 2px 10px rgba(0,0,0,.5); }
+#skipIntroBtn { position: absolute; right: 16px; bottom: 64px; z-index: 2; box-shadow: 0 2px 10px rgba(0,0,0,.5); }
 .bottomnav { display: none; }
 .view[hidden] { display: none !important; }
 form label { display: block; margin: 12px 0; }
@@ -90,4 +107,36 @@ form label input:not([type="checkbox"]) { display: block; width: 100%; max-width
   .bottomnav a { padding: 6px 8px; border-radius: 8px; font-size: 13px; }
   main { padding-bottom: 120px; }
   .hero-body { padding: 18px; }
+  .actor-head { flex-direction: column; gap: 12px; }
+  .actor-head img { width: 120px; }
 }
+
+.section-tabs { display: flex; gap: 8px; margin: 8px 0 16px; }
+.section-tabs button { background: #22222e; padding: 8px 14px; border-radius: 8px; }
+.section-tabs button.active { background: #e0354b; color: #fff; }
+.load-more { display: flex; justify-content: center; margin: 18px 0 8px; }
+.load-more button { background: #22222e; padding: 10px 22px; border-radius: 8px; }
+.search-people h2 { margin: 18px 0 10px; }
+
+/* Secondary actions stay dark so the primary action (Play, Save, Sign in) leads. */
+button.secondary { background: #22222e; color: var(--text); }
+button.secondary:hover { background: #2b2b39; }
+button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* Sign-in: centered card, nav hidden while signed out. */
+body.signed-out .topnav, body.signed-out .bottomnav, body.signed-out .top-actions { display: none; }
+body.signed-out .topbar { justify-content: center; }
+#view-signin { max-width: 440px; margin: 6vh auto 0; background: var(--card); border-radius: 16px; padding: 28px; }
+#signinForm { display: flex; flex-direction: column; gap: 14px; margin-top: 18px; }
+#signinForm label { display: flex; flex-direction: column; gap: 6px; }
+
+/* Settings rows read as a list, not a pile of checkboxes. */
+#settingsForm label { display: flex; gap: 10px; align-items: center; padding: 10px 0; border-bottom: 1px solid #22222e; }
+#settingsForm button { margin-top: 14px; }
+
+/* Search form uses the row. */
+#searchForm { display: flex; gap: 10px; max-width: 560px; }
+#searchForm input { flex: 1; }
+
+/* Library filter row spacing. */
+#view-library .filter { margin: 0 16px 16px 0; display: inline-flex; gap: 8px; align-items: center; }

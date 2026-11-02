@@ -34,6 +34,8 @@ async function api(path, options) {
   return ct.includes('application/json') ? res.json() : res.text();
 }
 const jf = (path, options) => api('/api/jellyfin/' + path.replace(/^\//, ''), options);
+// 1x1 transparent GIF used when an image is missing, so cards keep their shape.
+const PIXEL = 'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==';
 
 /* ---------- Jellyfin helpers, mirroring TV Models.kt ---------- */
 function formatAirDate(raw) {
@@ -196,6 +198,7 @@ function rowHtml(title, items, wide) {
   return `<section class="row"><h2>${esc(title)}</h2><div class="row-scroll">${items.map((i) => cardHtml(i, wide)).join('')}</div></section>`;
 }
 function showView(name, navOverride) {
+  document.body.classList.toggle('signed-out', name === 'signin');
   document.querySelectorAll('.view').forEach((v) => { v.hidden = true; });
   const el = $('view-' + name);
   if (el) el.hidden = false;
@@ -291,7 +294,7 @@ function renderHero(item) {
       <div class="hero-meta">${metaLine(item)} ${formatBadges(item)}</div>
       <p>${esc((item.Overview || '').slice(0, 300))}</p>
       <button type="button" id="heroPlay">${isResumeable(item) ? 'Resume' : 'Play'}</button>
-      <button type="button" id="heroInfo">More Info</button>
+      <button type="button" class="secondary" id="heroInfo">More Info</button>
     </div>`;
   $('heroPlay').addEventListener('click', () => goPlayer(item.Id));
   $('heroInfo').addEventListener('click', () => goDetails(item.Id));
@@ -319,17 +322,63 @@ async function loadLibrary(kind) {
     if (kids === 'kids') viewsToUse = viewsToUse.filter(isKidsLibrary);
     if (kids === 'nokids') viewsToUse = viewsToUse.filter((v) => !isKidsLibrary(v));
     const type = kind === 'shows' ? 'Series' : 'Movie';
-    let items = [];
-    for (const view of viewsToUse) {
-      const res = await jf(`Items?userId=${uid}&ParentId=${view.Id}&IncludeItemTypes=${type}&Recursive=true&SortBy=${encodeURIComponent($('librarySort').value)}&SortOrder=${encodeURIComponent($('librarySortOrder').value)}&limit=200&fields=Overview,Genres,MediaStreams`);
-      items = items.concat(res.Items || []);
-    }
+    state.libraryPaging = {
+      views: viewsToUse, type,
+      sort: $('librarySort').value, order: $('librarySortOrder').value,
+      offsets: {}, totals: {}, done: {},
+    };
+    const items = await fetchLibraryPage();
     grid.innerHTML = items.length ? items.map((i) => cardHtml(i)).join('') : '<p class="muted">No items returned for this filter.</p>';
     bindCards(grid);
+    renderLibraryMore();
   } catch (e) {
     grid.innerHTML = `<p class="error">Could not load library from Jellyfin: ${esc(e.message)}</p>`;
   }
 }
+
+// Libraries page through Jellyfin with StartIndex so titles past the first 200
+// are reachable (TV LibraryScreen fetches up to 4000 in one go; the browser pages).
+const LIBRARY_PAGE = 200;
+async function fetchLibraryPage() {
+  const pg = state.libraryPaging;
+  if (!pg) return [];
+  const uid = state.userId;
+  const jobs = pg.views.filter((v) => !pg.done[v.Id]).map(async (view) => {
+    const start = pg.offsets[view.Id] || 0;
+    const res = await jf(`Items?userId=${uid}&ParentId=${view.Id}&IncludeItemTypes=${pg.type}&Recursive=true&SortBy=${encodeURIComponent(pg.sort)}&SortOrder=${encodeURIComponent(pg.order)}&limit=${LIBRARY_PAGE}&StartIndex=${start}&fields=Overview,Genres,MediaStreams`);
+    const got = res.Items || [];
+    const total = typeof res.TotalRecordCount === 'number' ? res.TotalRecordCount : (start + got.length);
+    pg.totals[view.Id] = total;
+    pg.offsets[view.Id] = start + got.length;
+    if (got.length === 0 || pg.offsets[view.Id] >= total) pg.done[view.Id] = true;
+    return got;
+  });
+  const pages = await Promise.all(jobs);
+  return pages.flat();
+}
+function renderLibraryMore() {
+  const wrap = $('libraryMoreWrap');
+  if (!wrap) return;
+  const pg = state.libraryPaging;
+  const remaining = !!(pg && pg.views.some((v) => !pg.done[v.Id]));
+  wrap.hidden = !remaining;
+  if (remaining) {
+    const loaded = pg.views.reduce((n, v) => n + (pg.offsets[v.Id] || 0), 0);
+    const total = pg.views.reduce((n, v) => n + (pg.totals[v.Id] || 0), 0);
+    $('libraryMore').textContent = total > loaded ? `Load more (${loaded} of ${total})` : 'Load more';
+  }
+}
+$('libraryMore').addEventListener('click', async () => {
+  try {
+    const items = await fetchLibraryPage();
+    const grid = $('libraryGrid');
+    grid.insertAdjacentHTML('beforeend', items.map((i) => cardHtml(i)).join(''));
+    bindCards(grid);
+    renderLibraryMore();
+  } catch (e) {
+    $('libraryMore').textContent = 'Load more failed - try again';
+  }
+});
 
 // ---------- Details (full season switching) ----------
 async function goDetails(id, keepSeasonId) {
@@ -342,6 +391,9 @@ async function goDetails(id, keepSeasonId) {
     const item = await jf(`Items/${id}?userId=${uid}`);
     state.currentItem = item;
     state.allEpisodes = []; state.seasons = []; state.playTarget = item; state.selectedSeasonId = null;
+    if (item.Type === 'Movie' || item.Type === 'Series') {
+      try { state.watchlistIds = ((await api('/api/watchlist')) || {}).ids || []; } catch { state.watchlistIds = []; }
+    }
     if (item.Type === 'Series') {
       // TV DetailsScreen: seasons via Items (parentId + IncludeItemTypes=Season, SortName),
       // all episodes in one call (limit 2000, fields Overview,PremiereDate,People), filtered client-side.
@@ -387,7 +439,7 @@ function renderDetails() {
         </div>
         <div class="episode-actions">
           <button type="button" class="episode-play" data-id="${esc(ep.Id)}">${isResumeable(ep) ? 'Resume' : 'Play'}</button>
-          <button type="button" class="episode-watched" data-id="${esc(ep.Id)}">${ep.UserData && ep.UserData.Played ? 'Mark unwatched' : 'Mark watched'}</button>
+          <button type="button" class="episode-watched secondary" data-id="${esc(ep.Id)}">${ep.UserData && ep.UserData.Played ? 'Mark unwatched' : 'Mark watched'}</button>
         </div>
       </div>`;
     }).join('') || '<p class="muted">No episodes returned for this season.</p>';
@@ -409,9 +461,10 @@ function renderDetails() {
     <div class="hero-meta">${metaLine(item)} ${formatBadges(item)}</div>
     <p>${esc(item.Overview || '')}</p>
     <button type="button" id="detailPlay">${playLabel(target)}</button>
-    ${isResumeable(target) ? `<button type="button" id="detailFromStart">Play from start</button>` : ''}
-    <button type="button" id="detailFav">${isFav ? 'Remove from My List' : 'Add to My List'}</button>
-    <button type="button" id="detailWatched">${watchedPlayed ? 'Mark unwatched' : 'Mark watched'}${isSeries && target.Type === 'Episode' ? ' (' + esc(episodeLabel(target) || target.Name) + ')' : ''}</button>
+    ${isResumeable(target) ? `<button type="button" class="secondary" id="detailFromStart">Play from start</button>` : ''}
+    <button type="button" class="secondary" id="detailFav">${isFav ? 'Remove from My List' : 'Add to My List'}</button>
+    ${(item.Type === 'Movie' || item.Type === 'Series') ? `<button type="button" class="secondary" id="detailStar">${(state.watchlistIds || []).includes(item.Id) ? '\u2605 On Watchlist' : '\u2606 Watchlist'}</button>` : ''}
+    <button type="button" class="secondary" id="detailWatched">${watchedPlayed ? 'Mark unwatched' : 'Mark watched'}${isSeries && target.Type === 'Episode' ? ' (' + esc(episodeLabel(target) || target.Name) + ')' : ''}</button>
     ${castHtml}
     ${seasonsHtml}`;
   el.querySelectorAll('.cast-person').forEach((btn) => btn.addEventListener('click', () => { location.hash = '#/actor?id=' + encodeURIComponent(btn.dataset.person); }));
@@ -426,6 +479,17 @@ function renderDetails() {
   });
   $('detailWatched').addEventListener('click', async () => {
     await toggleWatched(watchedTarget);
+  });
+  const starBtn = $('detailStar');
+  if (starBtn) starBtn.addEventListener('click', async () => {
+    const r = await api('/api/watchlist', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: item.Id }) });
+    if (r && r.capped) { starBtn.textContent = 'Watchlist full (500 titles)'; return; }
+    if (r) {
+      const ids = new Set(state.watchlistIds || []);
+      if (r.starred) ids.add(item.Id); else ids.delete(item.Id);
+      state.watchlistIds = [...ids];
+    }
+    renderDetails();
   });
   el.querySelectorAll('.season-chip').forEach((btn) => btn.addEventListener('click', () => {
     // Season switching only changes the list; Play/Resume keeps pointing at the series target.
@@ -470,27 +534,72 @@ async function loadSearch(term) {
   if (!(await ensureSignedIn())) return;
   showView('search');
   const grid = $('searchResults');
-  if (!term) { grid.innerHTML = ''; return; }
+  const peopleWrap = $('searchPeople');
+  if (!term) { grid.innerHTML = ''; if (peopleWrap) peopleWrap.innerHTML = ''; return; }
   grid.innerHTML = '<p class="muted">Searching Jellyfin…</p>';
   try {
-    const res = await jf(`Items?userId=${state.userId}&SearchTerm=${encodeURIComponent(term)}&IncludeItemTypes=Movie,Series,Episode&Recursive=true&limit=30&fields=Overview`);
+    // TV SearchScreen parity: titles plus an Actors row from the Persons endpoint.
+    const [res, peopleRes] = await Promise.all([
+      jf(`Items?userId=${state.userId}&SearchTerm=${encodeURIComponent(term)}&IncludeItemTypes=Movie,Series,Episode&Recursive=true&limit=30&fields=Overview`),
+      jf(`Persons?userId=${state.userId}&searchTerm=${encodeURIComponent(term)}&limit=12&personTypes=Actor`).catch(() => ({ Items: [] })),
+    ]);
     const items = res.Items || [];
-    grid.innerHTML = items.length ? items.map((i) => cardHtml(i)).join('') : '<p class="muted">No results from Jellyfin.</p>';
+    const people = (peopleRes.Items || []).filter((p) => p.Name);
+    if (peopleWrap) {
+      peopleWrap.innerHTML = people.length ? `<div class="search-people"><h2>People</h2><div class="cast-row">${people.map((p) => `
+        <button type="button" class="cast-person" data-person="${esc(p.Id)}">
+          <img src="/api/jellyfin/Items/${esc(p.Id)}/Images/Primary?maxWidth=220&quality=90" alt="" loading="lazy" onerror="this.src='${PIXEL}'">
+          <div class="cast-name">${esc(p.Name)}</div>
+        </button>`).join('')}</div></div>` : '';
+      peopleWrap.querySelectorAll('.cast-person').forEach((btn) => btn.addEventListener('click', () => { location.hash = '#/actor?id=' + encodeURIComponent(btn.dataset.person); }));
+    }
+    grid.innerHTML = items.length ? items.map((i) => cardHtml(i)).join('') : (people.length ? '' : '<p class="muted">No results from Jellyfin.</p>');
     bindCards(grid);
   } catch (e) { grid.innerHTML = `<p class="error">Search failed: ${esc(e.message)}</p>`; }
 }
+// My Stuff sections in the TV order: Favorites (Jellyfin heart, unchanged semantics),
+// Watchlist (Driftfin's own star, stored server-side per server+user), Collections (box sets).
+let mystuffSection = 'favorites';
 async function loadMyStuff() {
   if (!(await ensureSignedIn())) return;
   showView('mystuff');
   const grid = $('mystuffGrid');
+  document.querySelectorAll('#mystuffTabs button').forEach((b) => b.classList.toggle('active', b.dataset.section === mystuffSection));
   grid.innerHTML = '<p class="muted">Loading from Jellyfin…</p>';
   try {
-    const res = await jf(`Items?userId=${state.userId}&Filters=IsFavorite&Recursive=true&IncludeItemTypes=Movie,Series&SortBy=DateCreated&SortOrder=Descending&limit=100&fields=Overview`);
+    const uid = state.userId;
+    if (mystuffSection === 'watchlist') {
+      const ids = ((await api('/api/watchlist')) || {}).ids || [];
+      state.watchlistIds = ids;
+      const emptyText = '<p class="muted">Nothing on your watchlist yet. Open a movie or show and choose the star.</p>';
+      if (!ids.length) { grid.innerHTML = emptyText; return; }
+      const res = await jf(`Items?userId=${uid}&Ids=${encodeURIComponent(ids.join(','))}&fields=Overview`);
+      const found = new Map((res.Items || []).map((i) => [i.Id, i]));
+      const ordered = ids.map((id) => found.get(id)).filter(Boolean);
+      // Never prune: a missing id can mean deleted, permission-filtered, or a
+      // partial/unavailable server response - the saved list is kept as is.
+      const missing = ids.length - ordered.length;
+      const note = missing > 0
+        ? `<p class="muted">${missing} saved ${missing === 1 ? 'title is' : 'titles are'} not available from the server right now. ${missing === 1 ? 'It stays' : 'They stay'} on your watchlist.</p>`
+        : '';
+      grid.innerHTML = (ordered.length ? ordered.map((i) => cardHtml(i)).join('') : (missing ? '' : emptyText)) + note;
+      bindCards(grid);
+      return;
+    }
+    if (mystuffSection === 'collections') {
+      const res = await jf(`Items?userId=${uid}&IncludeItemTypes=BoxSet&Recursive=true&SortBy=SortName&fields=Overview`);
+      const items = res.Items || [];
+      grid.innerHTML = items.length ? items.map((i) => cardHtml(i)).join('') : '<p class="muted">No collections found on this server.</p>';
+      bindCards(grid);
+      return;
+    }
+    const res = await jf(`Items?userId=${uid}&Filters=IsFavorite&Recursive=true&IncludeItemTypes=Movie,Series&SortBy=DateCreated&SortOrder=Descending&limit=100&fields=Overview`);
     const items = res.Items || [];
     grid.innerHTML = items.length ? items.map((i) => cardHtml(i)).join('') : '<p class="muted">No favorites in Jellyfin yet.</p>';
     bindCards(grid);
   } catch (e) { grid.innerHTML = `<p class="error">Could not load My Stuff: ${esc(e.message)}</p>`; }
 }
+document.querySelectorAll('#mystuffTabs button').forEach((b) => b.addEventListener('click', () => { mystuffSection = b.dataset.section; loadMyStuff(); }));
 
 // ---------- Actor page ----------
 async function goActor(personId) {
@@ -818,6 +927,12 @@ $('subtitleSelect').addEventListener('change', () => {
   }
 });
 $('playerBack').addEventListener('click', () => { if (history.length > 1) history.back(); else location.hash = '#/home'; });
+// Fullscreen the wrapper (not the bare video) so Back and Skip Intro stay usable.
+$('fsBtn').addEventListener('click', () => {
+  const wrap = document.querySelector('.videowrap');
+  if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+  else if (wrap && wrap.requestFullscreen) wrap.requestFullscreen().catch(() => {});
+});
 $('speedSelect').addEventListener('change', () => { $('player').playbackRate = parseFloat($('speedSelect').value); });
 
 window.addEventListener('beforeunload', () => {
@@ -830,6 +945,14 @@ window.addEventListener('beforeunload', () => {
 });
 
 (async () => {
-  try { state.config = await api('/api/config'); if (state.config && state.config.jellyfinUrl) $('serverInput').value = state.config.jellyfinUrl; } catch {}
+  try {
+    state.config = await api('/api/config');
+    if (state.config && state.config.jellyfinUrl) $('serverInput').value = state.config.jellyfinUrl;
+    if (state.config && state.config.serverLocked) {
+      $('serverInput').readOnly = true;
+      $('serverInput').setAttribute('aria-readonly', 'true');
+      $('serverLockedNote').hidden = false;
+    }
+  } catch {}
   route();
 })();

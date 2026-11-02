@@ -31,6 +31,7 @@
     <form id="signinForm">
       <label>Server URL
         <input id="serverInput" name="server" type="url" placeholder="https://jellyfin.example.com" autocomplete="off" required>
+        <p id="serverLockedNote" class="muted" hidden>Server is fixed by the administrator of this installation.</p>
       </label>
       <label>Username
         <input id="usernameInput" name="username" type="text" autocomplete="username" required>
@@ -74,6 +75,7 @@
       </select>
     </label>
     <div id="libraryGrid" class="grid"></div>
+    <div id="libraryMoreWrap" class="load-more" hidden><button type="button" id="libraryMore">Load more</button></div>
   </section>
 
   <section id="view-details" class="view" hidden>
@@ -86,6 +88,7 @@
       <input id="searchInput" type="search" placeholder="Search shows, movies, episodes" aria-label="Search">
       <button type="submit">Search</button>
     </form>
+    <div id="searchPeople"></div>
     <div id="searchResults" class="grid"></div>
   </section>
 
@@ -95,7 +98,12 @@
 
   <section id="view-mystuff" class="view" hidden>
     <h1>My Stuff</h1>
-    <p class="muted">Favorites from Jellyfin. Continue Watching and watched status also live in Jellyfin, so they follow you between devices.</p>
+    <p class="muted">Favorites and Collections come from Jellyfin; the Watchlist is Driftfin's own list, stored with your sign-in here. Watched status and Continue Watching live in Jellyfin, so they follow you between devices.</p>
+    <div id="mystuffTabs" class="section-tabs">
+      <button type="button" data-section="favorites" class="active">Favorites</button>
+      <button type="button" data-section="watchlist">Watchlist</button>
+      <button type="button" data-section="collections">Collections</button>
+    </div>
     <div id="mystuffGrid" class="grid"></div>
   </section>
 
@@ -115,9 +123,10 @@
 
   <section id="view-player" class="view" hidden>
     <div id="playerWrap">
-      <button id="playerBack" type="button" class="back-btn">&larr; Back</button>
       <div class="videowrap">
-        <video id="player" controls playsinline></video>
+        <video id="player" controls playsinline controlslist="nofullscreen"></video>
+        <button id="playerBack" type="button" class="overlay-btn back-btn">&larr; Back</button>
+        <button id="fsBtn" type="button" class="overlay-btn" title="Fullscreen">&#x26F6;</button>
         <button id="skipIntroBtn" type="button" hidden>Skip Intro</button>
       </div>
       <div id="upNext" class="up-next" hidden></div>

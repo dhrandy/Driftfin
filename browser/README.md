@@ -18,8 +18,8 @@ TV or phone app code.
 
 ## Deploy in Dockhand (the only run path)
 
-Randy runs this with Docker Compose via Dockhand on his NAS. There
-is no other run path documented here.
+Deploy with Docker Compose via Dockhand (or any compose runner).
+There is no other run path documented here.
 
 This is a pull-on-startup compose: the container downloads the code on startup, there is no published image and no build step.
 There is NO published image, NO Dockerfile, and NO GitHub Actions
