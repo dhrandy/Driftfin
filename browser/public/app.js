@@ -1175,9 +1175,15 @@ function browserVideoDirectPlayProfiles() {
   ];
 }
 function browserVideoTranscodeCodecs() {
-  // HLS remux target: including hevc when supported lets the server remux
-  // MKV -> TS with a container copy instead of re-encoding the video.
-  return browserSupportsHevc() ? 'h264,hevc' : 'h264';
+  // Matches jellyfin-web's browser profile: TS-HLS transcode targets are h264
+  // only (their browserDeviceProfile adds hevc to TS-HLS solely on tizen/webOS
+  // TV platforms - browser MSE/native HLS handling of HEVC-in-TS is unreliable;
+  // Chrome Android can report HEVC file decode while failing HLS HEVC playback,
+  // which showed up as a phone black screen). HEVC still plays without
+  // transcoding when the browser can direct-play the file (DirectPlayProfiles).
+  // Reliable playback first: the server transcodes to h264 when direct play
+  // does not apply, exactly like Jellyfin web on a phone.
+  return 'h264';
 }
 
 // ---------- Player ----------
@@ -1284,6 +1290,9 @@ async function goPlayer(id, opts) {
         video.src = hlsUrl;
       } else if (window.Hls && window.Hls.isSupported()) {
         state.hls = new window.Hls();
+        state.hls.on(window.Hls.Events.ERROR, (_e, data) => {
+          if (data && data.fatal) note.textContent = 'Playback failed: this browser could not decode the stream (' + (data.details || data.type || 'unknown error') + ').';
+        });
         state.hls.loadSource(hlsUrl);
         state.hls.attachMedia(video);
       } else {

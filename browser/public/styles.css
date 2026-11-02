@@ -154,6 +154,8 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 /* Sign-in: centered card, nav hidden while signed out. */
 body.signed-out .topnav, body.signed-out .bottomnav, body.signed-out .top-actions { display: none; }
 body.signed-out .topbar { justify-content: center; }
+/* Signed-out landing: bigger wordmark above the sign-in card. */
+body.signed-out .logo { font-size: 28px; }
 #view-signin { max-width: 440px; margin: 6vh auto 0; background: var(--card); border-radius: 16px; padding: 28px; }
 #signinForm { display: flex; flex-direction: column; gap: 12px; margin-top: 14px; }
 #signinForm.locked .server-field { display: none; }

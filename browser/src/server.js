@@ -159,6 +159,9 @@ function dropSession(req) {
   delete all[id];
   writeJsonFile(file, all, 0o600);
 }
+// Auth cookie lifetime matches the 30-day server-side session TTL, so a browser
+// restart (or a phone killing the browser) no longer forces a fresh sign-in.
+const SESSION_COOKIE_MAX_AGE_SECONDS = 30 * 86400;
 function cookieHeader(sessionId, maxAge) {
   let c = `driftfin_session=${sessionId}.${signSessionId(sessionId, sessionSecret())}; HttpOnly; SameSite=Lax; Path=/`;
   if (COOKIE_SECURE) c += '; Secure';
@@ -792,7 +795,7 @@ const server = http.createServer(async (req, res) => {
       };
       saveSession(session);
       return sendJson(res, 200, { ok: true, username: session.username, userId: session.userId },
-        { 'Set-Cookie': cookieHeader(session.id) });
+        { 'Set-Cookie': cookieHeader(session.id, SESSION_COOKIE_MAX_AGE_SECONDS) });
       } finally {
         loginInflight.set(loginPair, Math.max(0, (loginInflight.get(loginPair) || 1) - 1));
         loginIpInflight.set(clientIp, Math.max(0, (loginIpInflight.get(clientIp) || 1) - 1));
@@ -856,7 +859,7 @@ const server = http.createServer(async (req, res) => {
       };
       saveSession(session);
       return sendJson(res, 200, { status: 'authorized', username: session.username, userId: session.userId },
-        { 'Set-Cookie': [cookieHeader(session.id), qcCookieHeader('', 0)] });
+        { 'Set-Cookie': [cookieHeader(session.id, SESSION_COOKIE_MAX_AGE_SECONDS), qcCookieHeader('', 0)] });
     }
     if (pathname === '/api/quickconnect/cancel' && req.method === 'POST') {
       const payload = await readJsonBody(req);
