@@ -320,3 +320,54 @@ body.signed-out .logo { font-size: 28px; }
 #pauseInfo .pc .img-fallback.person { width: 56px; height: 56px; aspect-ratio: auto; border-radius: 8px; margin: 0 auto; }
 #pauseInfo.tiny .pc .img-fallback.person { width: 44px; height: 44px; }
 #pauseInfo.compact .pc .img-fallback.person { width: 32px; height: 32px; }
+
+/* Header: keep the nav pill centered on the viewport by balancing the two
+   side groups (logo left, sign-out + profile right) with equal flex. Signed-out
+   keeps its own centered-wordmark layout. */
+body:not(.signed-out) .topbar > .logo { flex: 1 1 0; }
+body:not(.signed-out) .topbar > .top-actions { flex: 1 1 0; justify-content: flex-end; }
+
+/* Theater player: while the player view is active it owns the whole window on
+   black - site header and nav hide, the video contain-fits (never cropped), and
+   the track/speed selectors sit in a slim row at the bottom. Pure CSS keyed off
+   the view's hidden attribute, so navigating away restores the normal page.
+   landscape-fill (the iPadOS pinch/fullscreen fallback) keeps its own rules. */
+body:has(#view-player:not([hidden])) header.topbar,
+body:has(#view-player:not([hidden])) nav.bottomnav { display: none; }
+body:has(#view-player:not([hidden])) main#app { padding: 0; max-width: none; }
+body:has(#view-player:not([hidden])) #view-player { height: 100dvh; }
+body:has(#view-player:not([hidden])) #playerWrap:not(.landscape-fill) { max-width: none; margin: 0; width: 100%; height: 100%; display: flex; flex-direction: column; background: #000; }
+body:has(#view-player:not([hidden])) #playerWrap:not(.landscape-fill) .videowrap { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; }
+body:has(#view-player:not([hidden])) #playerWrap:not(.landscape-fill) #player { width: 100%; height: 100%; aspect-ratio: auto; object-fit: contain; border-radius: 0; }
+body:has(#view-player:not([hidden])) #playerWrap .player-controls { margin: 0; padding: 6px 12px; gap: 12px; background: #000; justify-content: center; }
+body:has(#view-player:not([hidden])) #playerWrap #playerNote { margin: 0; padding: 0 12px 6px; text-align: center; font-size: 11px; }
+body:has(#view-player:not([hidden])) #playerWrap .up-next { margin: 0 12px 8px; }
+
+/* Theater on narrow screens: the transport bar becomes a two-row grid at
+   <=560px, so the full-size pause cast strip must clear it. */
+@media (max-width: 560px) {
+  body:has(#view-player:not([hidden])) #pauseInfo:not(.compact):not(.tiny) .pause-cast { bottom: 118px; }
+  body:has(#view-player:not([hidden])) #pauseInfo.compact .pause-cast { bottom: 112px; }
+}
+/* Theater: track/speed selectors stay one slim scrollable row on narrow
+   screens instead of stacking full-width rows. Labels and tap targets kept. */
+@media (max-width: 700px) {
+  body:has(#view-player:not([hidden])) #playerWrap .player-controls { flex-direction: row; flex-wrap: nowrap; overflow-x: auto; align-items: center; gap: 10px; padding: 6px 10px; -webkit-overflow-scrolling: touch; }
+  body:has(#view-player:not([hidden])) #playerWrap .player-controls label { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 6px; font-size: 13px; white-space: nowrap; }
+  body:has(#view-player:not([hidden])) #playerWrap .player-controls select { width: auto; max-width: none; padding: 6px 8px; font-size: 13px; }
+}
+
+/* Narrow transport bar is two rows: Skip Intro clears it too. */
+@media (max-width: 560px) {
+  #skipIntroBtn { bottom: 112px; }
+}
+/* Theater selector row: center when it fits, never clip the start when it
+   overflows (plain center + overflow makes the first label unreachable). */
+@media (max-width: 700px) {
+  body:has(#view-player:not([hidden])) #playerWrap .player-controls { justify-content: safe center; }
+}
+
+/* Paused during the intro: the cast strip reserves its right end so Skip Intro
+   gets its own corner - the button never covers actor names or eats their taps,
+   and every cast member stays reachable by scrolling the strip. */
+.videowrap:has(#skipIntroBtn:not([hidden])) #pauseInfo .pause-cast { right: 160px; }
