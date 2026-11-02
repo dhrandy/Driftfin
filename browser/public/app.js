@@ -1215,9 +1215,11 @@ function browserVideoTranscodeCodecs() {
 // fMP4-HLS profile the only transcode target is TS-HLS h264 and HEVC sources
 // get re-encoded. Offering fMP4-HLS lets the server choose a remux (video
 // copy) for HEVC sources when it can; whether it actually remuxes depends on
-// the file, audio, and subtitles, and is the server's decision. Phones, iPads and Android devices keep EXACTLY the profile set
-// above (TS-HLS h264 only) - the phone black-screen history is why this is
-// desktop-only. Exclusion is layered and errs toward exclusion:
+// the file, audio, and subtitles, and is the server's decision. Phones and
+// Android devices keep EXACTLY the profile set above (TS-HLS h264 only) - the
+// phone black-screen history is why this hls.js/MSE path is desktop-only
+// (iPads get their own native-HLS offer below, no MSE involved). Exclusion is
+// layered and errs toward exclusion:
 //   1. explicit mobile detection. iPadOS 13+ reports platform MacIntel, so
 //      maxTouchPoints >= 2 is the iPad tell (a Mac has none).
 //   2. primary pointer fine + hover. A connected touchscreen can flip
@@ -1245,10 +1247,35 @@ function desktopFmp4HevcOk() {
         || window.MediaSource.isTypeSupported('video/mp4; codecs="hev1.1.6.L120.90"');
   } catch (e) { return false; }
 }
-// Transcode profile order: capable desktops offer fMP4-HLS (HEVC remux,
-// video copy) first; the TS-HLS h264 profile is always present and is the
-// only one touch devices send. H264 stays on TS deliberately: this change
-// targets HEVC desktop remux only, nothing else about negotiation changes.
+// iPad-scoped HEVC fMP4-HLS offer. iPadOS Safari plays HLS NATIVELY (the
+// video.src path in goPlayer - no MSE, no hls.js), and Apple's native HLS
+// stack handles HEVC in fMP4 segments: that is the format Apple itself uses
+// for HEVC HLS, so the remux offer is safe there even though the hls.js/MSE
+// path stays desktop-only. Gates: iPad detection (same MacIntel+touch tell),
+// native HLS support, and HEVC file decode. iPhone and Android keep the exact
+// TS-only profile - the phone black-screen history stands; scope is iPad only.
+// A wrong HEVC claim costs one automatic TS retry via attemptFmp4Fallback,
+// which covers the native path through the video element's error listener.
+function isIpadDevice() {
+  try {
+    if (/iPad/.test(navigator.userAgent || '')) return true;
+    if (navigator.platform === 'MacIntel' && (navigator.maxTouchPoints || 0) >= 2) return true; // iPadOS 13+ reporting as Mac
+  } catch (e) {}
+  return false;
+}
+function ipadNativeFmp4Ok() {
+  try {
+    if (!isIpadDevice()) return false;
+    if (!browserCanPlayVideo('application/vnd.apple.mpegurl')) return false; // native HLS required - no MSE assumption on this path
+    return browserSupportsHevc();
+  } catch (e) { return false; }
+}
+
+// Transcode profile order: capable desktops (hls.js/MSE) and iPads (native
+// HLS) offer fMP4-HLS (HEVC remux, video copy) first; the TS-HLS h264 profile
+// is always present and is the only one other touch devices send. H264 stays
+// on TS deliberately: this targets HEVC remux only, nothing else about
+// negotiation changes.
 function browserVideoTranscodeProfiles(allowFmp4) {
   const ts = { Type: 'Video', Container: 'ts', Protocol: 'hls', VideoCodec: browserVideoTranscodeCodecs(), AudioCodec: 'aac,mp3', Context: 'Streaming', MaxAudioChannels: '6', BreakOnNonKeyFrames: true };
   if (!allowFmp4) return [ts];
@@ -1287,7 +1314,7 @@ async function goPlayer(id, opts) {
         MaxStreamingBitrate: 100000000,
         MaxStaticBitrate: 100000000,
         DirectPlayProfiles: browserVideoDirectPlayProfiles(),
-        TranscodingProfiles: browserVideoTranscodeProfiles(!opts.noFmp4 && desktopFmp4HevcOk()),
+        TranscodingProfiles: browserVideoTranscodeProfiles(!opts.noFmp4 && (desktopFmp4HevcOk() || ipadNativeFmp4Ok())),
         SubtitleProfiles: ['srt', 'subrip', 'vtt', 'webvtt', 'ass', 'ssa'].map((f) => ({ Format: f, Method: 'External' })),
       },
     };
