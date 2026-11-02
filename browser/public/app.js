@@ -1198,9 +1198,55 @@ function browserVideoTranscodeCodecs() {
   return 'h264';
 }
 
+// Desktop-only HEVC fMP4-HLS profile offer (jellyfin-web PR #2064's path).
+// MKV is not in DirectPlayProfiles (browsers cannot demux it), so without an
+// fMP4-HLS profile the only transcode target is TS-HLS h264 and HEVC sources
+// get re-encoded. Offering fMP4-HLS lets the server choose a remux (video
+// copy) for HEVC sources when it can; whether it actually remuxes depends on
+// the file, audio, and subtitles, and is the server's decision. Phones, iPads and Android devices keep EXACTLY the profile set
+// above (TS-HLS h264 only) - the phone black-screen history is why this is
+// desktop-only. Exclusion is layered and errs toward exclusion:
+//   1. explicit mobile detection. iPadOS 13+ reports platform MacIntel, so
+//      maxTouchPoints >= 2 is the iPad tell (a Mac has none).
+//   2. primary pointer fine + hover. A connected touchscreen can flip
+//      primary-pointer reporting on some platforms, so this is only layer 2.
+//   3. MediaSource.isTypeSupported for HEVC-in-fMP4 - the exact capability
+//      the fMP4-via-hls.js path needs, stricter than canPlayType file decode.
+// Known limit: a touchscreen laptop with a fine primary pointer passes 1-2
+// and is treated as desktop; if its MSE HEVC claim is wrong, the one-time
+// TS fallback in goPlayer recovers to today's behavior once, then the
+// existing fatal-error surface applies.
+function isExcludedTouchDevice() {
+  try {
+    const ua = navigator.userAgent || '';
+    if (/iPhone|iPod|iPad|Android/i.test(ua)) return true;
+    if (navigator.platform === 'MacIntel' && (navigator.maxTouchPoints || 0) >= 2) return true; // iPad reporting as Mac
+  } catch (e) { return true; }
+  return false;
+}
+function desktopFmp4HevcOk() {
+  try {
+    if (isExcludedTouchDevice()) return false;
+    if (!(window.matchMedia && matchMedia('(pointer: fine)').matches && matchMedia('(hover: hover)').matches)) return false;
+    if (!(window.MediaSource && window.MediaSource.isTypeSupported)) return false;
+    return window.MediaSource.isTypeSupported('video/mp4; codecs="hvc1.1.6.L120.90"')
+        || window.MediaSource.isTypeSupported('video/mp4; codecs="hev1.1.6.L120.90"');
+  } catch (e) { return false; }
+}
+// Transcode profile order: capable desktops offer fMP4-HLS (HEVC remux,
+// video copy) first; the TS-HLS h264 profile is always present and is the
+// only one touch devices send. H264 stays on TS deliberately: this change
+// targets HEVC desktop remux only, nothing else about negotiation changes.
+function browserVideoTranscodeProfiles(allowFmp4) {
+  const ts = { Type: 'Video', Container: 'ts', Protocol: 'hls', VideoCodec: browserVideoTranscodeCodecs(), AudioCodec: 'aac,mp3', Context: 'Streaming', MaxAudioChannels: '6', BreakOnNonKeyFrames: true };
+  if (!allowFmp4) return [ts];
+  return [{ Type: 'Video', Container: 'mp4', Protocol: 'hls', VideoCodec: 'hevc', AudioCodec: 'aac,mp3', Context: 'Streaming', MaxAudioChannels: '6', BreakOnNonKeyFrames: true }, ts];
+}
+
 // ---------- Player ----------
 async function goPlayer(id, opts) {
   opts = opts || {};
+  if (!opts.noFmp4) { state.fmp4InUse = false; state.fmp4Retried = false; }
   let resumePaused = false;
   try { resumePaused = sessionStorage.getItem('driftfinResumePaused') === '1'; sessionStorage.removeItem('driftfinResumePaused'); } catch {}
   if (!(await ensureSignedIn())) return;
@@ -1229,7 +1275,7 @@ async function goPlayer(id, opts) {
         MaxStreamingBitrate: 100000000,
         MaxStaticBitrate: 100000000,
         DirectPlayProfiles: browserVideoDirectPlayProfiles(),
-        TranscodingProfiles: [{ Type: 'Video', Container: 'ts', Protocol: 'hls', VideoCodec: browserVideoTranscodeCodecs(), AudioCodec: 'aac,mp3', Context: 'Streaming', MaxAudioChannels: '6', BreakOnNonKeyFrames: true }],
+        TranscodingProfiles: browserVideoTranscodeProfiles(!opts.noFmp4 && desktopFmp4HevcOk()),
         SubtitleProfiles: ['srt', 'subrip', 'vtt', 'webvtt', 'ass', 'ssa'].map((f) => ({ Format: f, Method: 'External' })),
       },
     };
@@ -1298,12 +1344,19 @@ async function goPlayer(id, opts) {
       if (chosenAudio != null) tq.set('AudioStreamIndex', String(chosenAudio));
       const tFile = (qIdx >= 0 ? tRaw.slice(0, qIdx) : tRaw).split('/').filter(Boolean).pop() || 'master.m3u8';
       const hlsUrl = `/api/hls/${id}/${source.Id}/${tFile}?${tq.toString()}`;
+      // Real Jellyfin marks fMP4 HLS with SegmentContainer=mp4 in the
+      // TranscodingUrl (StreamInfo.ToUrl appends SegmentContainer=<profile
+      // container> for hls); accept a bare Container=mp4 as a fallback shape.
+      state.fmp4InUse = /[?&](SegmentContainer|Container)=mp4/i.test(tRaw);
+      if (state.fmp4InUse) { state.fmp4ItemId = id; state.fmp4Seq = state.playbackSeq || 0; }
       if (video.canPlayType('application/vnd.apple.mpegurl')) {
         video.src = hlsUrl;
       } else if (window.Hls && window.Hls.isSupported()) {
         state.hls = new window.Hls();
         state.hls.on(window.Hls.Events.ERROR, (_e, data) => {
-          if (data && data.fatal) note.textContent = 'Playback failed: this browser could not decode the stream (' + (data.details || data.type || 'unknown error') + ').';
+          if (!(data && data.fatal)) return;
+          if (attemptFmp4Fallback()) return;
+          note.textContent = 'Playback failed: this browser could not decode the stream (' + (data.details || data.type || 'unknown error') + ').';
         });
         state.hls.loadSource(hlsUrl);
         state.hls.attachMedia(video);
@@ -1317,6 +1370,20 @@ async function goPlayer(id, opts) {
     $('playerBar').hidden = false;
     pbSync();
     applyPersistedSubtitle();
+    // Automatic retries (fMP4 fallback) carry the explicit selection: exact
+    // text-sub index, or -1 for Off. An index that no longer exists leaves the
+    // persisted/default selection alone rather than landing on a wrong track.
+    if (opts.subtitleTrackIndex != null) {
+      const tts = video.textTracks;
+      if (opts.subtitleTrackIndex < 0) {
+        subSel.value = '';
+        for (let t = 0; t < tts.length; t++) tts[t].mode = 'disabled';
+      } else if (opts.subtitleTrackIndex < state.subtitleTracks.length) {
+        subSel.value = String(opts.subtitleTrackIndex);
+        for (let t = 0; t < tts.length; t++) tts[t].mode = 'disabled';
+        if (tts[opts.subtitleTrackIndex]) tts[opts.subtitleTrackIndex].mode = 'showing';
+      }
+    }
     video.playbackRate = parseFloat($('speedSelect').value || '1');
     if (startTicks > 0) {
       video.addEventListener('loadedmetadata', function once() {
@@ -1404,6 +1471,7 @@ $('player').addEventListener('error', () => {
   const video = $('player');
   if (!video.error) return; // emptied src on teardown also fires error; ignore those
   if ($('view-player').hidden) return;
+  if (attemptFmp4Fallback()) return; // armed fMP4 remux failure: one TS retry before any teardown
   // The error can fire before startProgress opens the session; record it either way.
   state.playFailed = true;
   if (state.playingItemId != null) stopPlayback(true);
@@ -1413,7 +1481,33 @@ $('player').addEventListener('error', () => {
 
 // Leaving the player (nav, new title, sign-out) must actually end playback:
 // pause, report Stopped once, tear down hls.js, and release the element.
+// One-time recovery for the desktop fMP4 remux offer: if an fMP4 HLS stream
+// fails fatally (a browser whose MSE/native HEVC claim was wrong), re-negotiate
+// ONCE without the fMP4 profile and retry on the standard TS transcode, keeping
+// position and the explicit audio/subtitle selections. fmp4Retried makes a
+// second failure use the normal error surfaces - never a loop. fmp4Seq +
+// stopPlayback's disarm make stale events from torn-down playback no-ops.
+function attemptFmp4Fallback() {
+  if (!state.fmp4InUse || state.fmp4Retried || !state.fmp4ItemId) return false;
+  if (state.fmp4Seq !== state.playbackSeq) return false;
+  state.fmp4Retried = true;
+  const video = $('player');
+  const note = $('playerNote');
+  if (note) note.textContent = 'Remux playback failed; retrying with the standard transcode…';
+  const audioIdx = parseInt($('audioSelect').value, 10);
+  const subVal = $('subtitleSelect').value;
+  goPlayer(state.fmp4ItemId, {
+    preservePosition: video.currentTime || 0,
+    noFmp4: true,
+    mediaSourceId: state.mediaSourceId,
+    audioStreamIndex: Number.isNaN(audioIdx) ? null : audioIdx,
+    subtitleTrackIndex: subVal === '' ? -1 : parseInt(subVal, 10),
+  });
+  return true;
+}
 function stopPlayback(reportStopped) {
+  state.playbackSeq = (state.playbackSeq || 0) + 1; // invalidates pending one-shot playback handlers
+  state.fmp4InUse = false; state.fmp4ItemId = null; // disarm any armed remux fallback
   clearTimeout(chromeIdleTimer); setChromeHidden(false); dropWakeLock();
   const video = $('player');
   if (reportStopped && state.playingItemId != null) {
