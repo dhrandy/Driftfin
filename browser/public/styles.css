@@ -173,15 +173,20 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 
 /* Sign-in: centered card, nav hidden while signed out. */
 body.signed-out .topnav, body.signed-out .bottomnav, body.signed-out .top-actions { display: none; }
-body.signed-out .topbar { justify-content: center; }
+body.signed-out .topbar { justify-content: center; padding-top: 38px; }
 /* Signed-out landing: bigger wordmark above the sign-in card. */
 body.signed-out .logo { font-size: 28px; }
-#view-signin { max-width: 440px; margin: 6vh auto 0; background: var(--card); border-radius: 16px; padding: 28px; }
-#signinForm { display: flex; flex-direction: column; gap: 12px; margin-top: 14px; }
+#view-signin { max-width: 440px; margin: 24px auto 0; background: var(--card); border-radius: 16px; padding: 28px; }
+#view-signin h1 { margin: 0; font-size: clamp(20px, 5vw, 24px); line-height: 1.25; text-wrap: balance; }
+#signinForm { display: flex; flex-direction: column; gap: 16px; margin-top: 14px; }
 #signinForm.locked .server-field { display: none; }
-#serverLockedNote { margin: 10px 0 0; }
 #view-signin > .muted { margin: 6px 0 0; }
-#signinForm label { display: flex; flex-direction: column; gap: 6px; }
+/* Override the block-form defaults (form label margin + input margin-top) that
+   doubled every gap in this flex form. */
+#signinForm label { display: flex; flex-direction: column; gap: 8px; margin: 0; }
+#signinForm label input { margin-top: 0; }
+#signinError { margin: 0; }
+#signinError:empty { display: none; }
 
 /* Settings rows read as a list, not a pile of checkboxes. */
 #settingsForm label { display: flex; gap: 10px; align-items: center; padding: 10px 0; border-bottom: 1px solid #22222e; }
@@ -200,7 +205,7 @@ body.signed-out .logo { font-size: 28px; }
 .cast-person .img-fallback.person { width: 110px; height: 110px; border-radius: 12px; aspect-ratio: auto; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23565a70' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='8' r='4'/%3E%3Cpath d='M4 21c0-4 3.6-6.5 8-6.5s8 2.5 8 6.5'/%3E%3C/svg%3E"); }
 
 /* Quick Connect on the sign-in card. */
-.signin-divider { display: flex; align-items: center; gap: 10px; color: var(--muted); margin: 18px 0 12px; }
+.signin-divider { display: flex; align-items: center; gap: 10px; color: var(--muted); margin: 16px 0; }
 .signin-divider::before, .signin-divider::after { content: ''; flex: 1; border-top: 1px solid #33333f; }
 #quickConnectBtn { width: 100%; }
 #quickConnectPanel { margin-top: 14px; text-align: center; }
@@ -317,6 +322,13 @@ body.signed-out .logo { font-size: 28px; }
 .videowrap.hide-chrome #playerBack, .videowrap.hide-chrome #playerBar, .videowrap.hide-chrome #skipIntroBtn, .videowrap.hide-chrome .player-controls, .videowrap.hide-chrome #playerNote, .videowrap.hide-chrome #subError, .videowrap.hide-chrome .player-controls label, .videowrap.hide-chrome #pbSheet { opacity: 0; pointer-events: none; }
 .videowrap.hide-chrome, .videowrap.hide-chrome #player { cursor: none; }
 
+/* Native captions: lift off the bottom edge, and clear the transport bar when chrome is up. */
+#player::-webkit-media-text-track-display { transform: translateY(-24px); }
+.videowrap:not(.hide-chrome) #player::-webkit-media-text-track-display { transform: translateY(-76px); }
+@media (max-width: 560px) {
+  .videowrap:not(.hide-chrome) #player::-webkit-media-text-track-display { transform: translateY(-104px); }
+}
+
 /* Touch 10-second skips: only where a coarse pointer makes arrow keys unavailable. */
 #pbBack10, #pbFwd10 { display: none; min-width: 44px; min-height: 44px; padding: 0; align-items: center; justify-content: center; background: none; border: 0; color: #fff; }
 @media (pointer: coarse) { #pbBack10, #pbFwd10 { display: inline-flex; } }
@@ -393,3 +405,32 @@ body:has(#view-player:not([hidden])) #playerWrap .up-next { margin: 0 12px 8px; 
    gets its own corner - the button never covers actor names or eats their taps,
    and every cast member stays reachable by scrolling the strip. */
 .videowrap:has(#skipIntroBtn:not([hidden])) #pauseInfo .pause-cast { right: 160px; }
+/* 640-699: the bar's min-content exceeds the viewport, so the flex layout
+   overflows the page 15-35px and the pill renders right of center. Absolutely
+   center the pill and fit it with tighter bar/item/sign-out spacing. The logo
+   keeps its shipped 18px size. The cap clips the pill's own balancing spacer
+   first, never the flanks. */
+@media (max-width: 699px) and (min-width: 640px) {
+  body:not(.signed-out) .topbar { position: relative; padding: 12px 6px; gap: 5px; }
+  body:not(.signed-out) .topbar > .logo { flex: 0 0 auto; }
+  body:not(.signed-out) .topbar > .top-actions { flex: 0 0 auto; margin-left: auto; gap: 6px; }
+  body:not(.signed-out) .topnav {
+    position: absolute; left: 50%; transform: translateX(-50%); margin: 0;
+    max-width: calc(100% - 234px); overflow: hidden; justify-content: center; gap: 2px;
+  }
+  .topnav a { padding: 6px 5px; }
+  .topnav::after { width: 27px; }
+  #signoutBtn { padding: 10px 6px; }
+}
+@media (max-width: 789px) and (min-width: 761px) {
+  body:not(.signed-out) .topbar { position: relative; }
+  body:not(.signed-out) .topbar > .logo { flex: 0 0 auto; }
+  body:not(.signed-out) .topbar > .top-actions { flex: 0 0 auto; margin-left: auto; }
+  body:not(.signed-out) .topnav {
+    position: absolute; left: 50%; transform: translateX(-50%); margin: 0;
+    max-width: calc(100% - 288px); overflow: hidden; justify-content: center;
+  }
+  .topnav a { padding: 6px 8px; }
+  .topnav::after { width: 33px; }
+  #signoutBtn { padding: 10px 10px; }
+}

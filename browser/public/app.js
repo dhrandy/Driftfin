@@ -2474,7 +2474,6 @@ window.addEventListener('pagehide', reportStoppedOnUnload);
       $('serverInput').readOnly = true;
       $('serverInput').setAttribute('aria-readonly', 'true');
       $('signinForm').classList.add('locked');
-      $('serverLockedNote').hidden = false;
     }
   } catch {}
   route();
