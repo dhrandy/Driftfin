@@ -113,6 +113,11 @@
     <div id="actor"></div>
   </section>
 
+  <section id="view-collection" class="view" hidden>
+    <h1 id="collectionTitle">Collection</h1>
+    <div id="collectionGrid" class="grid"></div>
+  </section>
+
   <section id="view-mystuff" class="view" hidden>
     <h1>My Stuff</h1>
     <p class="muted">Favorites and Collections come from Jellyfin; the Watchlist is Driftfin's own list, stored with your sign-in here. Watched status and Continue Watching live in Jellyfin, so they follow you between devices.</p>
@@ -120,6 +125,36 @@
       <button type="button" data-section="favorites" class="active">Favorites</button>
       <button type="button" data-section="watchlist">Watchlist</button>
       <button type="button" data-section="collections">Collections</button>
+    </div>
+    <div id="mystuffFilters">
+      <label class="filter">Sort
+        <select id="mystuffSort">
+          <option value="Name">Name</option>
+          <option value="Added">Date Added</option>
+          <option value="Released">Release Year</option>
+          <option value="Rating">Rating</option>
+          <option value="PlayCount">Play Count</option>
+        </select>
+      </label>
+      <label class="filter">Order
+        <select id="mystuffSortOrder">
+          <option value="Ascending">Ascending</option>
+          <option value="Descending">Descending</option>
+        </select>
+      </label>
+      <label class="filter">Watched
+        <select id="mystuffWatch">
+          <option value="">All</option>
+          <option value="IsUnplayed">Unwatched</option>
+          <option value="IsPlayed">Watched</option>
+        </select>
+      </label>
+      <label class="filter">Genre
+        <select id="mystuffGenre"><option value="">All</option></select>
+      </label>
+      <label class="filter">Year
+        <select id="mystuffYear"><option value="">All</option></select>
+      </label>
     </div>
     <div id="mystuffGrid" class="grid"></div>
   </section>
@@ -132,6 +167,7 @@
       <label><input type="checkbox" name="showFormatBadges"> 4K, HDR, and Dolby Vision badges</label>
       <label><input type="checkbox" name="skipIntro"> Skip Intro button (only where Jellyfin reports an intro)</label>
       <label><input type="checkbox" name="autoplay"> Autoplay next episode</label>
+      <label><input type="checkbox" name="pauseInfo"> Summary, Up next and cast while paused</label>
       <label><input type="checkbox" name="excludeAnimatedFromBanner"> Leave animated movies out of the home banner</label>
       <label><input type="checkbox" name="homeBanner"> Home banner</label>
       <label><input type="checkbox" name="heroRatings"> Age rating and score on the home banner</label>
@@ -152,12 +188,32 @@
       <button type="submit">Save settings</button>
       <p id="settingsSaved" class="muted"></p>
     </form>
-    <p class="muted">Episode guest credits come from <a href="https://www.tvmaze.com" target="_blank" rel="noopener">TVMaze</a> (data <a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noopener">CC BY-SA 4.0</a>), shown only for a verified matching season. Coverage varies.</p>
+    <h2>Profile</h2>
+    <div id="avatarGrid" class="avatar-grid" role="radiogroup" aria-label="Profile avatar"></div>
+    <label class="filter">Show as
+      <select id="avatarDisplay">
+        <option value="username">Username only</option>
+        <option value="both">Avatar + username</option>
+        <option value="avatar">Avatar only</option>
+      </select>
+    </label>
+    <label class="filter">Shown name
+      <input id="shownNameInput" type="text" maxlength="40" autocomplete="off" placeholder="Your Jellyfin username">
+    </label>
+    <p class="muted">Display only, saved with your Driftfin settings on this server. Your Jellyfin username and account picture are not changed.</p>
+    <h2>Updates</h2>
+    <div class="account-actions">
+      <button id="updateCheckBtn" type="button" class="secondary">Check for updates</button>
+    </div>
+    <p id="updateCheckResult" class="muted" role="status"></p>
+    <p class="muted">Checking compares the code running here with the latest browser code on GitHub. Nothing is downloaded or applied - recreating your container is what updates it.</p>
     <h2>Account</h2>
     <div class="account-actions">
       <button id="switchUserBtn" type="button" class="secondary">Switch user</button>
     </div>
     <p class="muted">Switch user signs you out and returns to sign-in, where another Jellyfin user can sign in with a password or Quick Connect. No credentials are stored.</p>
+    <p class="muted">Episode guest credits come from <a href="https://www.tvmaze.com" target="_blank" rel="noopener">TVMaze</a> (data <a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noopener">CC BY-SA 4.0</a>), shown only for a verified matching season. Coverage varies.</p>
+    <p class="muted"><a href="https://github.com/dhrandy/Driftfin" target="_blank" rel="noopener">Driftfin on GitHub</a></p>
   </section>
 
   <section id="view-player" class="view" hidden>
@@ -173,6 +229,17 @@
           <button id="pbMute" type="button" aria-label="Mute"></button>
         </div>
         <button id="skipIntroBtn" type="button" hidden>Skip Intro</button>
+        <div id="pauseInfo" hidden>
+          <div class="pause-dim"></div>
+          <div class="pause-top">
+            <div id="pauseTitle" class="pause-title"></div>
+            <div id="pauseEpisode" class="pause-episode"></div>
+            <p id="pauseSummary" class="pause-summary"></p>
+            <p id="pauseUpNext" class="pause-upnext"></p>
+          </div>
+          <div class="pause-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="64" height="64" fill="currentColor" focusable="false"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg></div>
+          <div id="pauseCast" class="pause-cast"></div>
+        </div>
       </div>
       <div id="upNext" class="up-next" hidden></div>
       <div class="player-controls">

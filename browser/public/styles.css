@@ -45,6 +45,12 @@ main { padding: 0 24px 96px; max-width: 1400px; margin: 0 auto; }
 .hero-body h1 { margin: 0 0 8px; font-size: clamp(28px, 4vw, 52px); text-shadow: 0 2px 14px rgba(0,0,0,.9); }
 .hero-meta { color: #ddd; display: flex; gap: 10px; flex-wrap: wrap; text-shadow: 0 1px 8px rgba(0,0,0,.9); }
 .hero-body p { max-width: 720px; text-shadow: 0 1px 8px rgba(0,0,0,.9); }
+.hero-actions { display: flex; gap: 10px; align-items: center; }
+/* Phone banner: summary caps at three lines so the artwork and the rows below keep
+   their room; the full text stays one tap away under More Info. Desktop is unchanged. */
+@media (max-width: 700px) {
+  .hero-body p.hero-summary { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+}
 .badge { border: 1px solid #666; border-radius: 4px; padding: 1px 6px; font-size: 12px; }
 .row { margin-top: 28px; }
 .row h2 { margin: 0 0 12px; }
@@ -69,6 +75,10 @@ main { padding: 0 24px 96px; max-width: 1400px; margin: 0 auto; }
   -webkit-mask-image: linear-gradient(180deg, #000 55%, transparent 100%); mask-image: linear-gradient(180deg, #000 55%, transparent 100%);
   margin-bottom: -40px; position: relative; z-index: 0; }
 #details > h1, #details > .title-logo { position: relative; z-index: 1; }
+/* Title artwork needs clear air above the metadata line (phone review): the gap holds
+   for any logo aspect ratio, and the hidden h1 fallback keeps its own heading margins. */
+.title-logo { max-height: 90px; max-width: 60%; margin: 6px 0 16px; display: block; }
+@media (max-width: 700px) { .title-logo { margin-bottom: 18px; } }
 .episode { display: flex; justify-content: space-between; gap: 12px; background: var(--card); border-radius: 10px; padding: 12px; margin: 8px 0; cursor: pointer; }
 .episode-main { flex: 1; display: flex; flex-direction: column; gap: 4px; }
 .episode-actions { display: flex; gap: 8px; align-items: flex-start; flex-shrink: 0; }
@@ -190,6 +200,43 @@ body.signed-out .topbar { justify-content: center; }
 .videowrap { position: relative; }
 #playerBar { position: absolute; left: 10px; right: 10px; bottom: 10px; display: flex; align-items: center; gap: 10px; background: rgba(18,18,22,.88); border-radius: 10px; padding: 4px 10px; z-index: 3; }
 #playerBar[hidden] { display: none; }
+/* Pause screen (TV PlayerOverlay parity): a light even dim, the title block up top,
+   the summary clamped to three lines over half the frame, "Up next" with the air date,
+   a center pause mark, and the cast strip above - never over - the player bar. The
+   whole layer ignores pointer events so tap-to-pause/resume keeps working. */
+#pauseInfo { position: absolute; inset: 0; z-index: 2; pointer-events: none; }
+#pauseInfo[hidden] { display: none; }
+#pauseInfo .pause-dim { position: absolute; inset: 0; background: rgba(0,0,0,.42); }
+#pauseInfo .pause-top { position: absolute; top: 0; left: 0; right: 0; padding: 14px 18px 26px 120px; background: linear-gradient(rgba(0,0,0,.7), transparent); }
+#pauseInfo .pause-title { font-weight: 700; font-size: 17px; text-shadow: 0 1px 8px rgba(0,0,0,.9); }
+#pauseInfo .pause-episode { color: #ddd; font-size: 13px; margin-top: 2px; }
+#pauseInfo .pause-summary { color: #ddd; font-size: 13px; max-width: 50%; margin: 8px 0 0; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+#pauseInfo .pause-upnext { color: #ddd; font-size: 13px; margin: 6px 0 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#pauseInfo .pause-icon { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); color: rgba(255,255,255,.9); }
+#pauseInfo .pause-cast { position: absolute; left: 10px; right: 10px; bottom: 72px; display: flex; gap: 10px; overflow-x: auto; padding: 8px 2px; background: linear-gradient(transparent, rgba(0,0,0,.55)); border-radius: 10px; }
+#pauseInfo .pause-cast[hidden] { display: none; }
+#pauseInfo .pc { flex: 0 0 auto; width: 64px; text-align: center; }
+#pauseInfo .pc img { width: 56px; height: 56px; border-radius: 8px; object-fit: cover; background: #222; display: block; margin: 0 auto; }
+#pauseInfo .pc-name { font-size: 11px; color: #eee; margin-top: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#pauseInfo .pc-role { font-size: 10px; color: #bbb; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 700px) {
+  #pauseInfo .pause-summary { max-width: 100%; -webkit-line-clamp: 2; }
+  #pauseInfo .pause-top { padding-bottom: 14px; }
+  #pauseInfo .pause-cast { bottom: 64px; gap: 8px; padding: 6px 2px; }
+  #pauseInfo .pc { width: 52px; }
+  #pauseInfo .pc img { width: 44px; height: 44px; }
+}
+/* Short players (phone portrait, split screen): the cast strip and the text block cannot
+   both fit, so the summary yields to the strip; everything stays off the bar. The JS
+   measures the actual wrap height - a container height query would collapse the wrap. */
+#pauseInfo.compact .pause-top { padding: 8px 14px 6px 104px; }
+#pauseInfo.compact .pause-upnext { margin-top: 2px; }
+#pauseInfo.compact .pause-top:has(~ .pause-cast:not([hidden])) .pause-summary { display: none; }
+#pauseInfo.compact .pause-cast { bottom: 66px; gap: 6px; padding: 4px 2px; }
+#pauseInfo.compact .pc { width: 46px; }
+#pauseInfo.compact .pc img { width: 32px; height: 32px; }
+#pauseInfo.compact .pc-role { display: none; }
+#pauseInfo.tiny .pause-cast { display: none; }
 #pbPlay, #pbMute { min-width: 44px; min-height: 44px; padding: 0; display: inline-flex; align-items: center; justify-content: center; background: transparent; color: #fff; border-radius: 8px; flex: 0 0 auto; }
 #pbPlay:hover, #pbMute:hover { background: rgba(255,255,255,.15); }
 #pbTime { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
@@ -216,3 +263,11 @@ body.signed-out .topbar { justify-content: center; }
 #pbSeek::-moz-range-track { height: 5px; border-radius: 3px; background: #55555f; }
 #pbSeek::-moz-range-progress { height: 5px; border-radius: 3px; background: var(--accent); }
 #pbSeek::-moz-range-thumb { width: 13px; height: 13px; border-radius: 50%; background: var(--accent); border: none; }
+
+/* Settings: profile picker + header label (display-only) */
+.account-actions { display: flex; gap: 10px; }
+.avatar-grid { display: flex; flex-wrap: wrap; gap: 10px; margin: 10px 0 16px; max-width: 560px; }
+.avatar-pick { padding: 3px; border-radius: 50%; border: 2px solid transparent; background: none; line-height: 0; cursor: pointer; }
+.avatar-pick img { width: 52px; height: 52px; border-radius: 50%; display: block; }
+.avatar-pick.on { border-color: var(--accent); }
+.user-avatar { width: 22px; height: 22px; border-radius: 50%; vertical-align: -6px; margin-right: 6px; }

@@ -12,7 +12,7 @@
 const state = {
   userId: null, username: null, views: [], settings: null, config: null,
   currentItem: null, allEpisodes: [], seasons: [], selectedSeasonId: null,
-  playTarget: null, introSegments: [], nextEpisode: null,
+  playTarget: null, introSegments: [], nextEpisode: null, playingItem: null, pauseCastRemote: null,
   mediaSourceId: null, playSessionId: null, progressTimer: null, upNextTimer: null,
   heroItem: null, subtitleTracks: [],
   heroList: [], heroIndex: 0, heroTimer: null,
@@ -60,6 +60,17 @@ function formatAirDate(raw) {
   const month = parseInt(m[2], 10), day = parseInt(m[3], 10);
   if (parseInt(m[1], 10) < 1850 || month < 1 || month > 12 || day < 1 || day > 31) return null;
   return months[month - 1] + ' ' + day + ', ' + m[1];
+}
+// TV Models.kt lifeDatesLabel parity: Jellyfin carries a person's birth date in
+// PremiereDate and death date in EndDate. Nothing is invented: missing dates stay out,
+// and formatAirDate reads only the leading yyyy-MM-dd so a UTC midnight never slides a day.
+function lifeDatesLabel(birthRaw, deathRaw) {
+  const birth = formatAirDate(birthRaw);
+  const death = formatAirDate(deathRaw);
+  if (birth && death) return 'Born ' + birth + ' · Died ' + death;
+  if (birth) return 'Born ' + birth;
+  if (death) return 'Died ' + death;
+  return null;
 }
 function runtimeLabel(item) {
   if (!item || !item.RunTimeTicks) return '';
@@ -146,7 +157,7 @@ function titleHtml(item) {
     const hasLogo = (item.ImageTags && item.ImageTags.Logo) || item.Type === 'Episode';
     // Real Jellyfin serves an episode's inherited series logo; where no logo exists
     // anywhere the image 404s and the text title must take over, not a blank space.
-    if (hasLogo) return `<img src="${logoUrlFor(item)}" alt="${esc(item.Name)}" style="max-height:90px;max-width:60%" onerror="this.style.display='none';this.nextElementSibling.style.display=''"><h1 style="display:none">${esc(item.Name)}</h1>`;
+    if (hasLogo) return `<img class="title-logo" src="${logoUrlFor(item)}" alt="${esc(item.Name)}" onerror="this.style.display='none';this.nextElementSibling.style.display=''"><h1 style="display:none">${esc(item.Name)}</h1>`;
   }
   return `<h1>${esc(item.Name)}</h1>`;
 }
@@ -237,7 +248,11 @@ function cardHtml(item, wide) {
 }
 function bindCards(container) {
   container.querySelectorAll('.card').forEach((el) => {
-    el.addEventListener('click', () => { location.hash = '#/details?id=' + encodeURIComponent(el.dataset.id); });
+    el.addEventListener('click', () => {
+      // TV MainActivity: a BoxSet opens its collection page, never a details page.
+      const dest = el.dataset.type === 'BoxSet' ? '#/collection?id=' : '#/details?id=';
+      location.hash = dest + encodeURIComponent(el.dataset.id);
+    });
   });
 }
 function rowHtml(title, items, wide, key) {
@@ -268,10 +283,32 @@ async function ensureSignedIn() {
     state.settings = await api('/api/settings');
   applyPosterSize();
     applyPosterSize();
-    $('userLabel').textContent = state.username || '';
+    renderProfileLabel();
     $('signoutBtn').hidden = false;
     return true;
   } catch { showView('signin'); return false; }
+}
+
+// TV profile parity: avatar pick, display mode and shown name are Driftfin display
+// settings only - the Jellyfin account name and image are never touched.
+const AVATARS = [
+  [1, 'Astronaut'], [2, 'Robot'], [3, 'Camp scene'], [4, 'Fuzzy monster'], [5, 'Goofy dog'],
+  [6, 'Three-eyed alien'], [7, 'Cool shark'], [8, 'T-Rex'], [9, 'Astronaut cat'], [10, 'Sly fox'],
+  [11, 'Panda'], [12, 'Hoodie penguin'], [13, 'Octopus'], [14, 'Frog'], [15, 'Kid wizard'],
+  [16, 'Pirate girl'], [17, 'Owl with glasses'], [18, 'Baby dragon'], [19, 'Backwards-cap kid'], [20, 'Sloth'],
+];
+// Settings values round-trip through the server as strings; coerce before comparing.
+function currentAvatarId() { return parseInt(state.settings && state.settings.avatarId, 10) || 0; }
+function avatarUrl(id) { return `/avatars/avatar_${String(id).padStart(2, '0')}.png`; }
+function profileName() { return (state.settings && state.settings.shownName && String(state.settings.shownName).trim()) || state.username || ''; }
+function renderProfileLabel() {
+  const mode = (state.settings && state.settings.avatarDisplay) || 'username';
+  const aid = currentAvatarId();
+  const showAvatar = mode !== 'username' && aid > 0;
+  const showName = mode !== 'avatar';
+  $('userLabel').innerHTML =
+    (showAvatar ? `<img class="user-avatar" src="${avatarUrl(aid)}" alt="" onerror="this.remove()">` : '') +
+    (showName ? `<span>${esc(profileName())}</span>` : '');
 }
 
 // ---------- Home ----------
@@ -384,20 +421,58 @@ function truncateOverview(text) {
   const lastSpace = cut.lastIndexOf(' ');
   return (lastSpace > 200 ? cut.slice(0, lastSpace) : cut).trimEnd() + ' \u2026';
 }
+// Hero trailer lookup mirrors the details page (server files first, then YouTube) and is
+// cached per item so the rotating banner never re-fetches. No trailer = no button (never
+// a dead control).
+const heroTrailerCache = {};
+async function fillHeroTrailer(item) {
+  if (!item || $('hero').dataset.itemId !== item.Id) return;
+  if (!(item.Id in heroTrailerCache)) {
+    heroTrailerCache[item.Id] = null;
+    try {
+      const uid = state.userId;
+      if ((item.LocalTrailerCount || 0) > 0) {
+        const local = await jf(`Items/${item.Id}/LocalTrailers?userId=${uid}`).catch(() => null);
+        const first = Array.isArray(local) && local[0] && local[0].Id ? local[0] : null;
+        if (first) heroTrailerCache[item.Id] = { kind: 'local', id: first.Id };
+      }
+      if (!heroTrailerCache[item.Id]) {
+        for (const r of (item.RemoteTrailers || [])) {
+          const vid = youtubeVideoId(r && r.Url);
+          if (vid) { heroTrailerCache[item.Id] = { kind: 'youtube', id: vid }; break; }
+        }
+      }
+    } catch { /* stays null */ }
+  }
+  const t = heroTrailerCache[item.Id];
+  if (!t || !$('hero') || $('hero').dataset.itemId !== item.Id) return;
+  const btn = $('heroTrailer');
+  if (!btn) return;
+  btn.hidden = false;
+  btn.addEventListener('click', () => {
+    if (t.kind === 'local') location.hash = '#/player?id=' + encodeURIComponent(t.id);
+    else window.open('https://www.youtube.com/watch?v=' + t.id, '_blank', 'noopener');
+  });
+}
 function renderHero(item) {
   const hero = $('hero');
-  if (!item) { hero.innerHTML = '<div class="hero-empty">No unwatched movie found for the home banner.</div>'; return; }
+  if (!item) { hero.innerHTML = '<div class="hero-empty">No unwatched movie found for the home banner.</div>'; delete hero.dataset.itemId; return; }
+  hero.dataset.itemId = item.Id;
   hero.innerHTML = `
     <img class="hero-backdrop" src="${img(item, 'Backdrop', 1600)}" alt="" onerror="this.src='data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=='">
     <div class="hero-body">
       ${titleHtml(item)}
       <div class="hero-meta">${metaLine(item, { ratings: !state.settings || state.settings.heroRatings !== false })} ${formatBadges(item)}</div>
-      <p>${esc(truncateOverview(item.Overview))}</p>
+      <p class="hero-summary">${esc(truncateOverview(item.Overview))}</p>
+      <div class="hero-actions">
       <button type="button" id="heroPlay">${isResumeable(item) ? 'Resume' : 'Play'}</button>
       <button type="button" class="secondary" id="heroInfo">More Info</button>
+      <button type="button" class="icon-btn" id="heroTrailer" aria-label="Watch trailer" title="Watch trailer" hidden>${ICON_TRAILER}</button>
+      </div>
     </div>`;
   $('heroPlay').addEventListener('click', () => { location.hash = '#/player?id=' + encodeURIComponent(item.Id); });
   $('heroInfo').addEventListener('click', () => { location.hash = '#/details?id=' + encodeURIComponent(item.Id); });
+  fillHeroTrailer(item);
 }
 
 // ---------- Library (Shows / Movies) ----------
@@ -516,7 +591,7 @@ function genreLineHtml(item, target) {
     const epAired = target && target.Type === 'Episode' ? formatAirDate(target.PremiereDate) : null;
     const air = formatAirDate(item.PremiereDate);
     if (epAired && air) segs.push('Premiered ' + air);
-    const st = String(item.SeriesStatus || '').trim().toLowerCase();
+    const st = String(item.Status || '').trim().toLowerCase(); // Jellyfin wire field is Status
     const status = st === 'continuing' ? 'Continuing' : st === 'ended' ? 'Ended' : (st === 'canceled' || st === 'cancelled') ? 'Canceled' : null;
     if (status) segs.push(status);
   }
@@ -597,9 +672,22 @@ async function goDetails(id, keepSeasonId) {
   el.innerHTML = '<p class="muted">Loading from Jellyfin…</p>';
   try {
     const uid = state.userId;
-    const item = await jf(`Items/${id}?userId=${uid}`);
+    let item = await jf(`Items/${id}?userId=${uid}`);
+    // TV seriesOrSelfId parity: an episode entry opens the SERIES page with the episode
+    // kept as the play target and highlighted in its season, so the header always shows
+    // the full series metadata (Aired, Premiered, status, genres) instead of a sparse
+    // episode-only header. Episodes with no series link stay on their own page.
+    let focusEpisode = null;
+    if (item.Type === 'Episode' && item.SeriesId) {
+      focusEpisode = item;
+      item = await jf(`Items/${encodeURIComponent(item.SeriesId)}?userId=${uid}`);
+      // Keep the URL truthful without re-running the router (replaceState fires no
+      // hashchange), so Back skips the transient episode URL.
+      history.replaceState(null, '', '#/details?id=' + encodeURIComponent(item.Id));
+    }
     state.currentItem = item;
-    state.allEpisodes = []; state.seasons = []; state.playTarget = item; state.selectedSeasonId = null; state.seasonCastRemote = {};
+    state.focusEpisodeId = focusEpisode ? focusEpisode.Id : null;
+    state.allEpisodes = []; state.seasons = []; state.playTarget = focusEpisode || item; state.selectedSeasonId = null; state.seasonCastRemote = {};
     state.detailTrailer = null; state.detailSimilar = []; state.fourKEpisodeIds = new Set();
     if (item.Type === 'Movie' || item.Type === 'Series') {
       try { state.watchlistIds = ((await api('/api/watchlist')) || {}).ids || []; } catch { state.watchlistIds = []; }
@@ -616,7 +704,7 @@ async function goDetails(id, keepSeasonId) {
       ]);
       state.seasons = seasonsRes.Items || [];
       state.allEpisodes = episodesRes.Items || [];
-      state.playTarget = item.Type === 'Episode' ? item : (pickEpisodeTarget(state.allEpisodes) || item);
+      state.playTarget = (state.focusEpisodeId && state.allEpisodes.find((ep) => ep.Id === state.focusEpisodeId)) || focusEpisode || (pickEpisodeTarget(state.allEpisodes) || item);
       state.selectedSeasonId = keepSeasonId || (state.playTarget && state.playTarget.SeasonId) || (state.seasons[0] && state.seasons[0].Id) || null;
     }
     renderDetails();
@@ -691,7 +779,7 @@ function renderDetails() {
         ? `/api/jellyfin/Items/${ep.Id}/Images/Primary?maxWidth=480&quality=90`
         : (ep.ParentBackdropItemId ? `/api/jellyfin/Items/${ep.ParentBackdropItemId}/Images/Backdrop?maxWidth=480&quality=90` : '');
       const ep4k = state.fourKEpisodeIds && state.fourKEpisodeIds.has(ep.Id);
-      return `<div class="episode${ep.Id === item.Id ? ' current' : ''}" data-id="${esc(ep.Id)}">
+      return `<div class="episode${ep.Id === (state.focusEpisodeId || item.Id) ? ' current' : ''}" data-id="${esc(ep.Id)}">
         ${ethumb ? `<img class="episode-thumb" src="${ethumb}" alt="" loading="lazy" onerror="this.remove()">` : ''}
         <div class="episode-main">
           <span><strong>${esc(episodeLabel(ep) || '')}</strong> ${esc(ep.Name)}${ep4k ? ' <span class="badge">4K</span>' : ''}</span>
@@ -766,8 +854,7 @@ function renderDetails() {
       <button type="button" class="icon-btn${isFav ? ' on' : ''}" id="detailFav" aria-label="${isFav ? 'Remove from My List' : 'Add to My List'}" title="${isFav ? 'Remove from My List' : 'Add to My List'}" aria-pressed="${isFav ? 'true' : 'false'}">${ICON_HEART}</button>
       <span id="detailActionNote" class="muted" role="status"></span>
     </div>
-    ${castHtml}
-    ${seasonsHtml}
+    ${hasSeasons ? seasonsHtml + castHtml : castHtml + seasonsHtml}
     ${similarHtml}`;
   el.querySelectorAll('.cast-person[data-person]').forEach((btn) => btn.addEventListener('click', () => { location.hash = '#/actor?id=' + encodeURIComponent(btn.dataset.person); }));
   bindCards(el);
@@ -818,6 +905,11 @@ function renderDetails() {
     if (e.target.closest('button')) return;
     location.hash = '#/player?id=' + encodeURIComponent(node.dataset.id);
   }));
+  // Land the focused episode on screen when arriving from an episode entry (TV focus parity).
+  if (state.focusEpisodeId) {
+    const cur = el.querySelector('.episode.current');
+    if (cur) cur.scrollIntoView({ block: 'center' });
+  }
 }
 async function toggleWatched(target) {
   const uid = state.userId;
@@ -902,6 +994,53 @@ async function loadSearch(term) {
 // My Stuff sections in the TV order: Favorites (Jellyfin heart, unchanged semantics),
 // Watchlist (Driftfin's own star, stored server-side per server+user), Collections (box sets).
 let mystuffSection = 'favorites';
+// TV LibraryScreen My Stuff parity: the same Sort/Filter row on Favorites and Watchlist,
+// applied server-side. Watchlist keeps its star order until an explicit sort is chosen.
+const MYSTUFF_SORTS = {
+  Name: { sortBy: 'SortName', order: 'Ascending' },
+  Added: { sortBy: 'DateCreated,SortName', order: 'Descending' },
+  Released: { sortBy: 'ProductionYear,PremiereDate,SortName', order: 'Descending' },
+  Rating: { sortBy: 'CommunityRating,SortName', order: 'Descending' },
+  PlayCount: { sortBy: 'PlayCount,SortName', order: 'Descending' },
+};
+function mystuffFilterState() {
+  const sort = MYSTUFF_SORTS[$('mystuffSort').value] ? $('mystuffSort').value : 'Name';
+  return {
+    sort, order: $('mystuffSortOrder').value || MYSTUFF_SORTS[sort].order,
+    watch: $('mystuffWatch').value, genre: $('mystuffGenre').value, year: $('mystuffYear').value,
+  };
+}
+function mystuffQueryParts(f) {
+  let q = '';
+  if (f.watch) q += `&Filters=${f.watch}`;
+  if (f.genre) q += `&Genres=${encodeURIComponent(f.genre)}`;
+  if (f.year) q += `&Years=${encodeURIComponent(f.year)}`;
+  return q;
+}
+// Genre and year choices come from the server's own list, never from the filtered items.
+async function fillMystuffFilterOptions() {
+  if (state.mystuffFilterOptions) return;
+  state.mystuffFilterOptions = { genres: [], years: [] };
+  try {
+    const r = await jf(`Items/Filters?userId=${state.userId}&includeItemTypes=Movie,Series`);
+    const name = (g) => (typeof g === 'string' ? g : (g && g.Name) || '');
+    state.mystuffFilterOptions = {
+      genres: (r && r.Genres || []).map(name).filter(Boolean),
+      years: (r && r.Years || []).map(String).filter(Boolean),
+    };
+  } catch { /* filters still work typed-free: All only */ }
+  const g = $('mystuffGenre'), y = $('mystuffYear');
+  if (g) g.innerHTML = '<option value="">All</option>' + state.mystuffFilterOptions.genres.map((x) => `<option value="${esc(x)}">${esc(x)}</option>`).join('');
+  if (y) y.innerHTML = '<option value="">All</option>' + state.mystuffFilterOptions.years.map((x) => `<option value="${esc(x)}">${esc(x)}</option>`).join('');
+}
+function restoreMystuffFilters() {
+  const st = state.settings || {};
+  if (st.mystuffSort && MYSTUFF_SORTS[st.mystuffSort]) $('mystuffSort').value = st.mystuffSort;
+  if (st.mystuffSortOrder) $('mystuffSortOrder').value = st.mystuffSortOrder;
+  $('mystuffWatch').value = st.mystuffWatch || '';
+  if (st.mystuffGenre && Array.from($('mystuffGenre').options).some((o) => o.value === st.mystuffGenre)) $('mystuffGenre').value = st.mystuffGenre;
+  if (st.mystuffYear && Array.from($('mystuffYear').options).some((o) => o.value === st.mystuffYear)) $('mystuffYear').value = st.mystuffYear;
+}
 async function loadMyStuff() {
   if (!(await ensureSignedIn())) return;
   showView('mystuff');
@@ -910,43 +1049,85 @@ async function loadMyStuff() {
   if (wlBtn) wlBtn.hidden = Boolean(state.settings && state.settings.showWatchlist === false);
   if (mystuffSection === 'watchlist' && state.settings && state.settings.showWatchlist === false) mystuffSection = 'favorites';
   document.querySelectorAll('#mystuffTabs button').forEach((b) => b.classList.toggle('active', b.dataset.section === mystuffSection));
+  await fillMystuffFilterOptions();
+  restoreMystuffFilters();
   grid.innerHTML = '<p class="muted">Loading from Jellyfin…</p>';
   try {
     const uid = state.userId;
+    const f = mystuffFilterState();
+    const sortSpec = MYSTUFF_SORTS[f.sort];
+    const sortQ = `&SortBy=${encodeURIComponent(sortSpec.sortBy)}&SortOrder=${f.order}`;
     if (mystuffSection === 'watchlist') {
       const ids = ((await api('/api/watchlist')) || {}).ids || [];
       state.watchlistIds = ids;
       const emptyText = '<p class="muted">Nothing on your watchlist yet. Open a movie or show and choose the star.</p>';
       if (!ids.length) { grid.innerHTML = emptyText; return; }
-      const res = await jf(`Items?userId=${uid}&Ids=${encodeURIComponent(ids.join(','))}&fields=Overview`);
+      // TV parity: filters always apply; an explicit sort replaces the default star
+      // order (newest first). Never prune: a filtered-out or missing title stays starred.
+      const explicitSort = !(f.sort === 'Name' && f.order === 'Ascending');
+      const res = await jf(`Items?userId=${uid}&Ids=${encodeURIComponent(ids.join(','))}&IncludeItemTypes=Movie,Series&Recursive=true&fields=Overview${mystuffQueryParts(f)}${explicitSort ? sortQ : ''}`);
       const found = new Map((res.Items || []).map((i) => [i.Id, i]));
-      const ordered = ids.map((id) => found.get(id)).filter(Boolean);
-      // Never prune: a missing id can mean deleted, permission-filtered, or a
-      // partial/unavailable server response - the saved list is kept as is.
-      const missing = ids.length - ordered.length;
+      const ordered = explicitSort ? (res.Items || []) : ids.map((id) => found.get(id)).filter(Boolean);
+      const missing = ids.length - (ids.filter((id) => found.has(id))).length;
       const note = missing > 0
         ? `<p class="muted">${missing} saved ${missing === 1 ? 'title is' : 'titles are'} not available from the server right now. ${missing === 1 ? 'It stays' : 'They stay'} on your watchlist.</p>`
         : '';
-      grid.innerHTML = (ordered.length ? ordered.map((i) => cardHtml(i)).join('') : (missing ? '' : emptyText)) + note;
+      grid.innerHTML = (ordered.length ? ordered.map((i) => cardHtml(i)).join('') : (missing ? '' : '<p class="muted">Nothing on your watchlist matches these filters.</p>')) + note;
       bindCards(grid);
       return;
     }
     if (mystuffSection === 'collections') {
-      const res = await jf(`Items?userId=${uid}&IncludeItemTypes=BoxSet&Recursive=true&SortBy=SortName&fields=Overview`);
+      const res = await jf(`Items?userId=${uid}&IncludeItemTypes=BoxSet&Recursive=true&fields=Overview${mystuffQueryParts(f)}${sortQ}`);
       const items = res.Items || [];
       grid.innerHTML = items.length ? items.map((i) => cardHtml(i)).join('') : '<p class="muted">No collections found on this server.</p>';
       bindCards(grid);
       return;
     }
-    const res = await jf(`Items?userId=${uid}&Filters=IsFavorite&Recursive=true&IncludeItemTypes=Movie,Series&SortBy=DateCreated&SortOrder=Descending&limit=100&fields=Overview`);
+    const favQ = f.watch ? `&Filters=IsFavorite,${f.watch}` : '&Filters=IsFavorite';
+    const gy = `${f.genre ? `&Genres=${encodeURIComponent(f.genre)}` : ''}${f.year ? `&Years=${encodeURIComponent(f.year)}` : ''}`;
+    const res = await jf(`Items?userId=${uid}${favQ}&Recursive=true&IncludeItemTypes=Movie,Series&limit=200&fields=Overview${gy}${sortQ}`);
     const items = res.Items || [];
-    grid.innerHTML = items.length ? items.map((i) => cardHtml(i)).join('') : '<p class="muted">No favorites in Jellyfin yet.</p>';
+    grid.innerHTML = items.length ? items.map((i) => cardHtml(i)).join('') : '<p class="muted">No favorites match these filters.</p>';
     bindCards(grid);
   } catch (e) { grid.innerHTML = `<p class="error">Could not load My Stuff: ${esc(e.message)}</p>`; }
 }
+$('mystuffSort').addEventListener('change', () => {
+  // Follow the TV sort's natural direction when the sort changes; the user can still flip it.
+  $('mystuffSortOrder').value = MYSTUFF_SORTS[$('mystuffSort').value].order;
+  saveSettingPatch({ mystuffSort: $('mystuffSort').value, mystuffSortOrder: $('mystuffSortOrder').value });
+  loadMyStuff();
+});
+$('mystuffSortOrder').addEventListener('change', () => { saveSettingPatch({ mystuffSortOrder: $('mystuffSortOrder').value }); loadMyStuff(); });
+$('mystuffWatch').addEventListener('change', () => { saveSettingPatch({ mystuffWatch: $('mystuffWatch').value }); loadMyStuff(); });
+$('mystuffGenre').addEventListener('change', () => { saveSettingPatch({ mystuffGenre: $('mystuffGenre').value || null }); loadMyStuff(); });
+$('mystuffYear').addEventListener('change', () => { saveSettingPatch({ mystuffYear: $('mystuffYear').value || null }); loadMyStuff(); });
 document.querySelectorAll('#mystuffTabs button').forEach((b) => b.addEventListener('click', () => { mystuffSection = b.dataset.section; loadMyStuff(); }));
 
 // ---------- Actor page ----------
+async function goCollection(id) {
+  if (!(await ensureSignedIn())) return;
+  showView('collection');
+  $('collectionTitle').textContent = 'Collection';
+  $('collectionGrid').innerHTML = '<p class="muted">Loading from Jellyfin…</p>';
+  try {
+    const uid = state.userId;
+    const f = mystuffFilterState();
+    const s = MYSTUFF_SORTS[f.sort] || MYSTUFF_SORTS.Name;
+    const sortQ = `&SortBy=${encodeURIComponent(s.sortBy)}&SortOrder=${f.order}`;
+    const [box, kids] = await Promise.all([
+      jf(`Items/${id}?userId=${uid}`),
+      jf(`Items?userId=${uid}&parentId=${encodeURIComponent(id)}&fields=Overview${mystuffQueryParts(f)}${sortQ}`),
+    ]);
+    $('collectionTitle').textContent = box.Name || 'Collection';
+    const items = kids.Items || [];
+    $('collectionGrid').innerHTML = items.length
+      ? items.map((i) => cardHtml(i)).join('')
+      : '<p class="muted">Nothing in this collection yet.</p>';
+    bindCards($('collectionGrid'));
+  } catch (e) {
+    $('collectionGrid').innerHTML = `<p class="muted">${esc(e.message || 'Could not load this collection.')}</p>`;
+  }
+}
 async function goActor(personId) {
   if (!(await ensureSignedIn())) return;
   showView('actor');
@@ -959,11 +1140,13 @@ async function goActor(personId) {
       jf(`Items?userId=${uid}&PersonIds=${encodeURIComponent(personId)}&Recursive=true&IncludeItemTypes=Movie,Series&limit=60&fields=Overview`),
     ]);
     const items = works.Items || [];
+    const dates = lifeDatesLabel(person.PremiereDate, person.EndDate);
     el.innerHTML = `
       <div class="actor-head">
         <img src="/api/jellyfin/Items/${esc(personId)}/Images/Primary?maxWidth=320&quality=90" alt="" onerror="this.src='data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=='">
         <div>
           <h1>${esc(person.Name || '')}</h1>
+          ${dates ? `<p class="muted actor-dates">${esc(dates)}</p>` : ''}
           ${person.Overview ? `<p>${esc(person.Overview.slice(0, 1200))}</p>` : ''}
         </div>
       </div>
@@ -1114,6 +1297,10 @@ async function goPlayer(id, opts) {
       }
     } catch {}
     startProgress(id, source.Id);
+    state.playingItem = item;
+    state.pauseCastRemote = null;
+    hidePauseInfo();
+    fillPauseCastRemote(item);
   } catch (e) {
     note.textContent = 'Playback failed: ' + e.message;
   }
@@ -1189,6 +1376,7 @@ function stopPlayback(reportStopped) {
   state.playFailed = false;
   stopProgress();
   const pb = $('playerBar'); if (pb) pb.hidden = true;
+  state.playingItem = null; state.pauseCastRemote = null; hidePauseInfo();
   const pov = $('playerWrap'); if (pov) pov.classList.remove('landscape-fill');
   if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
   if (state.hls) { try { state.hls.destroy(); } catch {} state.hls = null; }
@@ -1236,9 +1424,10 @@ function route() {
   else if (pathPart === 'movies') loadLibrary('movies', true);
   else if (pathPart === 'mystuff') loadMyStuff();
   else if (pathPart === 'search') { showView('search'); if (params.get('q')) { $('searchInput').value = params.get('q'); loadSearch(params.get('q')); } else loadSearchRecommendations(); }
-  else if (pathPart === 'settings') { ensureSignedIn().then((ok) => { if (ok) { showView('settings'); const f = $('settingsForm'); for (const key of Object.keys(state.settings || {})) { const el = f.elements[key]; if (!el) continue; if (el.type === 'checkbox') el.checked = Boolean(state.settings[key]); else el.value = state.settings[key]; } } }); }
+  else if (pathPart === 'settings') { ensureSignedIn().then((ok) => { if (ok) { showView('settings'); const f = $('settingsForm'); for (const key of Object.keys(state.settings || {})) { const el = f.elements[key]; if (!el) continue; if (el.type === 'checkbox') el.checked = Boolean(state.settings[key]); else el.value = state.settings[key]; } renderAvatarGrid(); $('avatarDisplay').value = (state.settings && state.settings.avatarDisplay) || 'username'; $('shownNameInput').value = (state.settings && state.settings.shownName) || ''; } }); }
   else if (pathPart === 'details' && params.get('id')) goDetails(params.get('id'));
   else if (pathPart === 'actor' && params.get('id')) goActor(params.get('id'));
+  else if (pathPart === 'collection' && params.get('id')) goCollection(params.get('id'));
   else if (pathPart === 'player' && params.get('id')) goPlayer(params.get('id'), { fromStart: params.get('start') === '1' });
   else if (pathPart === 'signin') showView('signin');
   else loadHome();
@@ -1248,7 +1437,7 @@ async function finishSignIn(userId, username) {
   state.userId = userId; state.username = username;
   state.settings = await api('/api/settings');
   applyPosterSize();
-  $('userLabel').textContent = state.username || '';
+  renderProfileLabel();
   $('signoutBtn').hidden = false;
   location.hash = '#/home';
 }
@@ -1339,7 +1528,7 @@ async function signOutToSignIn() {
   state.views = []; state.watchlistIds = [];
   state.currentItem = null; state.allEpisodes = []; state.seasons = []; state.playTarget = null;
   document.documentElement.style.setProperty('--card-w', POSTER_WIDTHS.Medium);
-  $('signoutBtn').hidden = true; $('userLabel').textContent = '';
+  $('signoutBtn').hidden = true; $('userLabel').innerHTML = '';
   location.hash = '#/signin';
 }
 $('signoutBtn').addEventListener('click', signOutToSignIn);
@@ -1349,6 +1538,50 @@ $('kidsFilter').addEventListener('change', () => loadLibrary(libraryKind));
 $('librarySort').addEventListener('change', () => { saveSettingPatch({ librarySort: $('librarySort').value }); loadLibrary(libraryKind); });
 $('librarySortOrder').addEventListener('change', () => { saveSettingPatch({ librarySortOrder: $('librarySortOrder').value }); loadLibrary(libraryKind); });
 $('watchedFilter').addEventListener('change', () => loadLibrary(libraryKind));
+function renderAvatarGrid() {
+  const cur = currentAvatarId();
+  $('avatarGrid').innerHTML = AVATARS.map(([id, label]) =>
+    `<button type="button" class="avatar-pick${cur === id ? ' on' : ''}" data-id="${id}" aria-label="${esc(label)}" title="${esc(label)}" aria-pressed="${cur === id}"><img src="${avatarUrl(id)}" alt=""></button>`
+  ).join('');
+  $('avatarGrid').querySelectorAll('.avatar-pick').forEach((b) => b.addEventListener('click', () => {
+    const id = parseInt(b.dataset.id, 10);
+    const next = currentAvatarId() === id ? 0 : id; // tap again to clear
+    state.settings = { ...state.settings, avatarId: next };
+    renderAvatarGrid();
+    renderProfileLabel();
+    saveSettingPatch({ avatarId: next });
+  }));
+}
+$('avatarDisplay').addEventListener('change', () => {
+  const v = $('avatarDisplay').value;
+  state.settings = { ...state.settings, avatarDisplay: v };
+  renderProfileLabel();
+  saveSettingPatch({ avatarDisplay: v });
+});
+$('shownNameInput').addEventListener('change', () => {
+  const v = $('shownNameInput').value.trim();
+  state.settings = { ...state.settings, shownName: v };
+  renderProfileLabel();
+  saveSettingPatch({ shownName: v || null });
+});
+$('updateCheckBtn').addEventListener('click', async () => {
+  const out = $('updateCheckResult');
+  $('updateCheckBtn').disabled = true;
+  out.textContent = 'Checking…';
+  try {
+    const r = await api('/api/update-check');
+    out.textContent = '';
+    if (!r || r.status === 'current') { out.textContent = 'Driftfin Browser is up to date.'; }
+    else if (r.status === 'update-available') {
+      out.appendChild(document.createTextNode('Update available. '));
+      const a = document.createElement('a');
+      a.href = r.url; a.target = '_blank'; a.rel = 'noopener';
+      a.textContent = 'See the latest changes on GitHub';
+      out.appendChild(a);
+    } else { out.textContent = 'Could not check for updates right now.'; }
+  } catch { out.textContent = 'Could not check for updates right now.'; }
+  $('updateCheckBtn').disabled = false;
+});
 $('settingsForm').addEventListener('submit', async (e) => {
   e.preventDefault();
   const f = $('settingsForm'); const payload = {};
@@ -1430,6 +1663,73 @@ $('pbSeek').addEventListener('change', () => {
   if (isFinite(d) && d > 0) v.currentTime = (parseInt($('pbSeek').value, 10) / 1000) * d;
 });
 $('pbMute').addEventListener('click', () => { $('player').muted = !$('player').muted; });
+
+// ---------- Pause screen (TV PlayerOverlay parity) ----------
+// The dim, pause mark, and title show on any pause; the summary, Up next and the cast
+// strip follow the "pauseInfo" setting. Cast is display-only: leaving mid-playback to
+// open a person page would end the session, so the strip never navigates (same rule as
+// the TVMaze guest cards on detail pages).
+function renderPauseInfo() {
+  const item = state.playingItem;
+  if (!item) return;
+  const infoOn = !state.settings || state.settings.pauseInfo !== false;
+  $('pauseTitle').textContent = item.Type === 'Episode' ? (item.SeriesName || item.Name || '') : (item.Name || '');
+  $('pauseEpisode').textContent = item.Type === 'Episode' ? [episodeLabel(item), item.Name].filter(Boolean).join(' · ') : '';
+  $('pauseSummary').textContent = infoOn ? (item.Overview || '') : '';
+  const next = state.nextEpisode;
+  $('pauseUpNext').textContent = (infoOn && next)
+    ? 'Up next: ' + [episodeLabel(next), next.Name].filter(Boolean).join(' · ') + (formatAirDate(next.PremiereDate) ? ' · ' + formatAirDate(next.PremiereDate) : '')
+    : '';
+  // TV PauseCast: the episode's own Actor + GuestStar credits first, then the verified
+  // TVMaze guests of THIS episode; same display-dedup as the detail cast row, cap 15.
+  const local = (item.People || []).filter((p) => (p.Type === 'Actor' || p.Type === 'GuestStar') && p.Id);
+  const cast = infoOn ? mergeCastPeople(local, state.pauseCastRemote || []).slice(0, 15) : [];
+  $('pauseCast').innerHTML = cast.map((p) => p.Remote ? `
+    <span class="pc" title="Guest credit via TVMaze">
+      <img src="${esc(p.RemoteImageUrl || '')}" alt="" loading="lazy" onerror="this.src='data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=='">
+      <div class="pc-name">${esc(p.Name || '')}</div>
+      ${p.Role ? `<div class="pc-role">${esc(p.Role)}</div>` : ''}
+    </span>` : `
+    <span class="pc">
+      <img src="/api/jellyfin/Items/${esc(p.Id)}/Images/Primary?maxWidth=120&quality=90" alt="" loading="lazy" onerror="this.src='data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=='">
+      <div class="pc-name">${esc(p.Name || '')}</div>
+      ${p.Role ? `<div class="pc-role">${esc(p.Role)}</div>` : ''}
+    </span>`).join('');
+  $('pauseCast').hidden = !cast.length;
+}
+function showPauseInfo() {
+  const v = $('player');
+  if (!v || v.ended || !state.playingItem || $('view-player').hidden) return;
+  renderPauseInfo();
+  const wrap = v.closest('.videowrap');
+  const h = wrap ? wrap.clientHeight : 0;
+  $('pauseInfo').classList.toggle('compact', h > 0 && h < 340);
+  $('pauseInfo').classList.toggle('tiny', h > 0 && h < 200);
+  $('pauseInfo').hidden = false;
+}
+window.addEventListener('resize', () => {
+  const p = $('pauseInfo');
+  if (!p || p.hidden || !state.playingItem) return;
+  const wrap = $('player') && $('player').closest('.videowrap');
+  const h = wrap ? wrap.clientHeight : 0;
+  p.classList.toggle('compact', h > 0 && h < 340);
+  p.classList.toggle('tiny', h > 0 && h < 200);
+});
+function hidePauseInfo() { const p = $('pauseInfo'); if (p) p.hidden = true; }
+$('player').addEventListener('pause', showPauseInfo);
+$('player').addEventListener('play', hidePauseInfo);
+// Verified TVMaze guests for the playing episode, fetched once per playback (TV loads
+// its pause cast once at start); re-renders only when still paused on the same item.
+async function fillPauseCastRemote(item) {
+  if (!item || item.Type !== 'Episode') return;
+  if (state.settings && state.settings.tvmazeEpisodeCast === false) return;
+  try {
+    const r = await api(`/api/tvmaze/episode-cast?episodeId=${encodeURIComponent(item.Id)}`);
+    state.pauseCastRemote = (r && r.people) || [];
+  } catch { state.pauseCastRemote = []; }
+  const v = $('player');
+  if (v && v.paused && state.playingItem && state.playingItem.Id === item.Id && !$('pauseInfo').hidden) renderPauseInfo();
+}
 
 // Rotate-to-fullscreen: on mobile, turning to landscape during playback fills the screen.
 // Real requestFullscreen() needs a user gesture on most mobile browsers, so when it is

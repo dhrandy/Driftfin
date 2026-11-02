@@ -79,6 +79,19 @@ const DEFAULT_SETTINGS = {
   // Library grid sort, saved between sessions like the TV apps.
   librarySort: 'SortName',
   librarySortOrder: 'Ascending',
+  // TV LibraryScreen My Stuff parity: sort/filter choices saved per user.
+  mystuffSort: 'Name',
+  mystuffSortOrder: 'Ascending',
+  mystuffWatch: '',
+  mystuffGenre: null,
+  mystuffYear: null,
+  // TV pause screen parity: summary + Up next + cast while paused.
+  pauseInfo: true,
+  // TV profile parity: avatar pick + display mode + shown name. Driftfin display
+  // settings only; the Jellyfin account name and image are never touched.
+  avatarId: 0,
+  avatarDisplay: 'username',
+  shownName: null,
 };
 
 function ensureDir(dir) { fs.mkdirSync(dir, { recursive: true }); }
@@ -450,7 +463,75 @@ const TVMAZE_SESSION_WINDOW_MS = 60000;
 const TVMAZE_SESSION_MAX_RESOLUTIONS = 12;
 const tvmazeSeasonCache = new Map();    // key -> { ts, people } (insertion order = eviction order)
 const tvmazeSeasonInflight = new Map(); // key -> Promise (one resolution per season at a time)
+const tvmazeMatchCache = new Map();     // seasonKey -> { ts, match } verified TVMaze episode list
+const tvmazeEpisodeCache = new Map();   // episodeKey -> { ts, people } per-episode guest credits
 const tvmazeSessionLog = new Map();     // sessionKey -> number[] recent resolution start times
+
+// ---------- update check helpers ----------
+// The identity of "the browser app" is the content of every file the runtime needs:
+// client bundle, markup, styles, vendored player lib, this server, and the package
+// manifest (dependency set). A CSS-only or server-only release must not read as current.
+const GITHUB_REPO = 'dhrandy/Driftfin';
+const GITHUB_API_BASE = (process.env.GITHUB_API_BASE || 'https://api.github.com').replace(/\/+$/, '');
+const UPDATE_CHECK_TTL_MS = 10 * 60 * 1000;
+// The full tracked runtime tree under browser/: client code, markup, styles, icons,
+// the vendored player lib, every profile avatar asset, this server, the manifests the
+// container installs from, and the compose/docs files that ship in the same directory.
+// A change to ANY of them must read as an update; anything unreadable reads unknown.
+const UPDATE_CHECK_FILES = [
+  'public/app.js',
+  'public/index.html',
+  'public/styles.css',
+  'public/favicon.png',
+  'public/vendor/hls.min.js',
+  ...Array.from({ length: 20 }, (_, i) => `public/avatars/avatar_${String(i + 1).padStart(2, '0')}.png`),
+  'src/server.js',
+  'package.json',
+  'package-lock.json',
+  'docker-compose.yml',
+  'README.md',
+  'THIRD_PARTY_NOTICES.md',
+];
+const updateCheckCache = { at: 0, result: null };
+function gitBlobSha(buf) {
+  return crypto.createHash('sha1').update(`blob ${buf.length}\0`).update(buf).digest('hex');
+}
+const UPDATE_CHECK_SET = new Set(UPDATE_CHECK_FILES);
+// Fixed bounded dirs that make up the runtime tree. Subdirs of public/ are served
+// and subdirs of src/ are server code, so an unknown one there means unknown coverage;
+// anything else at the repo root (e.g. the untracked runtime data/ dir) is ignored.
+const UPDATE_CHECK_DIRS = ['', 'public', 'public/vendor', 'public/avatars', 'src'];
+const UPDATE_CHECK_SUBDIRS = new Set(['public', 'public/vendor', 'public/avatars', 'src']);
+function updateCheckLocalFingerprints() {
+  const hashes = {};
+  let uncovered = false;
+  for (const dir of UPDATE_CHECK_DIRS) {
+    let entries;
+    try { entries = fs.readdirSync(path.join(__dirname, '..', dir), { withFileTypes: true }); }
+    catch { return null; }
+    for (const e of entries) {
+      const rel = dir ? dir + '/' + e.name : e.name;
+      if (e.isDirectory()) {
+        if (!UPDATE_CHECK_SUBDIRS.has(rel) && (dir === 'public' || dir === 'src')) uncovered = true;
+        continue;
+      }
+      if (!e.isFile()) continue;
+      if (!UPDATE_CHECK_SET.has(rel)) { uncovered = true; continue; }
+      try { hashes[rel] = gitBlobSha(fs.readFileSync(path.join(__dirname, '..', rel))); }
+      catch { return null; }
+    }
+  }
+  return { hashes, uncovered };
+}
+async function githubApiFetch(pathname) {
+  const res = await fetch(GITHUB_API_BASE + pathname, {
+    headers: { 'User-Agent': 'Driftfin-Update-Check', Accept: 'application/vnd.github+json' },
+    signal: AbortSignal.timeout(10000),
+  }).catch(() => null);
+  if (!res || !res.ok) return null;
+  return res.json().catch(() => null);
+}
+
 function tvmazeSessionAllowed(sessionKey) {
   const now = Date.now();
   const log = (tvmazeSessionLog.get(sessionKey) || []).filter((t) => now - t < TVMAZE_SESSION_WINDOW_MS);
@@ -462,6 +543,25 @@ function tvmazeSessionAllowed(sessionKey) {
 function tvmazeCacheSet(key, people) {
   if (tvmazeSeasonCache.size >= TVMAZE_CACHE_MAX) tvmazeSeasonCache.delete(tvmazeSeasonCache.keys().next().value);
   tvmazeSeasonCache.set(key, { ts: Date.now(), people });
+}
+function tvmazeBoundedSet(map, key, value) {
+  if (map.size >= TVMAZE_CACHE_MAX) map.delete(map.keys().next().value);
+  map.set(key, { ts: Date.now(), ...value });
+}
+function tvmazeMapPeople(credits) {
+  const people = []; const seenPeople = new Set();
+  for (const c of credits) {
+    const person = c && c.person;
+    if (!person || !(person.id > 0) || !String(person.name || '').trim() || seenPeople.has(person.id)) continue;
+    seenPeople.add(person.id);
+    people.push({
+      Name: person.name,
+      Role: (c.character && c.character.name) || '',
+      RemoteImageUrl: (person.image && person.image.medium) || '',
+      ProviderIds: { Tvmaze: String(person.id) },
+    });
+  }
+  return people;
 }
 
 async function tvmazeFetch(pathname) {
@@ -504,65 +604,98 @@ function tvmazeFingerprintMatches(jellyfinEpisodes, tvmazeEpisodes) {
   return true;
 }
 
+// Verified-season resolution, cached so the season row and the pause-time single-episode
+// lookup share one upstream pass. Returns { items, match } - the server's own season
+// episodes and the one verified TVMaze season's episode list - or null when nothing
+// verifies (unknown, ambiguous, over budget: all fail closed the same way).
+async function tvmazeResolveSeasonMatch(session, seriesId, seasonId) {
+  const matchKey = `${session.server}#${session.userId}#${seriesId}|${seasonId}`;
+  const cached = tvmazeMatchCache.get(matchKey);
+  if (cached && Date.now() - cached.ts < TVMAZE_CACHE_TTL_MS) return cached.result;
+  const result = await (async () => {
+    const deadline = Date.now() + TVMAZE_RESOLUTION_DEADLINE_MS;
+    const expired = () => Date.now() > deadline;
+    const epsRes = await jellyfinRequest(session, `Shows/${seriesId}/Episodes?userId=${encodeURIComponent(session.userId)}&seasonId=${encodeURIComponent(seasonId)}&fields=PremiereDate&limit=2000`, 'GET');
+    if (epsRes.status !== 200) return null;
+    let items = [];
+    try { items = JSON.parse(epsRes.body.toString('utf8')).Items || []; } catch { return null; }
+    if (!items.length) return null;
+    const seriesName = items[0] && items[0].SeriesName;
+    if (!seriesName) return null;
+    const hits = await tvmazeFetch('/search/shows?q=' + encodeURIComponent(seriesName));
+    if (!Array.isArray(hits)) return null;
+    const candidates = []; const seenShows = new Set();
+    for (const h of hits) {
+      const show = h && h.show;
+      if (show && show.id > 0 && !seenShows.has(show.id)) { seenShows.add(show.id); candidates.push(show); }
+      if (candidates.length >= 5) break;
+    }
+    let match = null; // the one verified candidate season's episodes
+    for (const candidate of candidates) {
+      if (expired()) return null;
+      const all = await tvmazeFetch(`/shows/${candidate.id}/episodes`);
+      if (!Array.isArray(all)) continue;
+      const bySeason = new Map();
+      for (const e of all) {
+        if (!e || typeof e.number !== 'number' || e.number < 1) continue;
+        if (!bySeason.has(e.season)) bySeason.set(e.season, []);
+        bySeason.get(e.season).push(e);
+      }
+      for (const seasonEpisodes of bySeason.values()) {
+        // Server may carry MORE items than the real season (extras); never fewer.
+        if (!seasonEpisodes.length || seasonEpisodes.length > items.length) continue;
+        if (!tvmazeFingerprintMatches(items, seasonEpisodes)) continue;
+        if (match) return null; // ambiguous: two candidate seasons both match - stay hidden
+        match = seasonEpisodes;
+      }
+    }
+    return match ? { items, match } : null;
+  })();
+  tvmazeBoundedSet(tvmazeMatchCache, matchKey, { result });
+  return result;
+}
+
 // The verified season's episode guest credits, deduped by TVMaze person id, in episode
 // order - or [] when no season can be verified. A credit with a missing or non-positive
 // person id is rejected: it must never collapse two id-less credits into one.
 async function tvmazeSeasonCast(session, seriesId, seasonId) {
   const deadline = Date.now() + TVMAZE_RESOLUTION_DEADLINE_MS;
-  const expired = () => Date.now() > deadline;
-  const epsRes = await jellyfinRequest(session, `Shows/${seriesId}/Episodes?userId=${encodeURIComponent(session.userId)}&seasonId=${encodeURIComponent(seasonId)}&fields=PremiereDate&limit=2000`, 'GET');
-  if (epsRes.status !== 200) return [];
-  let items = [];
-  try { items = JSON.parse(epsRes.body.toString('utf8')).Items || []; } catch { return []; }
-  if (!items.length) return [];
-  const seriesName = items[0] && items[0].SeriesName;
-  if (!seriesName) return [];
-  const hits = await tvmazeFetch('/search/shows?q=' + encodeURIComponent(seriesName));
-  if (!Array.isArray(hits)) return [];
-  const candidates = []; const seenShows = new Set();
-  for (const h of hits) {
-    const show = h && h.show;
-    if (show && show.id > 0 && !seenShows.has(show.id)) { seenShows.add(show.id); candidates.push(show); }
-    if (candidates.length >= 5) break;
-  }
-  let match = null; // the one verified candidate season's episodes
-  for (const candidate of candidates) {
-    if (expired()) return [];
-    const all = await tvmazeFetch(`/shows/${candidate.id}/episodes`);
-    if (!Array.isArray(all)) continue;
-    const bySeason = new Map();
-    for (const e of all) {
-      if (!e || typeof e.number !== 'number' || e.number < 1) continue;
-      if (!bySeason.has(e.season)) bySeason.set(e.season, []);
-      bySeason.get(e.season).push(e);
-    }
-    for (const seasonEpisodes of bySeason.values()) {
-      // Server may carry MORE items than the real season (extras); never fewer.
-      if (!seasonEpisodes.length || seasonEpisodes.length > items.length) continue;
-      if (!tvmazeFingerprintMatches(items, seasonEpisodes)) continue;
-      if (match) return []; // ambiguous: two candidate seasons both match - stay hidden
-      match = seasonEpisodes;
-    }
-  }
-  if (!match) return [];
-  const people = []; const seenPeople = new Set();
-  for (const ep of match.slice(0, TVMAZE_MAX_EPISODES)) {
-    if (expired()) return [];
+  const resolved = await tvmazeResolveSeasonMatch(session, seriesId, seasonId);
+  if (!resolved) return [];
+  const people = []; const seen = new Set();
+  for (const ep of resolved.match.slice(0, TVMAZE_MAX_EPISODES)) {
+    if (Date.now() > deadline) return [];
     const credits = await tvmazeFetch(`/episodes/${ep.id}/guestcast`);
     if (!Array.isArray(credits)) continue;
-    for (const c of credits) {
-      const person = c && c.person;
-      if (!person || !(person.id > 0) || !String(person.name || '').trim() || seenPeople.has(person.id)) continue;
-      seenPeople.add(person.id);
-      people.push({
-        Name: person.name,
-        Role: (c.character && c.character.name) || '',
-        RemoteImageUrl: (person.image && person.image.medium) || '',
-        ProviderIds: { Tvmaze: String(person.id) },
-      });
+    for (const p of tvmazeMapPeople(credits)) {
+      if (seen.has(p.ProviderIds.Tvmaze)) continue;
+      seen.add(p.ProviderIds.Tvmaze);
+      people.push(p);
     }
   }
   return people;
+}
+
+// TV PauseCast parity: the guest credits of ONE verified episode (pause-time cast strip).
+// The episode must match the verified season's list exactly once by number + normalized
+// title + air date - the same fingerprint fields as the season verification - or it
+// stays hidden. Never a wrong-episode or show-level list.
+async function tvmazeEpisodeGuestCast(session, episodeId) {
+  const epRes = await jellyfinRequest(session, `Items/${episodeId}?userId=${encodeURIComponent(session.userId)}`, 'GET');
+  if (epRes.status !== 200) return [];
+  let ep = null;
+  try { ep = JSON.parse(epRes.body.toString('utf8')); } catch { return []; }
+  if (!ep || ep.Type !== 'Episode' || !ep.SeriesId || !ep.SeasonId) return [];
+  const resolved = await tvmazeResolveSeasonMatch(session, ep.SeriesId, ep.SeasonId);
+  if (!resolved) return [];
+  const matches = resolved.match.filter((t) =>
+    ep.IndexNumber != null && ep.IndexNumber === t.number &&
+    tvmazeNormalizeTitle(ep.Name) === tvmazeNormalizeTitle(t.name) &&
+    tvmazeSameAirDate(ep.PremiereDate, t.airdate));
+  if (matches.length !== 1) return [];
+  const credits = await tvmazeFetch(`/episodes/${matches[0].id}/guestcast`);
+  if (!Array.isArray(credits)) return [];
+  return tvmazeMapPeople(credits);
 }
 
 function serveStatic(req, res, pathname) {
@@ -829,6 +962,74 @@ const server = http.createServer(async (req, res) => {
       tvmazeSeasonInflight.delete(cacheKey);
       tvmazeCacheSet(cacheKey, people);
       return sendJson(res, 200, { people });
+    }
+    // One episode's verified guest credits (TV PauseCast parity) for the pause-time cast
+    // strip. Same verification, same fail-closed behavior, same bounds as the season route.
+    if (pathname === '/api/tvmaze/episode-cast' && req.method === 'GET') {
+      if (!session || !sessionAllowedForTarget(session)) return sendJson(res, 401, { error: 'not_signed_in' });
+      const episodeId = String(url.searchParams.get('episodeId') || '');
+      if (!/^[A-Za-z0-9-]{1,64}$/.test(episodeId)) return sendJson(res, 400, { error: 'bad_id' });
+      const allSettings = readJsonFile(path.join(DATA_DIR, 'settings.json'), {});
+      if ({ ...DEFAULT_SETTINGS, ...(allSettings[session.userId] || {}) }.tvmazeEpisodeCast === false) return sendJson(res, 200, { people: [] });
+      const cacheKey = `${session.server}#${session.userId}#ep:${episodeId}`;
+      const hit = tvmazeEpisodeCache.get(cacheKey);
+      if (hit && Date.now() - hit.ts < TVMAZE_CACHE_TTL_MS) return sendJson(res, 200, { people: hit.people });
+      if (!tvmazeSeasonInflight.has(cacheKey)) {
+        if (tvmazeSeasonInflight.size >= TVMAZE_MAX_CONCURRENT || !tvmazeSessionAllowed(`${session.server}#${session.userId}`)) {
+          return sendJson(res, 200, { people: [] });
+        }
+        tvmazeSeasonInflight.set(cacheKey, tvmazeEpisodeGuestCast(session, episodeId).catch(() => []));
+      }
+      const people = await tvmazeSeasonInflight.get(cacheKey);
+      tvmazeSeasonInflight.delete(cacheKey);
+      tvmazeBoundedSet(tvmazeEpisodeCache, cacheKey, { people });
+      return sendJson(res, 200, { people });
+    }
+    // Read-only update check. Compares git-blob SHAs of every file that makes up the
+    // running browser app (client JS, markup, CSS, server, vendored player lib,
+    // package manifest) against the same files at the latest browser-touching commit
+    // on GitHub. Anything we cannot verify reads as "unknown", never "up to date".
+    if (pathname === '/api/update-check' && req.method === 'GET') {
+      if (!session || !sessionAllowedForTarget(session)) return sendJson(res, 401, { error: 'not_signed_in' });
+      const now = Date.now();
+      if (updateCheckCache.result && now - updateCheckCache.at < UPDATE_CHECK_TTL_MS) {
+        return sendJson(res, 200, updateCheckCache.result);
+      }
+      let result = { status: 'unknown' };
+      const local = updateCheckLocalFingerprints();
+      if (local) {
+        const commits = await githubApiFetch('/repos/' + GITHUB_REPO + '/commits?path=browser&per_page=1');
+        const commit = Array.isArray(commits) && commits[0];
+        if (commit && commit.sha && commit.html_url) {
+          const dirs = await Promise.all(['', 'public', 'public/vendor', 'public/avatars', 'src'].map((dir) =>
+            githubApiFetch(`/repos/${GITHUB_REPO}/contents/browser${dir ? '/' + dir : ''}?ref=${commit.sha}`)));
+          if (dirs.every(Array.isArray)) {
+            const remote = { files: {}, uncovered: false };
+            for (const list of dirs) {
+              for (const item of list) {
+                if (!item || !item.path) continue;
+                const rel = item.path.replace(/^browser\//, '');
+                if (item.type === 'file') {
+                  if (UPDATE_CHECK_SET.has(rel)) remote.files[rel] = item.sha;
+                  else remote.uncovered = true; // upstream file this build knows nothing about
+                } else if (item.type === 'dir' && !UPDATE_CHECK_SUBDIRS.has(rel)) {
+                  const parent = rel.includes('/') ? rel.slice(0, rel.lastIndexOf('/')) : '';
+                  if (parent === 'public' || parent === 'src') remote.uncovered = true; // new served/server subdir
+                }
+              }
+            }
+            const names = Object.keys(local.hashes);
+            if (!local.uncovered && !remote.uncovered && names.every((rel) => remote.files[rel])) {
+              result = names.some((rel) => remote.files[rel] !== local.hashes[rel])
+                ? { status: 'update-available', url: commit.html_url }
+                : { status: 'current' };
+            }
+          }
+        }
+      }
+      updateCheckCache.at = now;
+      updateCheckCache.result = result;
+      return sendJson(res, 200, result);
     }
     if (pathname.startsWith('/api/jellyfin/')) {
       if (!session || !sessionAllowedForTarget(session)) return sendJson(res, 401, { error: 'not_signed_in' });
