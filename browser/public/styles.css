@@ -156,6 +156,9 @@ form label input:not([type="checkbox"]) { display: block; width: 100%; max-width
   .actor-head { flex-direction: column; gap: 12px; }
   .actor-head img { width: 120px; }
   .actor-head .img-fallback.person { width: 120px; }
+  /* Compact filter bar: filters wrap onto two short lines; labels become captions. */
+  #view-library .filter, #mystuffFilters .filter { font-size: 11px; color: var(--muted); gap: 5px; margin: 0 8px 6px 0; }
+  #view-library .filter select, #mystuffFilters .filter select { font-size: 12px; padding: 5px 4px; color: var(--text); max-width: 130px; }
 }
 
 .section-tabs { display: flex; gap: 8px; margin: 8px 0 16px; }
