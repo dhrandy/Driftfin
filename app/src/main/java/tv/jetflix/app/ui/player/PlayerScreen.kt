@@ -189,6 +189,38 @@ fun PlayerScreen(
             .also { it.trackSelectionParameters = TrackPrefs(tv.jetflix.app.data.AppSettings.audioLanguage, tv.jetflix.app.data.AppSettings.subtitleLanguage).apply(it.trackSelectionParameters) }
     }
 
+    // Home or another app backgrounds the activity without disposing this composable, and nothing
+    // else pauses the player, so audio kept playing off-screen. ON_STOP is real background only:
+    // the actor page, track panel and dialogs keep the activity visible, and ON_PAUSE also fires
+    // for transient overlays. Pause in place and save the position; the 10s reporter keeps the
+    // place fresh while backgrounded, and the existing resume path (controls + OK) picks back up.
+    val lifecycleOwner = androidx.compose.ui.platform.LocalLifecycleOwner.current
+    val backgroundScope = rememberCoroutineScope()
+    DisposableEffect(lifecycleOwner, player) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (pausesForBackground(event)) {
+                player.pause()
+                controlsVisible = true
+                lastInteraction = System.currentTimeMillis()
+                backgroundScope.launch {
+                    try {
+                        api.reportPlaybackProgress(
+                            PlaybackProgressInfo(
+                                ItemId = item.Id,
+                                MediaSourceId = mediaSourceId,
+                                PlaySessionId = playSessionId,
+                                PositionTicks = player.currentPosition.coerceAtLeast(0L) * 10_000,
+                                IsPaused = true,
+                            ),
+                        )
+                    } catch (_: Exception) { }
+                }
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
     var playbackError by remember { mutableStateOf<String?>(null) }
     // If a direct stream fails on this TV (decoder/format error), ask the server to transcode once and resume in place.
     var transcodeRetry by remember { mutableStateOf(false) }
@@ -980,6 +1012,9 @@ internal suspend fun reportStopThenOpenNext(
 internal fun shouldAutoFinish(ended: Boolean, interactive: Boolean): Boolean = ended && interactive
 
 /** True while playback is wanted and the player is buffering or ready, so the screensaver must not start. */
+internal fun pausesForBackground(event: androidx.lifecycle.Lifecycle.Event): Boolean =
+    event == androidx.lifecycle.Lifecycle.Event.ON_STOP
+
 internal fun shouldKeepScreenOn(playWhenReady: Boolean, playbackState: Int): Boolean =
     playWhenReady && (playbackState == androidx.media3.common.Player.STATE_BUFFERING ||
         playbackState == androidx.media3.common.Player.STATE_READY)

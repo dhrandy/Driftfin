@@ -4,6 +4,11 @@ Each build lists its real changes here. The CI release workflow copies the secti
 matching the build tag onto the GitHub release page and appends the standard
 automated-build footer.
 
+## build-56
+
+Changes:
+- Player: pressing the remote's Home button while a show was playing left the sound running in the background. Leaving the app now pauses the show and saves your place, so coming back picks up right where you stopped. Pages and dialogs inside the app, like the actor page over the player, don't trigger this - only actually leaving the app does.
+
 ## build-55
 
 Changes:
