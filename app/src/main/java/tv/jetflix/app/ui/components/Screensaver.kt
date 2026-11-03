@@ -108,6 +108,9 @@ internal fun ScreensaverText(
                 TitleOrLogo(
                     title = slide.title, logoUrl = slide.logoUrl,
                     maxLogoHeight = 48.dp, maxLogoWidth = 300.dp,
+                    // Squarer logos were unreadably small under the 48dp ceiling: give them a taller
+                    // box (wide/banner logos keep the original 48dp). Requested for this screen.
+                    maxStackedLogoHeight = 84.dp,
                     textStyle = JetflixType.heroTitle.copy(fontSize = 28.sp, lineHeight = 32.sp), textColor = Color.White,
                 )
             }

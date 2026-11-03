@@ -4,6 +4,12 @@ Each build lists its real changes here. The CI release workflow copies the secti
 matching the build tag onto the GitHub release page and appends the standard
 automated-build footer.
 
+## build-55
+
+Changes:
+- Settings are now kept per profile: each Jellyfin profile signed in on the TV gets its own copy of the Settings toggles, so one person's choices no longer change another person's. Everything already set carries over exactly as it is; a profile only starts differing when you change something yourself.
+- Wallpaper: stacked or squarish title logos (like Kingdom of the Planet of the Apes) were tiny next to the description - they now get more room and read clearly. Wide banner-style logos are unchanged, and Home and Details look exactly as they did.
+
 ## build-54
 
 Changes:

@@ -174,8 +174,8 @@ object SessionManager {
     private val _session = MutableStateFlow<Session?>(null)
     val session: StateFlow<Session?> = _session
 
-    fun signIn(session: Session) { _session.value = session; Watchlist.setUser(session.serverUrl, session.userId); AppSettings.reloadAvatars() }
-    fun signOut() { _session.value = null; Watchlist.setUser(null, null); AppSettings.reloadAvatars() }
+    fun signIn(session: Session) { _session.value = session; Watchlist.setUser(session.serverUrl, session.userId); AppSettings.reloadProfileSettings() }
+    fun signOut() { _session.value = null; Watchlist.setUser(null, null); AppSettings.reloadProfileSettings() }
 
     /**
      * Adds the auth header only when the request goes to the signed-in server (same scheme, host and port).
