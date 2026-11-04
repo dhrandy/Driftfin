@@ -196,6 +196,13 @@ object PlaybackNegotiator {
         return url + (if ('?' in url) "&" else "?") + "enableAdaptiveBitrateStreaming=true"
     }
 
+    /**
+     * True when the transcode URL carries StartTimeTicks, meaning the server starts the HLS stream at
+     * the resume offset (timeline zero = resume point). Jellyfin 12+ drops it and serves the whole
+     * file's playlist instead, so the client must seek and positions are already absolute.
+     */
+    fun serverSideStart(url: String): Boolean = url.contains("StartTimeTicks", ignoreCase = true)
+
     private fun mimeFor(codec: String?): String? = when (codec?.lowercase()) {
         "srt", "subrip" -> "application/x-subrip"
         "vtt", "webvtt" -> "text/vtt"

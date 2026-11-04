@@ -341,11 +341,14 @@ fun PlayerScreen(
             }
             is tv.jetflix.app.data.PlaybackChoice.Hls -> {
                 playingDirect = false
-                streamBaseTicks = startTicks
                 mediaSourceId = choice.mediaSourceId
-                // Server-side transcode starts at StartTimeTicks already, so start at 0 here. On servers
+                // Jellyfin 12+ transcode URLs drop StartTimeTicks and serve the whole file's playlist,
+                // so the player seeks to the resume point itself and positions are already absolute.
+                // Older servers start the stream at the offset (timeline zero = resume point). On servers
                 // with adaptive HLS the URL gains lower-bitrate variants, so later dips need no restart.
-                player.setMediaItem(mediaItemFor(tv.jetflix.app.data.PlaybackNegotiator.withAdaptiveBitrate(choice.url, serverVersion), choice.subtitles), 0L)
+                val serverSeeks = tv.jetflix.app.data.PlaybackNegotiator.serverSideStart(choice.url)
+                streamBaseTicks = if (serverSeeks) startTicks else 0L
+                player.setMediaItem(mediaItemFor(tv.jetflix.app.data.PlaybackNegotiator.withAdaptiveBitrate(choice.url, serverVersion), choice.subtitles), if (serverSeeks) 0L else startTicks.ticksToMs())
             }
             is tv.jetflix.app.data.PlaybackChoice.Unplayable -> {
                 playbackError = choice.reason

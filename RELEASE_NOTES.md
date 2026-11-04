@@ -4,6 +4,11 @@ Each build lists its real changes here. The CI release workflow copies the secti
 matching the build tag onto the GitHub release page and appends the standard
 automated-build footer.
 
+## build-58
+
+Changes:
+- Fix: on newer Jellyfin servers, resuming a show on a pinned video quality could start it over from the beginning. Resume now keeps your place on every quality setting.
+
 ## build-57
 
 Changes:
