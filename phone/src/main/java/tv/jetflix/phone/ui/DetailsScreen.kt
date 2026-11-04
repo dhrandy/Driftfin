@@ -8,8 +8,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -40,6 +40,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -120,11 +121,17 @@ fun DetailsScreen(id: String, onBack: () -> Unit, onPlay: (String) -> Unit, onOp
     }
     LazyColumn(Modifier.fillMaxSize()) {
         item {
-            Box(Modifier.fillMaxWidth().aspectRatio(1.4f)) {
+            // Folding-phone cover screens are about as wide as a phone but only half as tall: cap the
+            // backdrop header by screen height so the title and buttons stay on screen there. On normal
+            // phones the width ratio still wins and nothing changes.
+            val headerMaxHeight = androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp.dp * 0.45f
+            androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxWidth()) {
+            Box(Modifier.fillMaxWidth().height(minOf(maxWidth / 1.4f, headerMaxHeight)).testTag("details-header")) {
                 Art(Graph.repo.backdropUrl(it, 1000), Modifier.matchParentSize())
                 Box(Modifier.matchParentSize().background(Brush.verticalGradient(listOf(Color(0x66000000), DriftfinColors.Background))))
                 BackIconButton(onBack, Modifier.statusBarsPadding().padding(12.dp).align(androidx.compose.ui.Alignment.TopStart))
             }
+        }
         }
         item {
             Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {

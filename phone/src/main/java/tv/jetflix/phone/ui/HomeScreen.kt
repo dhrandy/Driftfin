@@ -5,9 +5,9 @@ import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -27,6 +27,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -131,7 +132,11 @@ private fun Hero(item: BaseItemDto, count: Int = 1, trailer: tv.jetflix.phone.da
             onHorizontalDrag = { _, d -> drag += d },
         )
     } else Modifier
-    Box(Modifier.padding(horizontal = 16.dp, vertical = 12.dp).fillMaxWidth().aspectRatio(0.8f).clip(RoundedCornerShape(14.dp)).background(DriftfinColors.Surface).then(swipe)) {
+    // Folding-phone cover screens are about as wide as a phone but only half as tall: cap the hero by
+    // screen height so the title and buttons stay on screen there. On normal phones the width ratio wins.
+    val heroMaxHeight = androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp.dp * 0.62f
+    androidx.compose.foundation.layout.BoxWithConstraints(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+    Box(Modifier.fillMaxWidth().height(minOf(maxWidth / 0.8f, heroMaxHeight)).testTag("home-hero-card").clip(RoundedCornerShape(14.dp)).background(DriftfinColors.Surface).then(swipe)) {
         Art(Graph.repo.posterUrl(item, 900), Modifier.matchParentSize())
         Box(Modifier.matchParentSize().background(Brush.verticalGradient(listOf(Color.Transparent, Color(0xDD000000)), startY = 300f)))
         Column(Modifier.align(Alignment.BottomStart).padding(16.dp)) {
@@ -151,5 +156,6 @@ private fun Hero(item: BaseItemDto, count: Int = 1, trailer: tv.jetflix.phone.da
                 }
             }
         }
+    }
     }
 }

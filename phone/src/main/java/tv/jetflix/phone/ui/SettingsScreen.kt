@@ -43,7 +43,8 @@ import tv.jetflix.phone.update.Updater
 fun SettingsScreen() {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    var ui by remember { mutableStateOf<UpdateUi>(UpdateUi.Idle) }
+    // If the quiet checker already found a build, open straight on its Download button (TV parity).
+    var ui by remember { mutableStateOf<UpdateUi>(tv.jetflix.phone.update.UpdateNoticeState.available.value?.let { UpdateUi.Available(it) } ?: UpdateUi.Idle) }
     val flow = remember {
         UpdateFlow(
             updater = Updater(), installedBuild = BuildConfig.VERSION_CODE,
@@ -62,7 +63,14 @@ fun SettingsScreen() {
             onClick = {
                 scope.launch {
                     ui = UpdateUi.Checking
-                    ui = withContext(Dispatchers.IO) { flow.check() }
+                    val r = withContext(Dispatchers.IO) { flow.check() }
+                    // Keep the Settings-tab dot in step with a manual answer; a failed check changes nothing.
+                    when (r) {
+                        is UpdateUi.Available -> tv.jetflix.phone.update.UpdateNoticeState.available.value = r.info
+                        is UpdateUi.UpToDate -> tv.jetflix.phone.update.UpdateNoticeState.available.value = null
+                        else -> {}
+                    }
+                    ui = r
                 }
             },
         ) { Text("Check for updates", fontSize = 16.sp) }

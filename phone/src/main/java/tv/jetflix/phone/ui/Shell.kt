@@ -109,6 +109,8 @@ fun DriftfinShell() {
         bottomBar = { if (showBars) BottomBar(route, nav) },
     ) { inner ->
         Box(Modifier.fillMaxSize().padding(bottom = inner.calculateBottomPadding())) {
+            // Quiet startup/6-hour update check; only feeds the red dot on the Settings tab.
+            tv.jetflix.phone.update.UpdateDotCheck(tv.jetflix.phone.BuildConfig.VERSION_CODE)
             NavHost(nav, startDestination = Routes.Home) {
                 composable(Routes.Home) { HomeScreen(onOpen = { nav.navigate(Routes.details(it.Id)) }, onTrailer = { t ->
                     when (t) {
@@ -213,7 +215,7 @@ private fun BottomBar(route: String?, nav: NavHostController) {
             NavigationBarItem(
                 selected = selected,
                 onClick = { goTo(nav, tab.route) },
-                icon = { Icon(tab.icon, contentDescription = tab.label) },
+                icon = { if (tab.route == Routes.Settings) tv.jetflix.phone.update.SettingsTabIcon(tab.icon, tab.label) else Icon(tab.icon, contentDescription = tab.label) },
                 label = { Text(tab.label, fontSize = 12.sp) },
                 colors = NavigationBarItemDefaults.colors(
                     selectedIconColor = Color.Black, selectedTextColor = Color.White,
