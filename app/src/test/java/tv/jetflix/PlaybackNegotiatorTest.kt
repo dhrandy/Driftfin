@@ -118,3 +118,35 @@ class BroadPlaybackProfileTest {
         org.junit.Assert.assertFalse(s.contains("hevc"))
     }
 }
+
+
+class AutoQualityNegotiatorTest {
+    @org.junit.Test fun manualCapReplacesTheUncappedOffer() {
+        val body = tv.jetflix.app.data.PlaybackNegotiator.playbackInfoBody("u1", 0, tv.jetflix.app.data.CodecSupport(listOf("h264"), listOf("aac")), maxBitrate = 4_000_000).toString()
+        org.junit.Assert.assertTrue(body.contains("\"MaxStreamingBitrate\":4000000") && body.contains("\"MaxStaticBitrate\":4000000"))
+    }
+
+    @org.junit.Test fun defaultOfferStaysUncapped() {
+        val body = tv.jetflix.app.data.PlaybackNegotiator.playbackInfoBody("u1", 0, tv.jetflix.app.data.CodecSupport(listOf("h264"), listOf("aac"))).toString()
+        org.junit.Assert.assertTrue(body.contains("\"MaxStreamingBitrate\":100000000"))
+    }
+
+    @org.junit.Test fun adaptiveHlsOnlyOnServersThatSupportIt() {
+        org.junit.Assert.assertTrue(tv.jetflix.app.data.PlaybackNegotiator.supportsAdaptiveHls("10.9.0"))
+        org.junit.Assert.assertTrue(tv.jetflix.app.data.PlaybackNegotiator.supportsAdaptiveHls("12.4.0"))
+        org.junit.Assert.assertTrue(!tv.jetflix.app.data.PlaybackNegotiator.supportsAdaptiveHls("10.8.13"))
+        org.junit.Assert.assertTrue(!tv.jetflix.app.data.PlaybackNegotiator.supportsAdaptiveHls(null))
+        org.junit.Assert.assertTrue(!tv.jetflix.app.data.PlaybackNegotiator.supportsAdaptiveHls("unknown"))
+    }
+
+    @org.junit.Test fun adaptiveUrlGainsTheFlagOnce() {
+        val url = "http://s/videos/i1/master.m3u8?x=1"
+        val out = tv.jetflix.app.data.PlaybackNegotiator.withAdaptiveBitrate(url, "12.4.0")
+        org.junit.Assert.assertEquals("http://s/videos/i1/master.m3u8?x=1&enableAdaptiveBitrateStreaming=true", out)
+        org.junit.Assert.assertEquals(out, tv.jetflix.app.data.PlaybackNegotiator.withAdaptiveBitrate(out, "12.4.0"))
+        org.junit.Assert.assertEquals(url, tv.jetflix.app.data.PlaybackNegotiator.withAdaptiveBitrate(url, "10.8.13"))
+        org.junit.Assert.assertEquals(url, tv.jetflix.app.data.PlaybackNegotiator.withAdaptiveBitrate(url, null))
+        org.junit.Assert.assertEquals("http://s/videos/i1/master.m3u8?enableAdaptiveBitrateStreaming=true",
+            tv.jetflix.app.data.PlaybackNegotiator.withAdaptiveBitrate("http://s/videos/i1/master.m3u8", "10.10.0"))
+    }
+}

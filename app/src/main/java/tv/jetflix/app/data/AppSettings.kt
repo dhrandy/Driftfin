@@ -11,10 +11,25 @@ enum class PosterSize(val label: String, val scale: Float, val gridColumns: Int)
     fun next() = values()[(ordinal + 1) % values().size]
 }
 
+/** Playback quality cap. Auto (the default) starts uncapped and steps down on sustained buffering;
+ *  a fixed choice pins the cap for every playback and never steps. capBps null = uncapped. */
+enum class VideoQuality(val label: String, val capBps: Int?) {
+    Auto("Auto", null),
+    P1080("1080p - 10 Mbps", 10_000_000),
+    P720("720p - 4 Mbps", 4_000_000),
+    P480("480p - 2 Mbps", 2_000_000);
+    fun next() = values()[(ordinal + 1) % values().size]
+}
+
 object AppSettings {
     private val _posterSize = MutableStateFlow(PosterSize.Medium)
     val posterSize: StateFlow<PosterSize> = _posterSize
     fun setPosterSize(v: PosterSize) { _posterSize.value = v; writeStr("poster_size", v.name) }
+
+    /** Video quality cap (Auto default). A fixed pick applies the next time something plays. */
+    private val _quality = MutableStateFlow(VideoQuality.Auto)
+    val quality: StateFlow<VideoQuality> = _quality
+    fun setQuality(v: VideoQuality) { _quality.value = v; writeStr("video_quality", v.name) }
 
     /** Live blur behind the menu and Home backdrop. On by default; off falls back to the small pre-scaled copy (a measurement switch). */
     private val _liveBlur = MutableStateFlow(true)
@@ -226,6 +241,7 @@ object AppSettings {
         _buttonSound.value = tv.jetflix.app.ui.components.ButtonSound.values().firstOrNull { it.name == readStr(p, "button_sound") } ?: tv.jetflix.app.ui.components.ButtonSound.Off
         tv.jetflix.app.ui.components.ButtonSounds.style = _buttonSound.value
         _posterSize.value = PosterSize.values().firstOrNull { it.name == readStr(p, "poster_size") } ?: PosterSize.Medium
+        _quality.value = VideoQuality.values().firstOrNull { it.name == readStr(p, "video_quality") } ?: VideoQuality.Auto
     }
 
     fun setAutoplayNext(v: Boolean) { _autoplayNext.value = v; writeBool("autoplay_next", v) }

@@ -88,6 +88,7 @@ data class MediaSourceInfo(
     val Id: String? = null,
     val Container: String? = null,
     val Size: Long? = null,
+    val Bitrate: Int? = null,
     val SupportsDirectPlay: Boolean? = null,
     val SupportsDirectStream: Boolean? = null,
     val SupportsTranscoding: Boolean? = null,

@@ -17,6 +17,11 @@ const state = {
   heroItem: null, subtitleTracks: [],
   heroList: [], heroIndex: 0, heroTimer: null,
   hls: null, playMethod: 'DirectPlay', playingItemId: null,
+  // Auto quality (Android AutoQuality mirror): per-playback cap, ladder state, the stream's
+  // start offset in seconds (transcodes start their timeline at the resume point), seek
+  // suppression, startup gate, and the cached server version for the adaptive-HLS offer.
+  qualityCap: null, qualityIsAuto: true, autoQ: null, streamBaseSec: 0,
+  lastSeekAt: 0, playingStarted: false, serverVersion: undefined,
 };
 
 const $ = (id) => document.getElementById(id);
@@ -1286,6 +1291,36 @@ function browserVideoTranscodeProfiles(allowFmp4) {
   return [{ Type: 'Video', Container: 'mp4', Protocol: 'hls', VideoCodec: 'hevc', AudioCodec: 'aac,mp3', Context: 'Streaming', MaxAudioChannels: '6', BreakOnNonKeyFrames: true }, ts];
 }
 
+// ---------- Auto quality (mirrors the Android AutoQuality ladder) ----------
+// On sustained buffering the cap walks down one rung at a time and playback restarts at the
+// new cap, resuming in place; the server transcodes to fit. A manual Quality setting pins the
+// cap and never steps. The cap never steps back up during one playback.
+const AUTO_QUALITY_LADDER = [20000000, 10000000, 6000000, 4000000, 2000000, 1000000];
+function autoQReset(sourceBitrate) {
+  let nextIndex = 0;
+  // A file below a rung gains nothing from stopping there (the server serves it unchanged),
+  // so the first step lands below the file's own bitrate.
+  if (sourceBitrate > 0) while (nextIndex < AUTO_QUALITY_LADDER.length && AUTO_QUALITY_LADDER[nextIndex] >= sourceBitrate) nextIndex++;
+  state.autoQ = { nextIndex, recent: [] };
+}
+function autoQUnderrun(nowMs) {
+  const q = state.autoQ;
+  if (!q || q.nextIndex >= AUTO_QUALITY_LADDER.length) return null;
+  while (q.recent.length && nowMs - q.recent[0] > 30000) q.recent.shift();
+  q.recent.push(nowMs);
+  if (q.recent.length < 2) return null;
+  q.recent.length = 0;
+  return AUTO_QUALITY_LADDER[q.nextIndex++];
+}
+// Jellyfin 10.9+ can build a multi-variant (adaptive) HLS master playlist: the player rides
+// quality down by itself, no restart. Older (or unknown) servers stay on restart step-down.
+function supportsAdaptiveHls(version) {
+  const m = /^(\d+)\.(\d+)/.exec(String(version || '').trim());
+  if (!m) return false;
+  const major = +m[1], minor = +m[2];
+  return major > 10 || (major === 10 && minor >= 9);
+}
+
 // ---------- Player ----------
 async function goPlayer(id, opts) {
   opts = opts || {};
@@ -1294,6 +1329,14 @@ async function goPlayer(id, opts) {
   try { resumePaused = sessionStorage.getItem('driftfinResumePaused') === '1'; sessionStorage.removeItem('driftfinResumePaused'); } catch {}
   if (!(await ensureSignedIn())) return;
   stopPlayback(true); // end any previous session cleanly before starting a new one
+  if (!opts.qualityStep) {
+    const qSetting = String((state.settings && state.settings.quality) || 'auto');
+    state.qualityIsAuto = qSetting === 'auto';
+    state.qualityCap = state.qualityIsAuto ? null : (parseInt(qSetting, 10) || null);
+  } else {
+    state.qualityCap = opts.maxBitrate;
+  }
+  state.playingStarted = false;
   showView('player');
   const video = $('player');
   const note = $('playerNote');
@@ -1304,6 +1347,10 @@ async function goPlayer(id, opts) {
     const uid = state.userId;
     const item = await jf(`Items/${id}?userId=${uid}`);
     const startTicks = opts.fromStart ? 0 : (opts.preservePosition != null ? Math.round(opts.preservePosition * 10000000) : (item.UserData && item.UserData.PlaybackPositionTicks ? item.UserData.PlaybackPositionTicks : 0));
+    if (state.serverVersion === undefined) {
+      try { state.serverVersion = (await jf('System/Info/Public')).Version || null; } catch { state.serverVersion = null; }
+    }
+    const maxBitrate = state.qualityCap || 100000000;
     // PlaybackInfo body follows TV PlaybackNegotiator.playbackInfoBody, with a browser
     // DeviceProfile (h264/vp9/av1 video, aac/mp3/opus audio, HLS transcode, text subtitles only).
     const infoBody = {
@@ -1312,11 +1359,11 @@ async function goPlayer(id, opts) {
       EnableDirectPlay: true,
       EnableDirectStream: true,
       EnableTranscoding: true,
-      MaxStreamingBitrate: 100000000,
+      MaxStreamingBitrate: maxBitrate,
       DeviceProfile: {
         Name: 'Driftfin Browser',
-        MaxStreamingBitrate: 100000000,
-        MaxStaticBitrate: 100000000,
+        MaxStreamingBitrate: maxBitrate,
+        MaxStaticBitrate: maxBitrate,
         DirectPlayProfiles: browserVideoDirectPlayProfiles(),
         TranscodingProfiles: browserVideoTranscodeProfiles(!opts.noFmp4 && (desktopFmp4HevcOk() || ipadNativeFmp4Ok())),
         SubtitleProfiles: ['srt', 'subrip', 'vtt', 'webvtt', 'ass', 'ssa'].map((f) => ({ Format: f, Method: 'External' })),
@@ -1331,6 +1378,7 @@ async function goPlayer(id, opts) {
     if (!source) throw new Error('Jellyfin returned no media source for this item.');
     state.mediaSourceId = source.Id;
     state.playSessionId = info.PlaySessionId || null;
+    if (!opts.qualityStep) autoQReset(source.Bitrate);
     const audioStreams = (source.MediaStreams || []).filter((s) => s.Type === 'Audio');
     const subStreams = (source.MediaStreams || []).filter((s) => s.Type === 'Subtitle');
     const audioSel = $('audioSelect');
@@ -1364,10 +1412,12 @@ async function goPlayer(id, opts) {
     // TV PlaybackNegotiator.choose: direct play/stream first, else a transcode (HLS here).
     if (source.SupportsDirectPlay === true || source.SupportsDirectStream === true) {
       state.playMethod = 'DirectPlay';
+      state.streamBaseSec = 0;
       video.src = `/api/direct/${id}?MediaSourceId=${source.Id}${audioParam}`;
       note.textContent = 'Playing via direct stream through the server proxy.';
     } else if (source.SupportsTranscoding === true) {
       state.playMethod = 'Transcode';
+      state.streamBaseSec = startTicks / 10000000;
       // TV PlaybackNegotiator.choose: the transcode URL is the server's own TranscodingUrl. Its
       // params (VideoCodec=h264, AudioCodec=aac, ...) are what make the server transcode to a
       // browser-playable format; a bare master.m3u8 request lets Jellyfin fall back to defaults
@@ -1383,6 +1433,7 @@ async function goPlayer(id, opts) {
         }
       }
       tq.set('PlaySessionId', state.playSessionId || '');
+      if (supportsAdaptiveHls(state.serverVersion)) tq.set('enableAdaptiveBitrateStreaming', 'true');
       if (chosenAudio != null) tq.set('AudioStreamIndex', String(chosenAudio));
       const tFile = (qIdx >= 0 ? tRaw.slice(0, qIdx) : tRaw).split('/').filter(Boolean).pop() || 'master.m3u8';
       const hlsUrl = `/api/hls/${id}/${source.Id}/${tFile}?${tq.toString()}`;
@@ -1821,6 +1872,31 @@ $('settingsForm').addEventListener('submit', async (e) => {
   state.settings = await api('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
   applyPosterSize();
   $('settingsSaved').textContent = 'Saved.';
+});
+$('player').addEventListener('playing', () => { state.playingStarted = true; });
+$('player').addEventListener('seeking', () => { state.lastSeekAt = Date.now(); });
+// Buffer underrun: playback had started, we are not paused, and this is not the rebuffer right
+// after a seek. Two underruns inside 30s move one ladder rung down; playback restarts at the
+// new cap and resumes in place. A manual Quality never steps (qualityIsAuto false).
+$('player').addEventListener('waiting', () => {
+  const v = $('player');
+  if (!state.qualityIsAuto || !state.playingStarted || state.playingItemId == null) return;
+  if (v.paused || v.seeking) return;
+  if (Date.now() - (state.lastSeekAt || 0) < 3000) return;
+  const cap = autoQUnderrun(Date.now());
+  if (cap == null) return;
+  const note = $('playerNote');
+  if (note) note.textContent = 'Weak connection: lowering quality...';
+  const audioIdx = parseInt($('audioSelect').value, 10);
+  const subSel = $('subtitleSelect');
+  const stepOpts = {
+    qualityStep: true,
+    maxBitrate: cap,
+    preservePosition: (state.streamBaseSec || 0) + (v.currentTime || 0),
+    subtitleTrackIndex: subSel.value === '' ? -1 : parseInt(subSel.value, 10),
+  };
+  if (!Number.isNaN(audioIdx)) stepOpts.audioStreamIndex = audioIdx;
+  goPlayer(state.playingItemId, stepOpts).catch(() => {});
 });
 $('player').addEventListener('timeupdate', () => {
   const btn = $('skipIntroBtn');

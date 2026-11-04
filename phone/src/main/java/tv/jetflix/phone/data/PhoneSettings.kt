@@ -10,6 +10,16 @@ enum class PosterSize(val label: String, val gridColumns: Int) {
     fun next() = values()[(ordinal + 1) % values().size]
 }
 
+/** Playback quality cap. Auto (the default) starts uncapped and steps down on sustained buffering;
+ *  a fixed choice pins the cap for every playback and never steps. capBps null = uncapped. */
+enum class VideoQuality(val label: String, val capBps: Int?) {
+    Auto("Auto", null),
+    P1080("1080p - 10 Mbps", 10_000_000),
+    P720("720p - 4 Mbps", 4_000_000),
+    P480("480p - 2 Mbps", 2_000_000);
+    fun next() = values()[(ordinal + 1) % values().size]
+}
+
 /** Small on-phone options. Same defaults as the TV app. */
 object PhoneSettings {
     private var prefs: android.content.SharedPreferences? = null
@@ -57,6 +67,10 @@ object PhoneSettings {
     /** The newest build whose What's New card was dismissed. */
     val lastSeenBuild: StateFlow<Int> = _lastSeenBuild
 
+    private val _quality = MutableStateFlow(VideoQuality.Auto)
+    /** Video quality cap (Auto default). A fixed pick applies the next time something plays. */
+    val quality: StateFlow<VideoQuality> = _quality
+
     fun init(context: Context) {
         val p = context.getSharedPreferences("driftfin_phone_settings", Context.MODE_PRIVATE)
         prefs = p
@@ -71,11 +85,13 @@ object PhoneSettings {
         _titleLogos.value = p.getBoolean("title_logos", true)
         _tvmazeEpisodeCast.value = p.getBoolean("tvmaze_episode_cast", true)
         _lastSeenBuild.value = p.getInt("last_seen_build", 0)
+        _quality.value = p.getString("video_quality", null)?.let { runCatching { VideoQuality.valueOf(it) }.getOrNull() } ?: VideoQuality.Auto
     }
 
     fun setAutoplayNext(v: Boolean) { _autoplayNext.value = v; prefs?.edit()?.putBoolean("autoplay_next", v)?.apply() }
     fun setTitleLogos(v: Boolean) { _titleLogos.value = v; prefs?.edit()?.putBoolean("title_logos", v)?.apply() }
     fun setLastSeenBuild(v: Int) { _lastSeenBuild.value = v; prefs?.edit()?.putInt("last_seen_build", v)?.apply() }
+    fun setQuality(v: VideoQuality) { _quality.value = v; prefs?.edit()?.putString("video_quality", v.name)?.apply() }
     fun setPosterSize(v: PosterSize) { _posterSize.value = v; prefs?.edit()?.putString("poster_size", v.name)?.apply() }
     fun setFormatBadges(v: Boolean) { _formatBadges.value = v; prefs?.edit()?.putBoolean("format_badges", v)?.apply() }
     fun setHeroRatings(v: Boolean) { _heroRatings.value = v; prefs?.edit()?.putBoolean("hero_ratings", v)?.apply() }

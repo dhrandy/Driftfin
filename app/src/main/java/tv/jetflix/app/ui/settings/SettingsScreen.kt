@@ -128,6 +128,8 @@ fun SettingsScreen(
         onUserClick = onUserClick,
         posterSize = AppSettings.posterSize.collectAsState().value,
         onCyclePosterSize = { AppSettings.setPosterSize(AppSettings.posterSize.value.next()) },
+        quality = AppSettings.quality.collectAsState().value,
+        onCycleQuality = { AppSettings.setQuality(AppSettings.quality.value.next()) },
         continueWatchingPosters = AppSettings.continueWatchingPosters.collectAsState().value,
         onToggleContinueWatchingPosters = { AppSettings.setContinueWatchingPosters(!AppSettings.continueWatchingPosters.value) },
         pauseCast = AppSettings.pauseCast.collectAsState().value,
@@ -209,6 +211,8 @@ fun SettingsContent(
     onUserClick: () -> Unit = {},
     posterSize: tv.jetflix.app.data.PosterSize = tv.jetflix.app.data.PosterSize.Medium,
     onCyclePosterSize: () -> Unit = {},
+    quality: tv.jetflix.app.data.VideoQuality = tv.jetflix.app.data.VideoQuality.Auto,
+    onCycleQuality: () -> Unit = {},
     buttonSound: tv.jetflix.app.ui.components.ButtonSound = tv.jetflix.app.ui.components.ButtonSound.Off,
     onCycleButtonSound: () -> Unit = {},
     liveBlur: Boolean = true,
@@ -366,6 +370,7 @@ fun SettingsContent(
                             }
                             SettingsCategory.Playback -> {
                                 SettingRow("Autoplay next episode", "Starts the next episode after a 5 second countdown.", autoplay, onToggleAutoplay, firstRow())
+                                SettingRow("Video quality", "Auto drops the quality when the network struggles instead of buffering. A fixed choice applies the next time you play something.", true, onCycleQuality, nextRow(), valueText = quality.label)
                                 SettingRow("Cast while paused", "Shows the cast along the bottom when you pause. Press Down to pick an actor and OK to see their movies on your server.", pauseCast, onTogglePauseCast, nextRow())
                                 SettingRow("Episode cast from TVMaze", "Adds available guest credits from TVMaze for a verified matching episode. Coverage varies. Free, no account or key needed.", tvmazeEpisodeCast, onToggleTvmazeEpisodeCast, nextRow())
                                 // TVMaze's API terms ask for a link back, not just a name: the full URL is

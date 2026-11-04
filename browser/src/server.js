@@ -52,7 +52,7 @@ const PORT = parseInt(process.env.PORT || '8740', 10);
 const DATA_DIR = process.env.DATA_DIR || '/data';
 const PUBLIC_DIR = process.env.PUBLIC_DIR || path.join(__dirname, '..', 'public');
 const COOKIE_SECURE = String(process.env.COOKIE_SECURE || '').toLowerCase() === 'true';
-const VERSION = '0.3.6';
+const VERSION = '0.3.9';
 // Jellyfin revokes every existing token for a (user, DeviceId) pair on each new
 // login (SessionManager.GetAuthorizationToken: "Logout any existing sessions for
 // the user on this device"), so one fixed DeviceId lets any sign-in kick the
@@ -86,6 +86,8 @@ const DEFAULT_SETTINGS = {
   // TV "Episode cast from TVMaze" parity (TvmazeCast.kt): verified season guest credits, no key.
   tvmazeEpisodeCast: true,
   posterSize: 'Medium',
+  // Playback quality cap: 'auto' (default, drops on weak connections) or a bitrate in bps.
+  quality: 'auto',
   // Player track preferences (TV AppSettings.kt: English audio, subtitles off).
   audioLanguage: 'eng',
   subtitleLanguage: null,

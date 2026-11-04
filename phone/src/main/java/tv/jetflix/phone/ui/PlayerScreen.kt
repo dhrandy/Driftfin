@@ -112,6 +112,13 @@ fun PlayerScreen(id: String, onExit: () -> Unit, onPlayNext: (String) -> Unit = 
     var method by remember { mutableStateOf("DirectPlay") }
     var transcodeRetry by remember { mutableStateOf(false) }
     var attempt by remember { mutableIntStateOf(0) }
+    // Auto quality: sustained buffering walks the shared ladder down, re-negotiating at a lower cap and
+    // resuming in place. A manual Quality pins the cap (read once per playback; changes apply next play).
+    var qualityCap by remember(id) { mutableStateOf(tv.jetflix.phone.data.PhoneSettings.quality.value.capBps) }
+    val qualityIsAuto = remember(id) { tv.jetflix.phone.data.PhoneSettings.quality.value.capBps == null }
+    val autoQuality = remember(id) { tv.jetflix.phone.data.AutoQuality() }
+    var qualityResumeMs by remember(id) { mutableLongStateOf(-1L) }
+    var serverVersion by remember { mutableStateOf<String?>(null) }
     var segments by remember { mutableStateOf<List<MediaSegmentDto>>(emptyList()) }
     var positionMs by remember { mutableStateOf(0L) }
     var bufferedMs by remember { mutableStateOf(0L) }
@@ -139,30 +146,41 @@ fun PlayerScreen(id: String, onExit: () -> Unit, onPlayNext: (String) -> Unit = 
         }
     }
 
-    LaunchedEffect(id, attempt) {
+    LaunchedEffect(id, attempt, qualityCap) {
         error = null
         val loaded = Content.item(id)
         if (loaded == null || session == null) { error = "Could not load this title."; return@LaunchedEffect }
         item = loaded
-        val start = if (attempt == 0) loaded.UserData?.PlaybackPositionTicks ?: 0L else (player.currentPosition * 10_000)
+        serverVersion = tv.jetflix.phone.data.ServerInfo.version(api)
+        val start = if (qualityResumeMs >= 0L) qualityResumeMs * 10_000 else if (attempt == 0) loaded.UserData?.PlaybackPositionTicks ?: 0L else (player.currentPosition * 10_000)
+        var chosenBitrate: Int? = null
         val choice = try {
             val caps = CodecSupport.detect()
             val audioLang = tv.jetflix.phone.data.TrackPrefs.audioLanguage ?: "eng"
             val subsOff = tv.jetflix.phone.data.TrackPrefs.subtitleChoice.let { it == null || it == "off" }
-            var resp = api.getPlaybackInfo(id, session.userId, PlaybackNegotiator.playbackInfoBody(session.userId, start, caps, forceTranscode = transcodeRetry, subtitlesOff = subsOff))
+            var resp = api.getPlaybackInfo(id, session.userId, PlaybackNegotiator.playbackInfoBody(session.userId, start, caps, forceTranscode = transcodeRetry, subtitlesOff = subsOff, maxBitrate = qualityCap ?: PlaybackNegotiator.MAX_STREAMING_BITRATE))
             // A server transcode carries one audio stream: if it picked another language, ask again for the saved one.
             PlaybackNegotiator.audioRetry(resp.body(), audioLang)?.let { (srcId, index) ->
                 try {
-                    val again = api.getPlaybackInfo(id, session.userId, PlaybackNegotiator.playbackInfoBody(session.userId, start, caps, forceTranscode = transcodeRetry, audioStreamIndex = index, mediaSourceId = srcId, subtitlesOff = subsOff))
+                    val again = api.getPlaybackInfo(id, session.userId, PlaybackNegotiator.playbackInfoBody(session.userId, start, caps, forceTranscode = transcodeRetry, audioStreamIndex = index, mediaSourceId = srcId, subtitlesOff = subsOff, maxBitrate = qualityCap ?: PlaybackNegotiator.MAX_STREAMING_BITRATE))
                     if (again.isSuccessful) resp = again
                 } catch (_: Exception) { }
             }
             if (!resp.isSuccessful) PlaybackChoice.Unplayable("The server refused playback (HTTP ${resp.code()}).")
-            else { playSession = resp.body()?.PlaySessionId; PlaybackNegotiator.choose(resp.body(), session.serverUrl, id) }
+            else {
+                playSession = resp.body()?.PlaySessionId
+                chosenBitrate = resp.body()?.MediaSources?.firstOrNull {
+                    it.SupportsDirectPlay == true || it.SupportsDirectStream == true || it.SupportsTranscoding == true
+                }?.Bitrate
+                PlaybackNegotiator.choose(resp.body(), session.serverUrl, id)
+            }
         } catch (e: Exception) { PlaybackChoice.Unplayable("Could not reach the server to start playback.") }
+        // Fresh playback (not a transcode retry or a quality step): reset the ladder below the file's own bitrate.
+        if (qualityResumeMs < 0L && attempt == 0) autoQuality.start(chosenBitrate)
         val (url, subs) = when (choice) {
             is PlaybackChoice.Direct -> { sourceId = choice.mediaSourceId; method = "DirectPlay"; streamStartTicks = 0; choice.url to choice.subtitles }
-            is PlaybackChoice.Hls -> { sourceId = choice.mediaSourceId; method = "Transcode"; streamStartTicks = start; choice.url to choice.subtitles }
+            // On servers with adaptive HLS the URL gains lower-bitrate variants, so later dips need no restart.
+            is PlaybackChoice.Hls -> { sourceId = choice.mediaSourceId; method = "Transcode"; streamStartTicks = start; PlaybackNegotiator.withAdaptiveBitrate(choice.url, serverVersion) to choice.subtitles }
             is PlaybackChoice.Unplayable -> { error = choice.reason; return@LaunchedEffect }
         }
         val mediaItem = MediaItem.Builder().setUri(url)
@@ -227,12 +245,31 @@ fun PlayerScreen(id: String, onExit: () -> Unit, onPlayNext: (String) -> Unit = 
         }
     }
     DisposableEffect(player) {
+        // Buffer underrun = READY dropping to BUFFERING while playing. Startup (IDLE) and the seconds
+        // right after a seek don't count, and a manual Quality never steps. Two underruns inside the
+        // window move one rung down; the LaunchedEffect above re-negotiates and resumes in place.
+        var wasReady = false
+        var lastSeekAtMs = 0L
         val listener = object : Player.Listener {
             override fun onPlayerError(e: androidx.media3.common.PlaybackException) {
                 if (method == "DirectPlay" && !transcodeRetry) { transcodeRetry = true; attempt++ }
                 else error = "This file could not be played on the phone."
             }
-            override fun onPlaybackStateChanged(state: Int) { if (state == Player.STATE_ENDED) ended = true }
+            override fun onPlaybackStateChanged(state: Int) {
+                if (state == Player.STATE_ENDED) ended = true
+                if (state == Player.STATE_BUFFERING && wasReady && player.playWhenReady && qualityIsAuto &&
+                    System.currentTimeMillis() - lastSeekAtMs > 3_000
+                ) {
+                    autoQuality.onUnderrun(System.currentTimeMillis())?.let { cap ->
+                        qualityResumeMs = absoluteTicks(player.currentPosition, streamStartTicks) / 10_000
+                        qualityCap = cap
+                    }
+                }
+                wasReady = state == Player.STATE_READY
+            }
+            override fun onPositionDiscontinuity(oldPosition: Player.PositionInfo, newPosition: Player.PositionInfo, reason: Int) {
+                if (reason == Player.DISCONTINUITY_REASON_SEEK) lastSeekAtMs = System.currentTimeMillis()
+            }
             override fun onTracksChanged(tracks: androidx.media3.common.Tracks) { tracksVersion++ }
             override fun onIsPlayingChanged(isPlaying: Boolean) { playing = isPlaying }
         }

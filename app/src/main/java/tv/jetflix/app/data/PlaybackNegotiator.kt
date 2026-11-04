@@ -170,6 +170,32 @@ object PlaybackNegotiator {
     const val MAX_STREAMING_BITRATE = 100_000_000
     val TEXT_SUBTITLE_FORMATS = listOf("srt", "subrip", "vtt", "webvtt", "ass", "ssa")
 
+    /**
+     * Auto quality: on sustained buffering the player walks down this ladder, re-asking PlaybackInfo
+     * with each lower cap so the server transcodes the stream to fit the network. A manual Quality
+     * choice pins the cap instead and never steps. Bitrates in bps.
+     */
+    val AUTO_QUALITY_LADDER: List<Int> = listOf(20_000_000, 10_000_000, 6_000_000, 4_000_000, 2_000_000, 1_000_000)
+
+    /** True when the server can build a multi-variant (adaptive) HLS master playlist: Jellyfin 10.9 and newer. */
+    fun supportsAdaptiveHls(version: String?): Boolean {
+        val m = Regex("^(\\d+)\\.(\\d+)").find(version?.trim().orEmpty()) ?: return false
+        val major = m.groupValues[1].toIntOrNull() ?: return false
+        val minor = m.groupValues[2].toIntOrNull() ?: return false
+        return major > 10 || (major == 10 && minor >= 9)
+    }
+
+    /**
+     * Adds enableAdaptiveBitrateStreaming to an HLS master URL when the server supports it: the playlist
+     * then carries lower-bitrate variants, so the player rides the quality down without a restart.
+     * Older (or unknown) servers get the URL unchanged and stay on restart-based step-down.
+     */
+    fun withAdaptiveBitrate(url: String, serverVersion: String?): String {
+        if (!supportsAdaptiveHls(serverVersion)) return url
+        if (url.contains("enableAdaptiveBitrateStreaming", ignoreCase = true)) return url
+        return url + (if ('?' in url) "&" else "?") + "enableAdaptiveBitrateStreaming=true"
+    }
+
     private fun mimeFor(codec: String?): String? = when (codec?.lowercase()) {
         "srt", "subrip" -> "application/x-subrip"
         "vtt", "webvtt" -> "text/vtt"
@@ -203,6 +229,7 @@ object PlaybackNegotiator {
         audioStreamIndex: Int? = null,
         mediaSourceId: String? = null,
         subtitlesOff: Boolean = false,
+        maxBitrate: Int = MAX_STREAMING_BITRATE,
     ): JsonObject = buildJsonObject {
         put("UserId", userId)
         mediaSourceId?.let { put("MediaSourceId", it) }
@@ -216,8 +243,8 @@ object PlaybackNegotiator {
         if (forceTranscode) {
             put("AllowVideoStreamCopy", false)
         }
-        put("MaxStreamingBitrate", MAX_STREAMING_BITRATE)
-        put("DeviceProfile", deviceProfile(caps, forceTranscode))
+        put("MaxStreamingBitrate", maxBitrate)
+        put("DeviceProfile", deviceProfile(caps, forceTranscode, maxBitrate))
     }
 
     private fun sameLanguage(a: String?, b: String?): Boolean {
@@ -326,10 +353,10 @@ object PlaybackNegotiator {
         }
     }
 
-    fun deviceProfile(caps: CodecSupport = CodecSupport.Conservative, forceTranscode: Boolean = false): JsonObject = buildJsonObject {
+    fun deviceProfile(caps: CodecSupport = CodecSupport.Conservative, forceTranscode: Boolean = false, maxBitrate: Int = MAX_STREAMING_BITRATE): JsonObject = buildJsonObject {
         put("Name", "Driftfin Android TV")
-        put("MaxStreamingBitrate", MAX_STREAMING_BITRATE)
-        put("MaxStaticBitrate", MAX_STREAMING_BITRATE)
+        put("MaxStreamingBitrate", maxBitrate)
+        put("MaxStaticBitrate", maxBitrate)
         put("DirectPlayProfiles", buildJsonArray {
             if (!forceTranscode) add(buildJsonObject {
                 put("Type", "Video")
@@ -376,5 +403,57 @@ object PlaybackNegotiator {
             return PlaybackChoice.Hls(url, it.Id ?: itemId, externalSubtitles(it, base, directPlay = false))
         }
         return PlaybackChoice.Unplayable("This file can't be played or converted for this TV.")
+    }
+}
+
+/** Process-wide cache of the Jellyfin server version; playback looks it up once to opt into adaptive HLS. */
+object ServerInfo {
+    @Volatile private var cached: String? = null
+    suspend fun version(api: JellyfinApi): String? =
+        cached ?: try { api.getPublicSystemInfo().body()?.Version?.also { cached = it } } catch (_: Exception) { null }
+}
+
+/**
+ * Buffering-driven step-down for the Auto quality setting, shared by the TV and phone players. The player
+ * reports every buffer underrun (a stall during playback - never a seek, pause or startup); after
+ * [underrunsNeeded] underruns inside [windowMs] the cap moves one step down
+ * [PlaybackNegotiator.AUTO_QUALITY_LADDER] and the player restarts the stream at that cap, resuming in
+ * place. The cap never steps back up during one playback - the next playback starts uncapped again.
+ * Pure logic with the time passed in, so both apps test it without a player.
+ */
+class AutoQuality(
+    private val underrunsNeeded: Int = 2,
+    private val windowMs: Long = 30_000,
+) {
+    private val ladder = PlaybackNegotiator.AUTO_QUALITY_LADDER
+    private var nextIndex = 0
+    private val recent = ArrayDeque<Long>()
+
+    /** The cap in effect after the last step-down; null while uncapped. */
+    val currentCap: Int? get() = if (nextIndex == 0) null else ladder.getOrNull(nextIndex - 1)
+
+    /**
+     * Resets for a new playback. A file whose own bitrate sits below a ladder rung gains nothing from
+     * stopping there (the server would serve it unchanged), so the first step lands below [sourceBitrateBps].
+     */
+    fun start(sourceBitrateBps: Int? = null) {
+        nextIndex = 0
+        recent.clear()
+        if (sourceBitrateBps != null && sourceBitrateBps > 0) {
+            while (nextIndex < ladder.size && ladder[nextIndex] >= sourceBitrateBps) nextIndex++
+        }
+    }
+
+    /**
+     * Records an underrun at [nowMs]. Returns the new cap when it is time to step down; null while the
+     * stalls are isolated or the ladder is exhausted (the lowest cap stays in effect).
+     */
+    fun onUnderrun(nowMs: Long): Int? {
+        if (nextIndex >= ladder.size) return null
+        while (recent.isNotEmpty() && nowMs - recent.first() > windowMs) recent.removeFirst()
+        recent.addLast(nowMs)
+        if (recent.size < underrunsNeeded) return null
+        recent.clear()
+        return ladder[nextIndex++]
     }
 }

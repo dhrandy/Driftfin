@@ -110,6 +110,11 @@ fun SettingsScreen() {
             onClick = { tv.jetflix.phone.data.PhoneSettings.setPosterSize(posterSize.next()) },
             modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
         ) { Text("Poster size: ${posterSize.label}", fontSize = 16.sp) }
+        val quality by tv.jetflix.phone.data.PhoneSettings.quality.collectAsState()
+        OutlinedButton(
+            onClick = { tv.jetflix.phone.data.PhoneSettings.setQuality(quality.next()) },
+            modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
+        ) { Text("Video quality: ${quality.label}", fontSize = 16.sp) }
         val badges by tv.jetflix.phone.data.PhoneSettings.formatBadges.collectAsState()
         androidx.compose.foundation.layout.Row(Modifier.fillMaxWidth().heightIn(min = 52.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {

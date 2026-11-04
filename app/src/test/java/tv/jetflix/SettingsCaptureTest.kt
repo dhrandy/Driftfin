@@ -70,6 +70,7 @@ class SettingsCaptureTest {
         key(Key.DirectionLeft)                 // rail: Updates
         key(Key.DirectionDown)                 // Playback
         key(Key.DirectionRight)                // enter pane: Autoplay next episode
+        key(Key.DirectionDown)                 // Video quality
         key(Key.DirectionDown)                 // Cast while paused
         key(Key.DirectionDown)                 // Episode cast from TVMaze
         key(Key.DirectionDown)                 // the TVMaze credit link
