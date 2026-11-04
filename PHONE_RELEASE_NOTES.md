@@ -3,6 +3,11 @@
 The phone app has its own release line: `phone-build-N` prereleases, separate from the TV app's
 `build-N` releases. The phone's Check for updates reads these; the TV app never sees them.
 
+## phone-build-14
+
+Changes:
+- Fix: Continue on a pinned quality (480p, 720p, or 1080p) could restart an episode from the beginning on newer Jellyfin servers instead of picking up where you left off. Resume now keeps your place on every quality setting, same as Auto.
+
 ## phone-build-13
 
 Changes:

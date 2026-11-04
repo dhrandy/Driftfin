@@ -149,4 +149,12 @@ class PhoneAutoQualityNegotiatorTest {
         org.junit.Assert.assertEquals("http://s/videos/i1/master.m3u8?enableAdaptiveBitrateStreaming=true",
             tv.jetflix.phone.data.PlaybackNegotiator.withAdaptiveBitrate("http://s/videos/i1/master.m3u8", "10.10.0"))
     }
+
+    @org.junit.Test fun serverSideStartOnlyWhenUrlCarriesStartTimeTicks() {
+        // Jellyfin 12+ drops StartTimeTicks from transcode URLs (client seeks); older servers keep it.
+        org.junit.Assert.assertTrue(tv.jetflix.phone.data.PlaybackNegotiator.serverSideStart(
+            "http://s/videos/i1/master.m3u8?MediaSourceId=m1&StartTimeTicks=18000000000&PlaySessionId=p1"))
+        org.junit.Assert.assertTrue(!tv.jetflix.phone.data.PlaybackNegotiator.serverSideStart(
+            "http://s/videos/i1/master.m3u8?MediaSourceId=m1&PlaySessionId=p1"))
+    }
 }

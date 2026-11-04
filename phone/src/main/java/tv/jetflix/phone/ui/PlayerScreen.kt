@@ -177,17 +177,21 @@ fun PlayerScreen(id: String, onExit: () -> Unit, onPlayNext: (String) -> Unit = 
         } catch (e: Exception) { PlaybackChoice.Unplayable("Could not reach the server to start playback.") }
         // Fresh playback (not a transcode retry or a quality step): reset the ladder below the file's own bitrate.
         if (qualityResumeMs < 0L && attempt == 0) autoQuality.start(chosenBitrate)
+        // Jellyfin 12+ transcode URLs drop StartTimeTicks and serve the whole file's playlist, so the
+        // player seeks to the resume point itself and positions are already absolute. Older servers
+        // start the stream at the offset (timeline zero = resume point).
+        val hlsSeeksServerSide = choice is PlaybackChoice.Hls && PlaybackNegotiator.serverSideStart(choice.url)
         val (url, subs) = when (choice) {
             is PlaybackChoice.Direct -> { sourceId = choice.mediaSourceId; method = "DirectPlay"; streamStartTicks = 0; choice.url to choice.subtitles }
             // On servers with adaptive HLS the URL gains lower-bitrate variants, so later dips need no restart.
-            is PlaybackChoice.Hls -> { sourceId = choice.mediaSourceId; method = "Transcode"; streamStartTicks = start; PlaybackNegotiator.withAdaptiveBitrate(choice.url, serverVersion) to choice.subtitles }
+            is PlaybackChoice.Hls -> { sourceId = choice.mediaSourceId; method = "Transcode"; streamStartTicks = if (hlsSeeksServerSide) start else 0; PlaybackNegotiator.withAdaptiveBitrate(choice.url, serverVersion) to choice.subtitles }
             is PlaybackChoice.Unplayable -> { error = choice.reason; return@LaunchedEffect }
         }
         val mediaItem = MediaItem.Builder().setUri(url)
             .setSubtitleConfigurations(subs.map {
                 MediaItem.SubtitleConfiguration.Builder(android.net.Uri.parse(it.url)).setMimeType(it.mimeType).setLanguage(it.language).setLabel(it.label).build()
             }).apply { if (choice is PlaybackChoice.Hls) setMimeType(MimeTypes.APPLICATION_M3U8) }.build()
-        player.setMediaItem(mediaItem, if (choice is PlaybackChoice.Hls) C.TIME_UNSET else start.ticksToMs())
+        player.setMediaItem(mediaItem, if (hlsSeeksServerSide) C.TIME_UNSET else start.ticksToMs())
         player.prepare(); player.playWhenReady = true
         try { api.reportPlaybackStart(PlaybackStartInfo(ItemId = id, MediaSourceId = sourceId, PlaySessionId = playSession, PositionTicks = start, PlayMethod = method)) } catch (_: Exception) {}
     }
