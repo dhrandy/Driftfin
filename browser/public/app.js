@@ -18,8 +18,9 @@ const state = {
   heroList: [], heroIndex: 0, heroTimer: null,
   hls: null, playMethod: 'DirectPlay', playingItemId: null,
   // Auto quality (Android AutoQuality mirror): per-playback cap, ladder state, the stream's
-  // start offset in seconds (transcodes start their timeline at the resume point), seek
-  // suppression, startup gate, and the cached server version for the adaptive-HLS offer.
+  // start offset in seconds (nonzero only on Jellyfin 10.x transcodes, which start the stream
+  // at the resume point; 12+ serves the whole file and the client seeks), seek suppression,
+  // startup gate, and the cached server version for the adaptive-HLS offer.
   qualityCap: null, qualityIsAuto: true, autoQ: null, streamBaseSec: 0,
   lastSeekAt: 0, playingStarted: false, serverVersion: undefined,
 };
@@ -1321,6 +1322,15 @@ function supportsAdaptiveHls(version) {
   return major > 10 || (major === 10 && minor >= 9);
 }
 
+// Jellyfin 10.x transcode URLs carry StartTimeTicks: the stream itself starts at the resume
+// point, so stream time 0 is the resume position and an offset must be added for absolute
+// positions. Jellyfin 12+ drops it and serves the whole file from segment 0: the client seeks to
+// the resume point itself and video positions are already absolute. Key off the URL, not the
+// version string (TV/phone PlaybackNegotiator.serverSideStart parity).
+function transcodeServerSideStart(transcodingUrl) {
+  return /[?&]StartTimeTicks=/i.test(String(transcodingUrl || ''));
+}
+
 // ---------- Player ----------
 async function goPlayer(id, opts) {
   opts = opts || {};
@@ -1347,6 +1357,7 @@ async function goPlayer(id, opts) {
     const uid = state.userId;
     const item = await jf(`Items/${id}?userId=${uid}`);
     const startTicks = opts.fromStart ? 0 : (opts.preservePosition != null ? Math.round(opts.preservePosition * 10000000) : (item.UserData && item.UserData.PlaybackPositionTicks ? item.UserData.PlaybackPositionTicks : 0));
+    let transcodeSeeksServerSide = false; // 10.x only: the transcode stream starts at startTicks
     if (state.serverVersion === undefined) {
       try { state.serverVersion = (await jf('System/Info/Public')).Version || null; } catch { state.serverVersion = null; }
     }
@@ -1417,7 +1428,6 @@ async function goPlayer(id, opts) {
       note.textContent = 'Playing via direct stream through the server proxy.';
     } else if (source.SupportsTranscoding === true) {
       state.playMethod = 'Transcode';
-      state.streamBaseSec = startTicks / 10000000;
       // TV PlaybackNegotiator.choose: the transcode URL is the server's own TranscodingUrl. Its
       // params (VideoCodec=h264, AudioCodec=aac, ...) are what make the server transcode to a
       // browser-playable format; a bare master.m3u8 request lets Jellyfin fall back to defaults
@@ -1425,6 +1435,11 @@ async function goPlayer(id, opts) {
       // Credentials are stripped - the token stays server-side in the proxy.
       const tq = new URLSearchParams();
       const tRaw = String(source.TranscodingUrl || '');
+      // 10.x: stream starts at the resume point, keep the base offset and do not seek.
+      // 12+: full-file playlist, streamBaseSec is 0 and the client seeks - otherwise every Auto
+      // quality step-down re-adds the offset and the position lurches forward (double-count).
+      transcodeSeeksServerSide = transcodeServerSideStart(tRaw);
+      state.streamBaseSec = transcodeSeeksServerSide ? startTicks / 10000000 : 0;
       const qIdx = tRaw.indexOf('?');
       if (qIdx >= 0) {
         for (const [k, v] of new URLSearchParams(tRaw.slice(qIdx + 1))) {
@@ -1479,7 +1494,7 @@ async function goPlayer(id, opts) {
     }
     if (subSel.value !== '') startSubWatch();
     video.playbackRate = parseFloat($('speedSelect').value || '1');
-    if (startTicks > 0) {
+    if (startTicks > 0 && !transcodeSeeksServerSide) {
       video.addEventListener('loadedmetadata', function once() {
         video.removeEventListener('loadedmetadata', once);
         video.currentTime = startTicks / 10000000;
