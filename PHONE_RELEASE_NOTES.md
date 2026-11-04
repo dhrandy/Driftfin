@@ -3,6 +3,11 @@
 The phone app has its own release line: `phone-build-N` prereleases, separate from the TV app's
 `build-N` releases. The phone's Check for updates reads these; the TV app never sees them.
 
+## phone-build-12
+
+Changes:
+- Fix: finishing an episode no longer sends a second, late "stopped playing" report after the watched check. That stray report could make the server drop the watched check and bring back a halfway resume point - one more way a finished episode lost its place.
+
 ## phone-build-11
 
 Changes:
