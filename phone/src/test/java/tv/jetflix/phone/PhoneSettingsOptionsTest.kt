@@ -4,6 +4,7 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -72,15 +73,21 @@ class PhoneSettingsOptionsTest {
         rule.waitForIdle()
         rule.onNodeWithText("Check for updates").assertIsDisplayed() // still first
         rule.onNodeWithText("Poster size: Medium").assertIsDisplayed()
+        rule.onNodeWithText("Video quality: Auto").assertIsDisplayed()
         rule.onNodeWithText("Format badges").assertIsDisplayed()
         rule.onNodeWithText("Hero ratings").assertIsDisplayed()
         rule.onNodeWithText("Exclude animated movies from Home banner").assertIsDisplayed()
-        rule.onNodeWithText("Next Up row").assertIsDisplayed()
-        rule.onNodeWithText("Favorites row").assertIsDisplayed()
-        rule.onNodeWithText("Poster size: Medium").performClick()
+        // The Video quality row pushed these below the fold: scroll them into view before asserting.
+        rule.onNodeWithText("Next Up row").performScrollTo().assertIsDisplayed()
+        rule.onNodeWithText("Favorites row").performScrollTo().assertIsDisplayed()
+        rule.onNodeWithText("Poster size: Medium").performScrollTo().performClick()
         rule.waitForIdle()
         assertEquals(PosterSize.Large, PhoneSettings.posterSize.value)
         rule.onNodeWithText("Poster size: Large").assertIsDisplayed()
+        rule.onNodeWithText("Video quality: Auto").performScrollTo().performClick()
+        rule.waitForIdle()
+        assertEquals(tv.jetflix.phone.data.VideoQuality.P1080, PhoneSettings.quality.value)
+        rule.onNodeWithText("Video quality: 1080p - 10 Mbps").assertIsDisplayed()
 
         // Pixel evidence: draw the full settings hierarchy to a bitmap.
         val decor = rule.activity.window.decorView
