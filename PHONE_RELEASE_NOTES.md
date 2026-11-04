@@ -3,6 +3,13 @@
 The phone app has its own release line: `phone-build-N` prereleases, separate from the TV app's
 `build-N` releases. The phone's Check for updates reads these; the TV app never sees them.
 
+## phone-build-11
+
+Changes:
+- Foldable cover screen: on the Razr+ outer display the hero and the details header now fit the small screen instead of overflowing it.
+- Updates: Settings shows a red dot when a new phone build is available, and you can check for an update right from Settings.
+- Fix: resuming a show that plays through the server's transcode no longer loses your place. Your position is now saved against the real point in the episode, so picking it back up starts where you stopped.
+
 ## phone-build-10
 
 Changes:
