@@ -4,6 +4,11 @@ Each build lists its real changes here. The CI release workflow copies the secti
 matching the build tag onto the GitHub release page and appends the standard
 automated-build footer.
 
+## build-59
+
+Changes:
+- Fix: pressing the search key on the on-screen keyboard in Search now closes the keyboard. It used to stay on screen until you pressed Back.
+
 ## build-58
 
 Changes:

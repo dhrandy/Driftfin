@@ -26,6 +26,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
@@ -214,6 +215,7 @@ fun SearchContent(
     // Captured at composition: arriving by a tab sweep keeps focus on the tab until Down or OK (NavSweep is
     // cleared by the handoff, so reading it live here races and either steals focus or defers it forever).
     val openedBySweep = remember { tv.jetflix.app.ui.components.NavSweep.active }
+    val keyboard = LocalSoftwareKeyboardController.current
     androidx.compose.runtime.LaunchedEffect(Unit) { if (!openedBySweep) runCatching { fieldFocus.requestFocus() } }
 
     Box(Modifier.fillMaxSize().background(JetflixColors.Background)) {
@@ -225,7 +227,13 @@ fun SearchContent(
                 textStyle = JetflixType.body.copy(color = JetflixColors.TextPrimary),
                 cursorBrush = SolidColor(JetflixColors.Red),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                keyboardActions = KeyboardActions(onSearch = { onSearchNow() }),
+                // Submitting must also dismiss the keyboard: ImeAction.Search only runs this
+                // callback, the IME stays up on its own (the user, build 58: the search ran but the
+                // keyboard only went away with Back).
+                keyboardActions = KeyboardActions(onSearch = {
+                    onSearchNow()
+                    keyboard?.hide()
+                }),
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 48.dp)
