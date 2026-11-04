@@ -4,6 +4,11 @@ Each build lists its real changes here. The CI release workflow copies the secti
 matching the build tag onto the GitHub release page and appends the standard
 automated-build footer.
 
+## build-57
+
+Changes:
+- New Video quality setting in Settings > Playback: Auto drops the quality when the network struggles instead of buffering, and picks back up where the show was. Fixed choices (1080p, 720p, 480p) cap every playback and apply the next time you play something.
+
 ## build-56
 
 Changes:

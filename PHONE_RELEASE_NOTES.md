@@ -3,6 +3,11 @@
 The phone app has its own release line: `phone-build-N` prereleases, separate from the TV app's
 `build-N` releases. The phone's Check for updates reads these; the TV app never sees them.
 
+## phone-build-13
+
+Changes:
+- New Video quality setting: Auto now drops the quality on weak connections instead of buffering forever - on campground wifi a show keeps playing at a lower bitrate and picks up right where it was. You can also pin 1080p, 720p, or 480p yourself.
+
 ## phone-build-12
 
 Changes:
