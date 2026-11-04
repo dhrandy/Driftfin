@@ -37,6 +37,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -104,6 +105,9 @@ fun PlayerScreen(id: String, onExit: () -> Unit, onPlayNext: (String) -> Unit = 
     var item by remember { mutableStateOf<BaseItemDto?>(null) }
     var sourceId by remember { mutableStateOf<String?>(null) }
     var playSession by remember { mutableStateOf<String?>(null) }
+    // Base of the playing stream in content ticks: the resume offset for an HLS transcode (its
+    // timeline starts at zero there), 0 for direct play. Added to every reported position.
+    var streamStartTicks by remember { mutableLongStateOf(0L) }
     var method by remember { mutableStateOf("DirectPlay") }
     var transcodeRetry by remember { mutableStateOf(false) }
     var attempt by remember { mutableIntStateOf(0) }
@@ -156,8 +160,8 @@ fun PlayerScreen(id: String, onExit: () -> Unit, onPlayNext: (String) -> Unit = 
             else { playSession = resp.body()?.PlaySessionId; PlaybackNegotiator.choose(resp.body(), session.serverUrl, id) }
         } catch (e: Exception) { PlaybackChoice.Unplayable("Could not reach the server to start playback.") }
         val (url, subs) = when (choice) {
-            is PlaybackChoice.Direct -> { sourceId = choice.mediaSourceId; method = "DirectPlay"; choice.url to choice.subtitles }
-            is PlaybackChoice.Hls -> { sourceId = choice.mediaSourceId; method = "Transcode"; choice.url to choice.subtitles }
+            is PlaybackChoice.Direct -> { sourceId = choice.mediaSourceId; method = "DirectPlay"; streamStartTicks = 0; choice.url to choice.subtitles }
+            is PlaybackChoice.Hls -> { sourceId = choice.mediaSourceId; method = "Transcode"; streamStartTicks = start; choice.url to choice.subtitles }
             is PlaybackChoice.Unplayable -> { error = choice.reason; return@LaunchedEffect }
         }
         val mediaItem = MediaItem.Builder().setUri(url)
@@ -178,7 +182,7 @@ fun PlayerScreen(id: String, onExit: () -> Unit, onPlayNext: (String) -> Unit = 
         val cur = item
         if (cur == null || session == null) { leave(); return@LaunchedEffect }
         val userId = session.userId
-        val positionTicks = player.currentPosition.coerceAtLeast(0L) * 10_000
+        val positionTicks = absoluteTicks(player.currentPosition, streamStartTicks)
         val seriesId = cur.SeriesId
         if (!cur.isEpisode || seriesId == null) {
             reportFinishThenNavigate(api, cur, userId, sourceId, playSession, positionTicks) { leave() }
@@ -216,7 +220,7 @@ fun PlayerScreen(id: String, onExit: () -> Unit, onPlayNext: (String) -> Unit = 
                 sinceReport = 0
                 try {
                     api.reportPlaybackProgress(PlaybackProgressInfo(ItemId = id, MediaSourceId = sourceId, PlaySessionId = playSession,
-                        PositionTicks = player.currentPosition * 10_000, IsPaused = !player.isPlaying, PlayMethod = method))
+                        PositionTicks = absoluteTicks(player.currentPosition, streamStartTicks), IsPaused = !player.isPlaying, PlayMethod = method))
                 } catch (_: Exception) {}
             }
         }
@@ -241,7 +245,7 @@ fun PlayerScreen(id: String, onExit: () -> Unit, onPlayNext: (String) -> Unit = 
         tv.jetflix.phone.PlayerWindowTokens.window.set(windowToken)
         activity?.window?.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         onDispose {
-            val pos = player.currentPosition * 10_000
+            val pos = absoluteTicks(player.currentPosition, streamStartTicks)
             // The player is about to be released, so the stop report runs on a short-lived thread.
             Thread { try { kotlinx.coroutines.runBlocking { api.reportPlaybackStopped(PlaybackStopInfo(ItemId = id, MediaSourceId = sourceId, PlaySessionId = playSession, PositionTicks = pos)) } } catch (_: Exception) {} }.start()
             if (tv.jetflix.phone.PlayerWindowTokens.window.compareAndSet(windowToken, null)) {

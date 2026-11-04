@@ -13,6 +13,7 @@ import org.junit.Test
 import tv.jetflix.phone.data.BaseItemDto
 import tv.jetflix.phone.data.JellyfinRepository
 import tv.jetflix.phone.ui.UpNextLookup
+import tv.jetflix.phone.ui.absoluteTicks
 import tv.jetflix.phone.ui.apiMarkPlayed
 import tv.jetflix.phone.ui.earnsWatchedAtEnd
 import tv.jetflix.phone.ui.lookupUpNext
@@ -35,6 +36,18 @@ class PhoneFinishTest {
     }
 
     @After fun tearDown() { runCatching { server.shutdown() } }
+
+    /** Resumed HLS transcodes count their stream from zero at the resume offset, so every reported
+     *  position needs the base added back; direct play is absolute already (offset 0). */
+    @Test fun reportedPositionsCarryTheStreamBase() {
+        // Direct play: offset 0, position unchanged.
+        assertEquals(1_200_000L * 10_000, absoluteTicks(1_200_000L, 0))
+        // HLS resumed at 20:00: 5 stream-minutes in must report 25:00, not 0:05.
+        val resumeTicks = 20 * 60 * 10_000_000L
+        assertEquals(resumeTicks + 5 * 60 * 10_000_000L, absoluteTicks(5 * 60 * 1_000L, resumeTicks))
+        // A negative player reading clamps to the base, never below it.
+        assertEquals(resumeTicks, absoluteTicks(-1, resumeTicks))
+    }
 
     @Test fun onlyMoviesAndEpisodesEarnTheMark() {
         assertTrue(earnsWatchedAtEnd(BaseItemDto(Id = "m", Type = "Movie")))

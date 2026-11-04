@@ -25,6 +25,16 @@ internal suspend fun lookupUpNext(api: JellyfinApi, seriesId: String, userId: St
 /** Only movies and episodes earn the watched check at their natural end. */
 internal fun earnsWatchedAtEnd(item: BaseItemDto): Boolean = item.isMovie || item.isEpisode
 
+/**
+ * Absolute content position for a server report. A resumed HLS transcode starts encoding at the
+ * resume offset and ExoPlayer counts that stream from zero, so its position is relative to the
+ * offset; direct play seeks inside the real timeline and is already absolute (offset 0). Without
+ * the base, every progress/stop report collapses toward the episode start and Jellyfin saves that
+ * as the resume point.
+ */
+internal fun absoluteTicks(streamPositionMs: Long, streamStartTicks: Long): Long =
+    streamPositionMs.coerceAtLeast(0L) * 10_000 + streamStartTicks
+
 /** Longest a natural end waits on one server write before giving up and moving on - a hung
  *  connection must never strand the viewer on the end screen. */
 internal const val FINISH_WRITE_TIMEOUT_MS = 5_000L
