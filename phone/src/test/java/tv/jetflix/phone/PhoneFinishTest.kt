@@ -14,7 +14,8 @@ import tv.jetflix.phone.data.BaseItemDto
 import tv.jetflix.phone.data.JellyfinRepository
 import tv.jetflix.phone.ui.UpNextLookup
 import tv.jetflix.phone.ui.absoluteTicks
-import tv.jetflix.phone.ui.apiMarkPlayed
+import tv.jetflix.phone.ui.StopReportOnce
+import tv.jetflix.phone.ui.reportStopAndMarkPlayed
 import tv.jetflix.phone.ui.earnsWatchedAtEnd
 import tv.jetflix.phone.ui.lookupUpNext
 import tv.jetflix.phone.ui.reportFinishThenNavigate
@@ -95,20 +96,49 @@ class PhoneFinishTest {
         assertEquals(listOf("POST /Sessions/Playing/Stopped", "POST /UserPlayedItems/e1"), seen)
     }
 
-    @Test fun countdownMarkPostsPlayed() {
-        serve("""{}""")
-        apiMarkPlayed(api, BaseItemDto(Id = "e9", Type = "Episode"), "u1")
-        val deadline = System.currentTimeMillis() + 10_000
-        while (System.currentTimeMillis() < deadline && seen.none { it.contains("UserPlayedItems/e9") }) Thread.sleep(50)
-        Thread.sleep(500)
-        assertEquals(1, seen.count { it == "POST /UserPlayedItems/e9" })
+    /** The dispose-time stop report claims the guard first; a finish path that already reported
+     *  arms it, so no second stop can land after the watched mark and clear it. */
+    @Test fun stopReportGuardAllowsExactlyOneSend() {
+        val once = StopReportOnce()
+        assertTrue(once.claim())
+        assertFalse(once.claim())
+        assertFalse(once.claim())
     }
 
-    @Test fun countdownMarkSkipsNonWatchableTypes() {
+    @Test fun finishArmsTheGuardSoDisposeSkips() = runBlocking {
         serve("""{}""")
-        apiMarkPlayed(api, BaseItemDto(Id = "s1", Type = "Series"), "u1")
-        Thread.sleep(1500)
-        assertTrue(seen.isEmpty())
+        val once = StopReportOnce()
+        var navigated = false
+        reportFinishThenNavigate(api, BaseItemDto(Id = "m1", Type = "Movie"), "u1", "src", "sess", 1234L, once) { navigated = true }
+        assertTrue(navigated)
+        assertFalse("dispose would send a second stop report", once.claim())
+        assertEquals(1, seen.count { it == "POST /Sessions/Playing/Stopped" })
+    }
+
+    @Test fun openNextArmsTheGuardSoDisposeSkips() = runBlocking {
+        serve("""{}""")
+        val once = StopReportOnce()
+        reportStopThenOpenNext(api, BaseItemDto(Id = "e1", Type = "Episode"), "u1", null, null, 99L, once) { }
+        assertFalse(once.claim())
+        assertEquals(1, seen.count { it == "POST /Sessions/Playing/Stopped" })
+    }
+
+    /** The autoplay countdown and the up-next error path mark watched through the same ordered
+     *  stop-then-mark write as every other finish path, with the guard armed. */
+    @Test fun autoplayFinishStopsThenMarksAndArmsTheGuard() = runBlocking {
+        serve("""{}""")
+        val once = StopReportOnce()
+        reportStopAndMarkPlayed(api, BaseItemDto(Id = "e9", Type = "Episode"), "u1", "src", "sess", 42L, once)
+        assertEquals(listOf("POST /Sessions/Playing/Stopped", "POST /UserPlayedItems/e9"), seen)
+        assertFalse(once.claim())
+    }
+
+    @Test fun autoplayFinishSkipsTheMarkForNonWatchableTypes() = runBlocking {
+        serve("""{}""")
+        val once = StopReportOnce()
+        reportStopAndMarkPlayed(api, BaseItemDto(Id = "s1", Type = "Series"), "u1", null, null, 0L, once)
+        assertEquals(listOf("POST /Sessions/Playing/Stopped"), seen)
+        assertFalse(once.claim())
     }
 
     @Test fun lookupCrossesSeasonBoundaryInServerOrder() = runBlocking {

@@ -108,6 +108,7 @@ fun PlayerScreen(id: String, onExit: () -> Unit, onPlayNext: (String) -> Unit = 
     // Base of the playing stream in content ticks: the resume offset for an HLS transcode (its
     // timeline starts at zero there), 0 for direct play. Added to every reported position.
     var streamStartTicks by remember { mutableLongStateOf(0L) }
+    val stopOnce = remember { StopReportOnce() }
     var method by remember { mutableStateOf("DirectPlay") }
     var transcodeRetry by remember { mutableStateOf(false) }
     var attempt by remember { mutableIntStateOf(0) }
@@ -185,22 +186,22 @@ fun PlayerScreen(id: String, onExit: () -> Unit, onPlayNext: (String) -> Unit = 
         val positionTicks = absoluteTicks(player.currentPosition, streamStartTicks)
         val seriesId = cur.SeriesId
         if (!cur.isEpisode || seriesId == null) {
-            reportFinishThenNavigate(api, cur, userId, sourceId, playSession, positionTicks) { leave() }
+            reportFinishThenNavigate(api, cur, userId, sourceId, playSession, positionTicks, stopOnce) { leave() }
             return@LaunchedEffect
         }
         val outcome = lookupUpNext(api, seriesId, userId, cur.Id)
         if (!tv.jetflix.phone.data.PhoneSettings.autoplayNext.value) {
             when (outcome) {
-                is UpNextLookup.Found -> reportStopThenOpenNext(api, cur, userId, sourceId, playSession, positionTicks) { onOpenNext(outcome.next.Id) }
-                else -> reportFinishThenNavigate(api, cur, userId, sourceId, playSession, positionTicks) { leave() }
+                is UpNextLookup.Found -> reportStopThenOpenNext(api, cur, userId, sourceId, playSession, positionTicks, stopOnce) { onOpenNext(outcome.next.Id) }
+                else -> reportFinishThenNavigate(api, cur, userId, sourceId, playSession, positionTicks, stopOnce) { leave() }
             }
             return@LaunchedEffect
         }
         when (outcome) {
-            is UpNextLookup.None -> reportFinishThenNavigate(api, cur, userId, sourceId, playSession, positionTicks) { leave() }
-            is UpNextLookup.Failed -> { apiMarkPlayed(api, cur, userId); error = "Finished. Couldn't load the next episode." }
+            is UpNextLookup.None -> reportFinishThenNavigate(api, cur, userId, sourceId, playSession, positionTicks, stopOnce) { leave() }
+            is UpNextLookup.Failed -> { reportStopAndMarkPlayed(api, cur, userId, sourceId, playSession, positionTicks, stopOnce); error = "Finished. Couldn't load the next episode." }
             is UpNextLookup.Found -> {
-                apiMarkPlayed(api, cur, userId)
+                reportStopAndMarkPlayed(api, cur, userId, sourceId, playSession, positionTicks, stopOnce)
                 upNext = outcome.next; countdown = 5
                 while (countdown > 0) { delay(1000); countdown-- }
                 onPlayNext(outcome.next.Id)
@@ -247,7 +248,11 @@ fun PlayerScreen(id: String, onExit: () -> Unit, onPlayNext: (String) -> Unit = 
         onDispose {
             val pos = absoluteTicks(player.currentPosition, streamStartTicks)
             // The player is about to be released, so the stop report runs on a short-lived thread.
-            Thread { try { kotlinx.coroutines.runBlocking { api.reportPlaybackStopped(PlaybackStopInfo(ItemId = id, MediaSourceId = sourceId, PlaySessionId = playSession, PositionTicks = pos)) } } catch (_: Exception) {} }.start()
+            // Skipped when a finish path already reported: a second stop landing after the watched
+            // mark can make the server clear the mark and resurrect a resume point.
+            if (stopOnce.claim()) {
+                Thread { try { kotlinx.coroutines.runBlocking { api.reportPlaybackStopped(PlaybackStopInfo(ItemId = id, MediaSourceId = sourceId, PlaySessionId = playSession, PositionTicks = pos)) } } catch (_: Exception) {} }.start()
+            }
             if (tv.jetflix.phone.PlayerWindowTokens.window.compareAndSet(windowToken, null)) {
                 activity?.window?.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
                 controller?.show(WindowInsetsCompat.Type.systemBars())

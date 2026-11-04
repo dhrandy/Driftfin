@@ -22,6 +22,18 @@ internal suspend fun lookupUpNext(api: JellyfinApi, seriesId: String, userId: St
     return if (next != null) UpNextLookup.Found(next) else UpNextLookup.None
 }
 
+/** Once-only guard for a play session's final stop report. The natural-finish paths send their own
+ *  awaited stop + watched mark and then arm this, so the fire-and-forget dispose report skips:
+ *  a second stop landing after the watched mark can make the server clear the mark and resurrect a
+ *  resume point. The tradeoff is deliberate: when the finish path's stop failed, the dispose report
+ *  no longer retries it, because that retry is exactly what can arrive after the mark. */
+internal class StopReportOnce {
+    private val sent = java.util.concurrent.atomic.AtomicBoolean(false)
+
+    /** True for the one caller that may send the stop report; false for everyone after. */
+    fun claim(): Boolean = !sent.getAndSet(true)
+}
+
 /** Only movies and episodes earn the watched check at their natural end. */
 internal fun earnsWatchedAtEnd(item: BaseItemDto): Boolean = item.isMovie || item.isEpisode
 
@@ -48,7 +60,9 @@ internal suspend fun reportStopAndMarkPlayed(
     mediaSourceId: String?,
     playSessionId: String?,
     positionTicks: Long,
+    once: StopReportOnce? = null,
 ) {
+    once?.claim()
     try {
         kotlinx.coroutines.withTimeoutOrNull(FINISH_WRITE_TIMEOUT_MS) {
             api.reportPlaybackStopped(
@@ -81,21 +95,11 @@ internal suspend fun reportFinishThenNavigate(
     mediaSourceId: String?,
     playSessionId: String?,
     positionTicks: Long,
+    once: StopReportOnce? = null,
     navigate: () -> Unit,
 ) {
-    reportStopAndMarkPlayed(api, item, userId, mediaSourceId, playSessionId, positionTicks)
+    reportStopAndMarkPlayed(api, item, userId, mediaSourceId, playSessionId, positionTicks, once)
     navigate()
-}
-
-/** Watched mark for the finish paths that keep playing (the autoplay countdown) or surface an error:
- *  fire-and-forget on a daemon thread, like the dispose stop report. */
-internal fun apiMarkPlayed(api: JellyfinApi, item: BaseItemDto, userId: String) {
-    if (!earnsWatchedAtEnd(item)) return
-    Thread {
-        try {
-            kotlinx.coroutines.runBlocking { api.markPlayed(item.Id, userId) }
-        } catch (_: Exception) { }
-    }.start()
 }
 
 /** Autoplay-off completion path: report stopped and mark watched, WAITing for the server before opening
@@ -108,8 +112,9 @@ internal suspend fun reportStopThenOpenNext(
     mediaSourceId: String?,
     playSessionId: String?,
     positionTicks: Long,
+    once: StopReportOnce? = null,
     onOpenNext: () -> Unit,
 ) {
-    reportStopAndMarkPlayed(api, item, userId, mediaSourceId, playSessionId, positionTicks)
+    reportStopAndMarkPlayed(api, item, userId, mediaSourceId, playSessionId, positionTicks, once)
     onOpenNext()
 }
