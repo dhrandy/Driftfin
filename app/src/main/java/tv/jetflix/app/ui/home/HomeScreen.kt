@@ -726,6 +726,14 @@ fun HomeContent(
             onUserClick = onUserClick,
             modifier = Modifier.align(Alignment.TopCenter),
             downFocus = if (state.hero != null) heroPlayFocus else if (state.sections.isNotEmpty()) firstRowFocus else null,
+            // Down's target can be scrolled out of composition: coming back to Home restores the old
+            // scroll spot (Back-to-Home, or a page like Search that sat on top), and a playback return
+            // jumps straight to the remembered row. The request would die silently; scroll back and land.
+            onDownFallback = {
+                tv.jetflix.app.ui.components.NavSweep.active = false
+                tv.jetflix.app.ui.components.NavSweep.tab = null
+                scope.launch { listState.scrollToItem(0); focusHero() }
+            },
             selectedFocus = navFocus,
             solid = navSolid,
             onNavFocusChange = { navHasFocus = it },

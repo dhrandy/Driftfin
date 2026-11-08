@@ -27,6 +27,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.layout.height
@@ -74,6 +77,9 @@ fun TopNavBar(
     onUserClick: () -> Unit,
     modifier: Modifier = Modifier,
     downFocus: androidx.compose.ui.focus.FocusRequester? = null,
+    /** Down (or OK on the selected tab) when downFocus is scrolled out of composition: the request would
+     *  silently go nowhere and trap focus on the bar, so the page scrolls back to it and refocuses. */
+    onDownFallback: (() -> Unit)? = null,
     selectedFocus: androidx.compose.ui.focus.FocusRequester? = null,
     /** Opaque bar for when content scrolls underneath, so tab labels never sit on top of posters. */
     solid: Boolean = false,
@@ -106,7 +112,11 @@ fun TopNavBar(
     }
     val openTab: (JetflixTab) -> Unit = { tab -> activate(tab, true) }
     // OK on the tab you are already on enters the page content (same target as Down); OK on another tab opens it.
-    val enterContent: () -> Unit = { NavSweep.active = false; NavSweep.tab = null; try { downFocus?.requestFocus() } catch (_: Exception) { } }
+    val enterContent: () -> Unit = {
+        NavSweep.active = false; NavSweep.tab = null
+        val reached = try { downFocus?.requestFocus(); true } catch (_: Exception) { false }
+        if (!reached) onDownFallback?.invoke()
+    }
     androidx.compose.runtime.LaunchedEffect(Unit) {
         // Arrived by moving across the tabs: the new page's selected tab takes focus so the sweep can continue.
         // Only the page the sweep was heading to takes it, and only once - a stale sweep must not steal focus.
@@ -127,7 +137,24 @@ fun TopNavBar(
                 onNavFocusChange(it.hasFocus)
                 barHasFocus = it.hasFocus
             }
-            .then(if (downFocus != null) Modifier.focusProperties { down = downFocus } else Modifier)
+            .then(
+                when {
+                    // With a fallback, Down is handled here: a direct request when the target exists, the
+                    // fallback when it is scrolled out of composition (a custom focusProperties target in
+                    // that state silently drops the move and strands the bar).
+                    downFocus != null && onDownFallback != null -> Modifier.onPreviewKeyEvent { e ->
+                        if (e.key == androidx.compose.ui.input.key.Key.DirectionDown &&
+                            e.type == androidx.compose.ui.input.key.KeyEventType.KeyDown
+                        ) {
+                            val reached = try { downFocus.requestFocus(); true } catch (_: Exception) { false }
+                            if (!reached) onDownFallback()
+                            true
+                        } else false
+                    }
+                    downFocus != null -> Modifier.focusProperties { down = downFocus }
+                    else -> Modifier
+                },
+            )
             .fillMaxWidth(),
     ) {
         val canBlur = true

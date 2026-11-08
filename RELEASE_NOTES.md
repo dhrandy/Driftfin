@@ -4,6 +4,11 @@ Each build lists its real changes here. The CI release workflow copies the secti
 matching the build tag onto the GitHub release page and appends the standard
 automated-build footer.
 
+## build-60
+
+Changes:
+- Fix: after something played and you came back to Home, the remote could get stuck on the Home tab - Left and Right still worked, but Down did nothing. Down now takes you back into the page every time.
+
 ## build-59
 
 Changes:
