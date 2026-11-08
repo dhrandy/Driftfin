@@ -465,7 +465,10 @@ fun HomeContent(
             // No banner (animation excluded, nothing unwatched): the first row is the landing spot. Never leave
             // it to the default, which is the first control in the bar, the Search magnifier.
             if (state.hero == null) {
-                try { firstRowFocus.requestFocus(); delay(60); return } catch (_: Exception) { delay(60); return@repeat }
+                // A false return is a miss exactly like a throw: retry instead of leaving focus unset.
+                val landed = try { firstRowFocus.requestFocus() } catch (_: Exception) { false }
+                delay(60)
+                if (landed) return else return@repeat
             }
             try { heroPlayFocus.requestFocus() } catch (_: Exception) { }
             delay(60)
@@ -507,7 +510,9 @@ fun HomeContent(
                     listState.scrollToItem(rowIndex + 1) // one leading item is the hero block
                     var landed = false
                     for (attempt in 1..20) {
-                        try { target.requestFocus(); landed = true; break } catch (_: Exception) { delay(60) }
+                        // A false return is a miss exactly like a throw: retry instead of believing it.
+                        landed = try { target.requestFocus() } catch (_: Exception) { false }
+                        if (landed) break else delay(60)
                     }
                     focusMemory.pending = false
                     focusMemory.key = null

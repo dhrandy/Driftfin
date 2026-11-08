@@ -4,6 +4,11 @@ Each build lists its real changes here. The CI release workflow copies the secti
 matching the build tag onto the GitHub release page and appends the standard
 automated-build footer.
 
+## build-61
+
+Changes:
+- Fix: Down could still do nothing on the Home tab after coming back to Home - for example after marking titles watched - because the build 60 repair missed one kind of silent failure. Down now takes you back into the page every time.
+
 ## build-60
 
 Changes:

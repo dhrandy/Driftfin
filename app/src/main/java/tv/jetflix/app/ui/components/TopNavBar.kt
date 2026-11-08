@@ -114,7 +114,8 @@ fun TopNavBar(
     // OK on the tab you are already on enters the page content (same target as Down); OK on another tab opens it.
     val enterContent: () -> Unit = {
         NavSweep.active = false; NavSweep.tab = null
-        val reached = try { downFocus?.requestFocus(); true } catch (_: Exception) { false }
+        // Same two failure modes as Down above: honour the Boolean as well as the throw.
+        val reached = try { downFocus?.requestFocus() != false } catch (_: Exception) { false }
         if (!reached) onDownFallback?.invoke()
     }
     androidx.compose.runtime.LaunchedEffect(Unit) {
@@ -125,7 +126,10 @@ fun TopNavBar(
                 repeat(15) {
                     // Sweep complete once the target tab holds focus: clear the flag so screens opened
                     // afterward (Search, Settings) take their own initial focus instead of deferring forever.
-                    try { selectedFocus.requestFocus(); NavSweep.active = false; NavSweep.tab = null; return@LaunchedEffect } catch (_: Exception) { kotlinx.coroutines.delay(40) }
+                    // A false return means the request did not land (same failure family as a throw): keep retrying.
+                    val landed = try { selectedFocus.requestFocus() } catch (_: Exception) { false }
+                    if (landed) { NavSweep.active = false; NavSweep.tab = null; return@LaunchedEffect }
+                    kotlinx.coroutines.delay(40)
                 }
             }
             NavSweep.active = false; NavSweep.tab = null // never got the tab: do not leave content focus blocked
@@ -146,7 +150,9 @@ fun TopNavBar(
                         if (e.key == androidx.compose.ui.input.key.Key.DirectionDown &&
                             e.type == androidx.compose.ui.input.key.KeyEventType.KeyDown
                         ) {
-                            val reached = try { downFocus.requestFocus(); true } catch (_: Exception) { false }
+                            // A detached target can fail two ways depending on its past: a never-attached
+                            // requester returns false, a previously-attached one throws. Both are a miss.
+                            val reached = try { downFocus.requestFocus() } catch (_: Exception) { false }
                             if (!reached) onDownFallback()
                             true
                         } else false

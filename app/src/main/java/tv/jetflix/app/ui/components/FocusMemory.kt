@@ -50,14 +50,14 @@ fun Modifier.restoreFocus(memory: FocusMemory, id: String): Modifier {
             // A single request can lose to the group's default focus entry right after a Back
             // return (the card composes a few frames before focus settles): retry briefly.
             repeat(20) {
-                try {
-                    requester.requestFocus()
+                // A false return is a miss exactly like a throw: keep the restore pending and retry.
+                val landed = try { requester.requestFocus() } catch (_: Exception) { false }
+                if (landed) {
                     memory.pending = false
                     return@LaunchedEffect
-                } catch (_: Exception) {
-                    // Not attached yet; leave pending so a later composition can try.
-                    kotlinx.coroutines.delay(60)
                 }
+                // Not attached yet; leave pending so a later composition can try.
+                kotlinx.coroutines.delay(60)
             }
         }
     }
