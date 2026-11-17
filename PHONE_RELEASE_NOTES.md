@@ -3,6 +3,11 @@
 The phone app has its own release line: `phone-build-N` prereleases, separate from the TV app's
 `build-N` releases. The phone's Check for updates reads these; the TV app never sees them.
 
+## phone-build-15
+
+Changes:
+- Fix: Driftfin kept playing over phone calls, navigation prompts and other apps' audio. It now pauses when something else takes the phone's sound; short interruptions resume on their own, and Play otherwise picks up where you left off.
+
 ## phone-build-14
 
 Changes:
