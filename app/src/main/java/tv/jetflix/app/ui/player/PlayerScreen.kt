@@ -53,6 +53,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.media3.common.AudioAttributes
+import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.datasource.okhttp.OkHttpDataSource
@@ -185,6 +187,16 @@ fun PlayerScreen(
         val dataSourceFactory = OkHttpDataSource.Factory(httpClient)
         ExoPlayer.Builder(context)
             .setMediaSourceFactory(DefaultMediaSourceFactory(dataSourceFactory))
+            // Media audio that yields focus: when a cast session (or Assistant, or another video app)
+            // takes the TV's audio, ExoPlayer pauses in place instead of playing over it, and Play
+            // resumes from the same spot.
+            .setAudioAttributes(
+                AudioAttributes.Builder()
+                    .setUsage(C.USAGE_MEDIA)
+                    .setContentType(C.AUDIO_CONTENT_TYPE_MOVIE)
+                    .build(),
+                /* handleAudioFocus = */ true,
+            )
             .build()
             .also { it.trackSelectionParameters = TrackPrefs(tv.jetflix.app.data.AppSettings.audioLanguage, tv.jetflix.app.data.AppSettings.subtitleLanguage).apply(it.trackSelectionParameters) }
     }

@@ -4,6 +4,11 @@ Each build lists its real changes here. The CI release workflow copies the secti
 matching the build tag onto the GitHub release page and appends the standard
 automated-build footer.
 
+## build-62
+
+Changes:
+- Fix: casting something to the TV left Driftfin playing over it. Driftfin now pauses in place the moment the TV's audio is taken over - by a cast, Google Assistant, or another video app - and Play picks up right where you left off.
+
 ## build-61
 
 Changes:
