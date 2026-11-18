@@ -4,6 +4,11 @@ Each build lists its real changes here. The CI release workflow copies the secti
 matching the build tag onto the GitHub release page and appends the standard
 automated-build footer.
 
+## build-63
+
+Changes:
+- New: a Next Episode card shows up at the 90% mark of an episode, while it plays out - the next episode's thumbnail and title, with a countdown to the end. OK plays it right away, Back dismisses the card. With autoplay off it stays a plain button, no countdown. Same addition on the phone and browser apps.
+
 ## build-62
 
 Changes:

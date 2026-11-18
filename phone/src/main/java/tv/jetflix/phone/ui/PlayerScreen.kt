@@ -4,6 +4,7 @@ import android.app.Activity
 import androidx.activity.compose.BackHandler
 import androidx.annotation.OptIn
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
@@ -127,6 +128,13 @@ fun PlayerScreen(id: String, onExit: () -> Unit, onPlayNext: (String) -> Unit = 
     var ended by remember { mutableStateOf(false) }
     var upNext by remember { mutableStateOf<BaseItemDto?>(null) }
     var countdown by remember { mutableIntStateOf(5) }
+    // Early next-up card: from the 90% watched mark the next episode is offered while this one
+    // plays out. Tap the card to jump straight over, the X dismisses it for this episode. One
+    // lookup per episode; the natural-end behavior (autoplay countdown, or the next episode's
+    // page when autoplay is off) is untouched.
+    var earlyNext by remember { mutableStateOf<BaseItemDto?>(null) }
+    var earlyFetched by remember { mutableStateOf(false) }
+    var earlyDismissed by remember { mutableStateOf(false) }
     var picker by remember { mutableStateOf(false) }
     var tracksVersion by remember { mutableIntStateOf(0) }
     var controlsVisible by remember { mutableStateOf(true) }
@@ -241,6 +249,19 @@ fun PlayerScreen(id: String, onExit: () -> Unit, onPlayNext: (String) -> Unit = 
         }
     }
     LaunchedEffect(id) { segments = try { api.getMediaSegments(id).body()?.Items.orEmpty() } catch (_: Exception) { emptyList() } }
+    // The 90% watched mark arms the early next-up card (positions here are the raw player timeline;
+    // the card only rides the last stretch, so the transcode offset does not move the trigger).
+    val pastNinety = durationMs > 0 && positionMs >= durationMs * 9 / 10
+    LaunchedEffect(pastNinety) {
+        if (!pastNinety || earlyFetched) return@LaunchedEffect
+        val cur = item ?: return@LaunchedEffect
+        val sess = session ?: return@LaunchedEffect
+        val seriesId = cur.SeriesId
+        if (!cur.isEpisode || seriesId == null) return@LaunchedEffect
+        earlyFetched = true
+        (lookupUpNext(api, seriesId, sess.userId, cur.Id) as? UpNextLookup.Found)?.let { earlyNext = it.next }
+    }
+    val earlyCardNext = if (pastNinety && !earlyDismissed && upNext == null && !ended) earlyNext else null
     LaunchedEffect(Unit) {
         var sinceReport = 0
         while (isActive) {
@@ -406,6 +427,21 @@ fun PlayerScreen(id: String, onExit: () -> Unit, onPlayNext: (String) -> Unit = 
             // The press decides from the live position, not the polled state.
             SkipIntroButton(
                 onSkip = { SkipIntro.active(segments, player.currentPosition)?.let { player.seekTo(SkipIntro.endMs(it)) } },
+                modifier = Modifier.align(Alignment.BottomEnd).safeDrawingPadding().padding(16.dp).padding(bottom = 84.dp),
+            )
+        }
+        earlyCardNext?.let { n ->
+            // The countdown is the time left in the current episode and the drain bar covers its
+            // last tenth, so both reach zero at the natural end, where the existing end-of-episode
+            // behavior takes over. Autoplay off: a static prompt, no countdown.
+            NextUpCard(
+                next = n,
+                imageUrl = Graph.repo.thumbUrl(n, 320),
+                remainingSec = ((durationMs - positionMs).coerceAtLeast(0L) / 1000L).toInt(),
+                progress = ((durationMs - positionMs).coerceAtLeast(0L) / (durationMs / 10L).coerceAtLeast(1L).toFloat()).coerceIn(0f, 1f),
+                showCountdown = tv.jetflix.phone.data.PhoneSettings.autoplayNext.value,
+                onPlay = { onPlayNext(n.Id) },
+                onDismiss = { earlyDismissed = true },
                 modifier = Modifier.align(Alignment.BottomEnd).safeDrawingPadding().padding(16.dp).padding(bottom = 84.dp),
             )
         }
@@ -591,3 +627,59 @@ fun PlayerChrome(
         }
     }
 }
+
+
+/** Early next-episode card from the 90% mark: thumbnail, title and a live countdown to this
+ *  episode's natural end when autoplay is on (a static prompt when off). Tap plays the next
+ *  episode now; the X dismisses the card for this episode. Same dark surface as Skip Intro. */
+@Composable
+fun NextUpCard(next: BaseItemDto, imageUrl: String?, remainingSec: Int, progress: Float, showCountdown: Boolean, onPlay: () -> Unit, onDismiss: () -> Unit, modifier: Modifier = Modifier) {
+    val shape = RoundedCornerShape(12.dp)
+    Row(
+        modifier
+            .clip(shape)
+            .background(Color(0xF2080808))
+            .border(1.dp, Color(0x33FFFFFF), shape)
+            .clickable(onClick = onPlay)
+            .padding(10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (imageUrl != null) {
+            coil.compose.AsyncImage(
+                model = imageUrl,
+                contentDescription = null,
+                contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                modifier = Modifier
+                    .size(96.dp, 54.dp)
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(DriftfinColors.Surface),
+            )
+            Spacer(Modifier.width(10.dp))
+        }
+        Column {
+            Text("UP NEXT", color = DriftfinColors.TextSecondary, fontSize = 11.sp, letterSpacing = 2.sp)
+            Text(
+                listOfNotNull(next.episodeLabel(), next.Name).joinToString(" \u00B7 "),
+                color = Color.White, fontSize = 14.sp,
+                fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+            )
+            if (showCountdown) {
+                Text("Playing in ${nextUpCountdownText(remainingSec)}", color = DriftfinColors.TextSecondary, fontSize = 12.sp)
+                Spacer(Modifier.height(4.dp))
+                Box(Modifier.width(150.dp).height(3.dp).clip(RoundedCornerShape(2.dp)).background(Color(0x33FFFFFF))) {
+                    Box(Modifier.fillMaxWidth(progress.coerceIn(0f, 1f)).height(3.dp).background(DriftfinColors.Red))
+                }
+            }
+        }
+        Spacer(Modifier.width(6.dp))
+        Text(
+            "\u2715", color = DriftfinColors.TextSecondary, fontSize = 14.sp,
+            modifier = Modifier.clip(CircleShape).clickable(onClick = onDismiss).padding(10.dp),
+        )
+    }
+}
+
+/** Countdown label: plain seconds near the end, m:ss over the early card's longer stretch. */
+private fun nextUpCountdownText(seconds: Int): String =
+    if (seconds >= 100) "${seconds / 60}:${(seconds % 60).toString().padStart(2, '0')}" else "${seconds}s"

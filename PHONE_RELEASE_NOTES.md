@@ -3,6 +3,11 @@
 The phone app has its own release line: `phone-build-N` prereleases, separate from the TV app's
 `build-N` releases. The phone's Check for updates reads these; the TV app never sees them.
 
+## phone-build-16
+
+Changes:
+- New: a Next Episode card shows up at the 90% mark of an episode, while it plays out - the next episode's thumbnail and title, with a countdown to the end. Tap the card to play it right away, the X dismisses it. With autoplay off it stays a plain button, no countdown. Same addition on the TV and browser apps.
+
 ## phone-build-15
 
 Changes:

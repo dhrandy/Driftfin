@@ -1515,6 +1515,8 @@ async function goPlayer(id, opts) {
     }
     // Next episode for autoplay: next in server episode order, from a full episode list.
     state.nextEpisode = null;
+    state.nextUpDismissed = false;
+    $('nextUpCard').hidden = true;
     try {
       if (item.Type === 'Episode' && item.SeriesId) {
         const eps = await jf(`Shows/${item.SeriesId}/Episodes?userId=${uid}&limit=2000`);
@@ -1561,6 +1563,7 @@ function startProgress(itemId, mediaSourceId) {
   video.onended = () => {
     report('stopped');
     state.playingItemId = null;
+    $('nextUpCard').hidden = true;
     if (state.settings && state.settings.autoplay && state.nextEpisode) {
       const box = $('upNext');
       box.hidden = false;
@@ -1705,6 +1708,7 @@ function stopProgress() {
   if (state.progressTimer) clearInterval(state.progressTimer);
   if (state.upNextTimer) clearInterval(state.upNextTimer);
   state.progressTimer = null; state.upNextTimer = null;
+  const nu = $('nextUpCard'); if (nu) nu.hidden = true;
   const video = $('player');
   if (video) { video.onpause = null; video.onended = null; }
 }
@@ -1917,7 +1921,37 @@ $('player').addEventListener('timeupdate', () => {
   const btn = $('skipIntroBtn');
   const seg = state.settings && state.settings.skipIntro ? activeIntroSegment() : null;
   btn.hidden = !seg;
+  syncNextUpCard();
 });
+// Early next-episode card: from the 90% watched mark the next episode rides the credits.
+// Click/Play next jumps straight over; the X dismisses it for this episode. The countdown runs
+// to the natural end, where the existing autoplay behavior takes over; autoplay off shows a
+// static prompt with no countdown.
+function syncNextUpCard() {
+  const box = $('nextUpCard');
+  const v = $('player');
+  const next = state.nextEpisode;
+  if (!box || !v || !next || state.nextUpDismissed || v.ended || !isFinite(v.duration) || v.duration <= 0) { if (box && (v == null || v.ended)) box.hidden = true; return; }
+  const frac = v.currentTime / v.duration;
+  if (frac < 0.9) { if (!state.nextUpDismissed) box.hidden = true; return; }
+  if (box.hidden) {
+    const img = (next.ImageTags && next.ImageTags.Primary) ? `/api/jellyfin/Items/${next.Id}/Images/Primary?maxWidth=320&quality=90`
+      : (next.SeriesId ? `/api/jellyfin/Items/${next.SeriesId}/Images/Primary?maxWidth=320&quality=90` : '');
+    const se = (next.ParentIndexNumber != null && next.IndexNumber != null) ? `S${next.ParentIndexNumber} E${next.IndexNumber} · ` : '';
+    const auto = !!(state.settings && state.settings.autoplay);
+    box.innerHTML = `${img ? `<img src="${img}" alt="">` : ''}<div class="nu-main"><div class="nu-label">UP NEXT</div><div class="nu-title">${esc(se + (next.Name || ''))}</div>${auto ? '<div class="nu-count"></div><div class="nu-bar"><i></i></div>' : ''}</div><button type="button" class="nu-close" aria-label="Dismiss">\u00d7</button>`;
+    box.hidden = false;
+    box.querySelector('.nu-close').addEventListener('click', (e) => { e.stopPropagation(); state.nextUpDismissed = true; box.hidden = true; });
+    box.addEventListener('click', () => { box.hidden = true; location.replace('#/player?id=' + encodeURIComponent(next.Id)); });
+  }
+  const count = box.querySelector('.nu-count');
+  if (count) {
+    const remain = Math.max(0, v.duration - v.currentTime);
+    count.textContent = 'Playing in ' + pbFmt(remain);
+    const bar = box.querySelector('.nu-bar i');
+    if (bar) bar.style.width = Math.max(0, Math.min(100, (remain / (v.duration * 0.1)) * 100)) + '%';
+  }
+}
 $('skipIntroBtn').addEventListener('click', () => {
   const seg = activeIntroSegment();
   if (!seg) return;

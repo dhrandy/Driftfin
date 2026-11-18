@@ -257,6 +257,23 @@ fun PlayerScreen(
     // Milliseconds left on the up-next countdown; the card's seconds and drain bar both read this one clock.
     var countdownMs by remember { mutableStateOf(UP_NEXT_COUNTDOWN_MS) }
 
+    // Early next-up card: from the 90% watched mark the next episode is offered while this one
+    // plays out - OK jumps straight to it, Back dismisses the card for this episode. One lookup
+    // per episode; the natural-end behavior (autoplay countdown, or the next episode's page when
+    // autoplay is off) is untouched.
+    var earlyNext by remember { mutableStateOf<BaseItemDto?>(null) }
+    var earlyFetched by remember { mutableStateOf(false) }
+    var earlyDismissed by remember { mutableStateOf(false) }
+    val pastNinety = durationTicks > 0 && positionTicks >= durationTicks * 9 / 10
+    LaunchedEffect(pastNinety) {
+        if (!pastNinety || earlyFetched) return@LaunchedEffect
+        val seriesId = item.SeriesId
+        if (!item.isEpisode || seriesId == null) return@LaunchedEffect
+        earlyFetched = true
+        (lookupUpNext(api, seriesId, session.userId, item.Id) as? UpNextLookup.Found)?.let { earlyNext = it.next }
+    }
+    val earlyCardNext = if (pastNinety && !earlyDismissed && upNext == null && !ended) earlyNext else null
+
     // When playback ends: for episodes with autoplay on, look up the next episode in server order.
     // While an actor page covers the player (not interactive), the finish waits: the actor page stays until
     // the user leaves it with Back, and the ended player finishes then.
@@ -520,6 +537,13 @@ fun PlayerScreen(
                     }
                     return@run true
                 }
+                earlyCardNext?.let { n ->
+                    when (nativeEvent.keyCode) {
+                        // OK jumps to the next episode now; Back dismisses the card and keeps watching (it must not exit the player).
+                        KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER -> { onPlayNext(n); return@run true }
+                        KeyEvent.KEYCODE_BACK -> { earlyDismissed = true; return@run true }
+                    }
+                }
                 if (guestPanel != null) {
                     // The guest panel mirrors the full biography overlay: Up/Down scroll, OK/Back close.
                     // Media keys keep their normal job (they are never swallowed): unpausing closes
@@ -657,6 +681,21 @@ fun PlayerScreen(
                 seconds = ((countdownMs + 999L) / 1_000L).toInt(),
                 progress = (countdownMs / UP_NEXT_COUNTDOWN_MS.toFloat()).coerceIn(0f, 1f),
                 modifier = Modifier.align(androidx.compose.ui.Alignment.BottomEnd).padding(end = 48.dp, bottom = 120.dp),
+            )
+        }
+        earlyCardNext?.let { n ->
+            // The countdown is the time left in the current episode and the drain bar covers its
+            // last tenth, so both reach zero at the natural end, where the existing end-of-episode
+            // behavior takes over. Autoplay off: a static prompt, no countdown.
+            val remainingTicks = (durationTicks - positionTicks).coerceAtLeast(0L)
+            val tailSpan = (durationTicks - durationTicks * 9 / 10).coerceAtLeast(1L)
+            UpNextCard(
+                title = listOfNotNull(n.episodeLabel(), n.Name).joinToString(" \u00B7 "),
+                seconds = (remainingTicks / 10_000_000L).toInt(),
+                progress = (remainingTicks / tailSpan.toFloat()).coerceIn(0f, 1f),
+                modifier = Modifier.align(androidx.compose.ui.Alignment.BottomEnd).padding(end = 48.dp, bottom = 120.dp),
+                imageUrl = repo.thumbUrl(n, 320),
+                showCountdown = tv.jetflix.app.data.AppSettings.autoplayNext.value,
             )
         }
         if (panelOpen) {
@@ -1197,29 +1236,55 @@ fun PauseCastStrip(
 
 /** The next-episode countdown card: near-black, faint stroke, soft shadow; the seconds are the hero; a bar drains over the 5 seconds. */
 @Composable
-fun UpNextCard(title: String, seconds: Int, progress: Float, modifier: Modifier = Modifier) {
+fun UpNextCard(title: String, seconds: Int, progress: Float, modifier: Modifier = Modifier, imageUrl: String? = null, showCountdown: Boolean = true) {
     val shape = RoundedCornerShape(12.dp)
     Column(
         modifier = modifier
-            .width(300.dp)
+            .width(if (imageUrl != null) 380.dp else 300.dp)
             .shadow(12.dp, shape, ambientColor = Color.Black, spotColor = Color.Black)
             .background(Color(0xF2080808), shape)
-            .border(1.dp, Color(0x33FFFFFF), shape)
+            // The early card is itself the focused element while it shows, so it wears the app's
+            // white focus outline; the plain end-of-episode card keeps the dimmer border.
+            .border(1.dp, if (imageUrl != null) Color(0x99FFFFFF) else Color(0x33FFFFFF), shape)
             .padding(horizontal = 16.dp, vertical = 12.dp),
     ) {
         androidx.tv.material3.Text("UP NEXT", style = JetflixType.caption, color = JetflixColors.TextSecondary, letterSpacing = 2.sp)
         Spacer(Modifier.height(4.dp))
-        androidx.tv.material3.Text(title, style = JetflixType.body, color = Color.White, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, maxLines = 2)
-        Spacer(Modifier.height(6.dp))
-        Row(verticalAlignment = Alignment.Bottom) {
-            androidx.tv.material3.Text("Playing in ", style = JetflixType.body, color = JetflixColors.TextSecondary, modifier = Modifier.padding(bottom = 4.dp))
-            androidx.tv.material3.Text("$seconds", color = Color.White, fontSize = 30.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.ExtraBold, lineHeight = 34.sp)
+        if (imageUrl == null) {
+            androidx.tv.material3.Text(title, style = JetflixType.body, color = Color.White, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, maxLines = 2)
+        } else {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                coil.compose.AsyncImage(
+                    model = imageUrl,
+                    contentDescription = null,
+                    contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                    modifier = Modifier
+                        .size(112.dp, 63.dp)
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(JetflixColors.Surface),
+                )
+                Spacer(Modifier.width(10.dp))
+                androidx.tv.material3.Text(title, style = JetflixType.body, color = Color.White, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, maxLines = 2, modifier = Modifier.weight(1f))
+            }
+        }
+        if (showCountdown) {
+            Spacer(Modifier.height(6.dp))
+            Row(verticalAlignment = Alignment.Bottom) {
+                androidx.tv.material3.Text("Playing in ", style = JetflixType.body, color = JetflixColors.TextSecondary, modifier = Modifier.padding(bottom = 4.dp))
+                androidx.tv.material3.Text(upNextCountdownText(seconds), color = Color.White, fontSize = 30.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.ExtraBold, lineHeight = 34.sp)
+            }
         }
         Spacer(Modifier.height(4.dp))
         androidx.tv.material3.Text("OK plays now  \u00B7  Back cancels", style = JetflixType.caption, color = Color(0xFFD0D0D0))
-        Spacer(Modifier.height(10.dp))
-        Box(Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)).background(Color(0x33FFFFFF))) {
-            Box(Modifier.fillMaxWidth(progress.coerceIn(0f, 1f)).height(4.dp).background(Color.White))
+        if (showCountdown) {
+            Spacer(Modifier.height(10.dp))
+            Box(Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)).background(Color(0x33FFFFFF))) {
+                Box(Modifier.fillMaxWidth(progress.coerceIn(0f, 1f)).height(4.dp).background(Color.White))
+            }
         }
     }
 }
+
+/** Countdown label: plain seconds near the end, m:ss over the early card's longer stretch. */
+private fun upNextCountdownText(seconds: Int): String =
+    if (seconds >= 100) "${seconds / 60}:${(seconds % 60).toString().padStart(2, '0')}" else "$seconds"
