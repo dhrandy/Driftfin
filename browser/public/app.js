@@ -1923,7 +1923,7 @@ $('player').addEventListener('timeupdate', () => {
   btn.hidden = !seg;
   syncNextUpCard();
 });
-// Early next-episode card: from the 90% watched mark the next episode rides the credits.
+// Early next-episode card: from the 96% watched mark the next episode rides the credits.
 // Click/Play next jumps straight over; the X dismisses it for this episode. The countdown runs
 // to the natural end, where the existing autoplay behavior takes over; autoplay off shows a
 // static prompt with no countdown.
@@ -1933,7 +1933,7 @@ function syncNextUpCard() {
   const next = state.nextEpisode;
   if (!box || !v || !next || state.nextUpDismissed || v.ended || !isFinite(v.duration) || v.duration <= 0) { if (box && (v == null || v.ended)) box.hidden = true; return; }
   const frac = v.currentTime / v.duration;
-  if (frac < 0.9) { if (!state.nextUpDismissed) box.hidden = true; return; }
+  if (frac < 0.96) { if (!state.nextUpDismissed) box.hidden = true; return; }
   if (box.hidden) {
     const img = (next.ImageTags && next.ImageTags.Primary) ? `/api/jellyfin/Items/${next.Id}/Images/Primary?maxWidth=320&quality=90`
       : (next.SeriesId ? `/api/jellyfin/Items/${next.SeriesId}/Images/Primary?maxWidth=320&quality=90` : '');
@@ -1949,7 +1949,7 @@ function syncNextUpCard() {
     const remain = Math.max(0, v.duration - v.currentTime);
     count.textContent = 'Playing in ' + pbFmt(remain);
     const bar = box.querySelector('.nu-bar i');
-    if (bar) bar.style.width = Math.max(0, Math.min(100, (remain / (v.duration * 0.1)) * 100)) + '%';
+    if (bar) bar.style.width = Math.max(0, Math.min(100, (remain / (v.duration * 0.04)) * 100)) + '%';
   }
 }
 $('skipIntroBtn').addEventListener('click', () => {

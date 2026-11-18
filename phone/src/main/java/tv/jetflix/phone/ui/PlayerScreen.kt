@@ -128,7 +128,7 @@ fun PlayerScreen(id: String, onExit: () -> Unit, onPlayNext: (String) -> Unit = 
     var ended by remember { mutableStateOf(false) }
     var upNext by remember { mutableStateOf<BaseItemDto?>(null) }
     var countdown by remember { mutableIntStateOf(5) }
-    // Early next-up card: from the 90% watched mark the next episode is offered while this one
+    // Early next-up card: from the 96% watched mark the next episode is offered while this one
     // plays out. Tap the card to jump straight over, the X dismisses it for this episode. One
     // lookup per episode; the natural-end behavior (autoplay countdown, or the next episode's
     // page when autoplay is off) is untouched.
@@ -249,9 +249,9 @@ fun PlayerScreen(id: String, onExit: () -> Unit, onPlayNext: (String) -> Unit = 
         }
     }
     LaunchedEffect(id) { segments = try { api.getMediaSegments(id).body()?.Items.orEmpty() } catch (_: Exception) { emptyList() } }
-    // The 90% watched mark arms the early next-up card (positions here are the raw player timeline;
+    // The 96% watched mark arms the early next-up card (positions here are the raw player timeline;
     // the card only rides the last stretch, so the transcode offset does not move the trigger).
-    val pastNinety = durationMs > 0 && positionMs >= durationMs * 9 / 10
+    val pastNinety = durationMs > 0 && positionMs >= durationMs * 96 / 100
     LaunchedEffect(pastNinety) {
         if (!pastNinety || earlyFetched) return@LaunchedEffect
         val cur = item ?: return@LaunchedEffect
@@ -438,7 +438,7 @@ fun PlayerScreen(id: String, onExit: () -> Unit, onPlayNext: (String) -> Unit = 
                 next = n,
                 imageUrl = Graph.repo.thumbUrl(n, 320),
                 remainingSec = ((durationMs - positionMs).coerceAtLeast(0L) / 1000L).toInt(),
-                progress = ((durationMs - positionMs).coerceAtLeast(0L) / (durationMs / 10L).coerceAtLeast(1L).toFloat()).coerceIn(0f, 1f),
+                progress = ((durationMs - positionMs).coerceAtLeast(0L) / (durationMs * 4 / 100).coerceAtLeast(1L).toFloat()).coerceIn(0f, 1f),
                 showCountdown = tv.jetflix.phone.data.PhoneSettings.autoplayNext.value,
                 onPlay = { onPlayNext(n.Id) },
                 onDismiss = { earlyDismissed = true },
@@ -629,7 +629,7 @@ fun PlayerChrome(
 }
 
 
-/** Early next-episode card from the 90% mark: thumbnail, title and a live countdown to this
+/** Early next-episode card from the 96% mark: thumbnail, title and a live countdown to this
  *  episode's natural end when autoplay is on (a static prompt when off). Tap plays the next
  *  episode now; the X dismisses the card for this episode. Same dark surface as Skip Intro. */
 @Composable

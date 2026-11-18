@@ -3,6 +3,11 @@
 The phone app has its own release line: `phone-build-N` prereleases, separate from the TV app's
 `build-N` releases. The phone's Check for updates reads these; the TV app never sees them.
 
+## phone-build-17
+
+Changes:
+- Tweak: the Next Episode card now appears at the 96% mark instead of 90%, closer to the very end of the episode. Same change on the TV and browser apps.
+
 ## phone-build-16
 
 Changes:

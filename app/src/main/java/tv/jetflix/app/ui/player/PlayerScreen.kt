@@ -257,14 +257,14 @@ fun PlayerScreen(
     // Milliseconds left on the up-next countdown; the card's seconds and drain bar both read this one clock.
     var countdownMs by remember { mutableStateOf(UP_NEXT_COUNTDOWN_MS) }
 
-    // Early next-up card: from the 90% watched mark the next episode is offered while this one
+    // Early next-up card: from the 96% watched mark the next episode is offered while this one
     // plays out - OK jumps straight to it, Back dismisses the card for this episode. One lookup
     // per episode; the natural-end behavior (autoplay countdown, or the next episode's page when
     // autoplay is off) is untouched.
     var earlyNext by remember { mutableStateOf<BaseItemDto?>(null) }
     var earlyFetched by remember { mutableStateOf(false) }
     var earlyDismissed by remember { mutableStateOf(false) }
-    val pastNinety = durationTicks > 0 && positionTicks >= durationTicks * 9 / 10
+    val pastNinety = durationTicks > 0 && positionTicks >= durationTicks * 96 / 100
     LaunchedEffect(pastNinety) {
         if (!pastNinety || earlyFetched) return@LaunchedEffect
         val seriesId = item.SeriesId
@@ -685,10 +685,10 @@ fun PlayerScreen(
         }
         earlyCardNext?.let { n ->
             // The countdown is the time left in the current episode and the drain bar covers its
-            // last tenth, so both reach zero at the natural end, where the existing end-of-episode
+            // last 4%, so both reach zero at the natural end, where the existing end-of-episode
             // behavior takes over. Autoplay off: a static prompt, no countdown.
             val remainingTicks = (durationTicks - positionTicks).coerceAtLeast(0L)
-            val tailSpan = (durationTicks - durationTicks * 9 / 10).coerceAtLeast(1L)
+            val tailSpan = (durationTicks - durationTicks * 96 / 100).coerceAtLeast(1L)
             UpNextCard(
                 title = listOfNotNull(n.episodeLabel(), n.Name).joinToString(" \u00B7 "),
                 seconds = (remainingTicks / 10_000_000L).toInt(),

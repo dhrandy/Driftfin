@@ -4,6 +4,11 @@ Each build lists its real changes here. The CI release workflow copies the secti
 matching the build tag onto the GitHub release page and appends the standard
 automated-build footer.
 
+## build-64
+
+Changes:
+- Tweak: the Next Episode card now appears at the 96% mark instead of 90%, closer to the very end of the episode. Same change on the phone and browser apps.
+
 ## build-63
 
 Changes:
