@@ -42,9 +42,12 @@ class PhoneRowPosterSizeTest {
         rule.onNodeWithTag("row-card-i1").fetchSemanticsNode().boundsInRoot.width / rule.density.density
 
     @Test fun rowCardsFollowPosterSize() {
-        for ((size, expectedDp) in listOf(PosterSize.Small to 95, PosterSize.Medium to 112, PosterSize.Large to 140)) {
+        PhoneSettings.setPosterSize(PosterSize.Medium)
+        rule.setContent { DriftfinTheme { SectionRow("Row", listOf(item)) {} } }
+        rule.waitForIdle()
+        // One composition; the setting flips underneath it, which is exactly how the app is used.
+        for ((size, expectedDp) in listOf(PosterSize.Medium to 112, PosterSize.Small to 95, PosterSize.Large to 140)) {
             PhoneSettings.setPosterSize(size)
-            rule.setContent { DriftfinTheme { SectionRow("Row", listOf(item)) {} } }
             rule.waitForIdle()
             assertEquals("poster size ${size.label}", expectedDp.toFloat(), rowCardWidthDp(), 0.5f)
         }
