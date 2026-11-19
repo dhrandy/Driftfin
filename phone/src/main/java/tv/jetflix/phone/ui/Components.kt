@@ -24,6 +24,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -87,12 +88,14 @@ fun PosterCard(item: BaseItemDto, modifier: Modifier = Modifier, titlePoster: Bo
 }
 
 @Composable
-fun SectionRow(title: String, items: List<BaseItemDto>, cardWidth: Dp = 112.dp, titlePoster: Boolean = false, onOpen: (BaseItemDto) -> Unit) {
+fun SectionRow(title: String, items: List<BaseItemDto>, cardWidth: Dp? = null, titlePoster: Boolean = false, onOpen: (BaseItemDto) -> Unit) {
     if (items.isEmpty()) return
+    // Rows follow the poster size setting, like the grids do; Medium keeps the original 112 dp cards.
+    val w = cardWidth ?: tv.jetflix.phone.data.PhoneSettings.posterSize.collectAsState().value.rowCardWidth.dp
     Column(Modifier.padding(top = 20.dp)) {
         Text(title, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 16.dp, bottom = 10.dp))
         LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp), contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp)) {
-            items(items, key = { it.Id }) { PosterCard(it, Modifier.width(cardWidth), titlePoster) { onOpen(it) } }
+            items(items, key = { it.Id }) { PosterCard(it, Modifier.width(w).testTag("row-card-" + it.Id), titlePoster) { onOpen(it) } }
         }
     }
 }

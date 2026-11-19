@@ -4,9 +4,10 @@ import android.content.Context
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 
-/** Poster grid density across Browse, Search and My Stuff. Medium is the original three columns. */
-enum class PosterSize(val label: String, val gridColumns: Int) {
-    Small("Small", 4), Medium("Medium", 3), Large("Large", 2);
+/** Poster density across Browse, Search and My Stuff grids and the Home/Search rows. Medium is the
+ *  original three columns and 112 dp row cards; Small/Large use the TV app's 0.85/1.25 row scale. */
+enum class PosterSize(val label: String, val gridColumns: Int, val rowCardWidth: Int) {
+    Small("Small", 4, 95), Medium("Medium", 3, 112), Large("Large", 2, 140);
     fun next() = values()[(ordinal + 1) % values().size]
 }
 

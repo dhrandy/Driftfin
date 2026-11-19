@@ -3,6 +3,11 @@
 The phone app has its own release line: `phone-build-N` prereleases, separate from the TV app's
 `build-N` releases. The phone's Check for updates reads these; the TV app never sees them.
 
+## phone-build-18
+
+Changes:
+- Fix: the Poster size setting now resizes the poster rows on Home and the recommended rows on Search too, not just the Shows, Movies and My Stuff grids. Small, Medium and Large now change every poster you see. This is what made the setting look like it did nothing on a 7-inch tablet.
+
 ## phone-build-17
 
 Changes:
