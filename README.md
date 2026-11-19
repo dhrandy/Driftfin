@@ -14,8 +14,8 @@ Free to use, not free to fork. Download the APK and use it, file bugs, but pleas
 
 ## Get the app
 
-- **TV:** latest build on the [releases page](https://github.com/dhrandy/Driftfin/releases/latest)
-- **Phone (alpha):** newest `phone-build-N` prerelease on the [releases page](https://github.com/dhrandy/Driftfin/releases)
+- **TV (Android TV / Google TV):** `driftfin-release.apk` on the [latest release](https://github.com/dhrandy/Driftfin/releases/latest)
+- **Phone / tablet (alpha):** `driftfin-phone-release.apk` on the newest **Driftfin Phone phone-build-N** entry on the [releases page](https://github.com/dhrandy/Driftfin/releases). Phone releases are marked Pre-release, so one never shows as "Latest" - scroll past the TV build to the newest Phone entry.
 
 TV and phone are separate release lines with their own build numbers, so one never overwrites the other.
 
@@ -64,27 +64,31 @@ Driftfin is still in alpha. Its focus is making your Jellyfin library feel good 
 
 ## Install
 
-Driftfin is an APK you sideload. You need an Android TV or Google TV and a Jellyfin server you can reach from it.
+Driftfin is an APK you sideload. Pick the file for your device: `driftfin-release.apk` for a TV, `driftfin-phone-release.apk` for a phone or tablet. You also need a Jellyfin server the device can reach.
 
-**With Downloader (easiest on a TV)**
+**Android TV / Google TV, with Downloader (easiest on a TV)**
 
 1. Install the free **Downloader** app ([aftvnews.com/downloader](https://www.aftvnews.com/downloader/)) from your TV's app store.
 2. Open Downloader and allow it to install apps from unknown sources when Android asks (Settings, then the install-unknown-apps permission for Downloader).
 3. In Downloader's address box, type this link and select Go:
-   `https://github.com/dhrandy/Driftfin/releases/latest/download/jetflix-release.apk`
-
-   (The file is being renamed to `driftfin-release.apk`; use the new name once it appears on the latest release - the old name keeps working during the transition.)
+   `https://github.com/dhrandy/Driftfin/releases/latest/download/driftfin-release.apk`
 4. When the download finishes, select Install, then Open.
 
 Typing a long link with a remote is slow. The same file is on the [releases page](https://github.com/dhrandy/Driftfin/releases/latest), and you can also download it on a computer and copy it to the TV with a USB drive or `adb install`.
 
-**Updating.** Open Settings in Driftfin and select "Check for updates" at the top. It installs over the current version and keeps your profiles. If the installer step does not work on your TV, download the APK again with Downloader: installing over the existing app keeps your data.
+**Android phone or tablet**
+
+1. On the device, open the [releases page](https://github.com/dhrandy/Driftfin/releases) and find the newest entry titled **Driftfin Phone phone-build-N**. It is marked Pre-release, so it won't be the "Latest" entry at the top - that one is the TV app.
+2. Under its Assets, download `driftfin-phone-release.apk`. (Not `driftfin-release.apk`; that one is the TV app.)
+3. Open the downloaded file. The first time, Android asks you to allow installs from your browser or files app. Select Install, then Open.
+
+**Updating.** Open Settings and select "Check for updates". Each app checks its own release line and installs over the current version, keeping your profiles and data.
 
 Each release page lists a SHA-256 file next to the APK if you want to check the download.
 
 ## Driftfin Phone (alpha)
 
-An Android phone companion app lives in `phone/`: the same Jellyfin server with a phone-first layout. It is sideloaded the same way, from its own `phone-build-N` prereleases on the releases page, and Settings has Check for updates. Phone builds are numbered and published separately, so they never change the TV app's build numbers or update prompts. Earlier phone test builds were debug-signed, so the first release build gets one manual install; the button takes over after that.
+An Android phone and tablet companion app lives in `phone/`: the same Jellyfin server with a phone-first layout. It is sideloaded from its own `phone-build-N` prereleases on the [releases page](https://github.com/dhrandy/Driftfin/releases) - the newest Driftfin Phone entry, marked Pre-release - and Settings has Check for updates. Phone builds are numbered and published separately, so they never change the TV app's build numbers or update prompts. Earlier phone test builds were debug-signed, so the first release build gets one manual install; the button takes over after that.
 
 ## Limits
 
