@@ -299,14 +299,14 @@ function showView(name, navOverride) {
   });
   window.scrollTo(0, 0);
 }
-const POSTER_WIDTHS = { Small: '140px', Medium: '180px', Large: '220px' };
+const POSTER_SIZES = new Set(['Small', 'Medium', 'Large']);
 function applyPosterSize() {
   const size = (state.settings && state.settings.posterSize) || 'Medium';
-  // --poster-w is only set for an explicit Small/Large choice; Medium removes it
-  // so the responsive defaults (180/150/128 rows, 160 grid min, 300 wide) stay
-  // exactly as designed per screen size.
-  if (size === 'Medium') document.documentElement.style.removeProperty('--poster-w');
-  else document.documentElement.style.setProperty('--poster-w', POSTER_WIDTHS[size] || POSTER_WIDTHS.Medium);
+  // The size lives on a data attribute so styles.css can scale Small/Large with the
+  // responsive Medium default (180/150/128px per screen size). Fixed px values made
+  // Small land within 10px of Medium on tablets and larger than Medium on phones,
+  // so the setting looked dead there.
+  document.documentElement.dataset.posterSize = POSTER_SIZES.has(size) ? size : 'Medium';
 }
 async function ensureSignedIn() {
   state.unauthorized401 = false;
@@ -1829,7 +1829,7 @@ async function signOutToSignIn() {
   state.heroList = []; state.heroIndex = 0; state.heroItem = null;
   state.views = []; state.watchlistIds = [];
   state.currentItem = null; state.allEpisodes = []; state.seasons = []; state.playTarget = null;
-  document.documentElement.style.removeProperty('--poster-w');
+  delete document.documentElement.dataset.posterSize;
   $('signoutBtn').hidden = true; $('userLabel').innerHTML = '';
   location.hash = '#/signin';
 }

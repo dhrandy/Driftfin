@@ -76,6 +76,19 @@ main { padding: 0 24px 96px; max-width: 1400px; margin: 0 auto; }
 .progress { height: 4px; background: #333; }
 .progress > div { height: 100%; background: var(--accent); }
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(var(--poster-w, 160px), 1fr)); gap: 14px; margin-top: 16px; }
+/* Poster size setting: Small/Large scale with the responsive Medium (--card-w), so every
+   step is clearly visible at every screen size. Fixed px values put Small within 10px of
+   Medium on tablets and above Medium on phones. Ratios keep the desktop design: 140/180, 220/180. */
+:root[data-poster-size="Small"] { --poster-w: 140px; }
+:root[data-poster-size="Large"] { --poster-w: 220px; }
+@media (max-width: 1023px) {
+  :root[data-poster-size="Small"] { --poster-w: 118px; }
+  :root[data-poster-size="Large"] { --poster-w: 184px; }
+}
+@media (max-width: 639px) {
+  :root[data-poster-size="Small"] { --poster-w: 100px; }
+  :root[data-poster-size="Large"] { --poster-w: 156px; }
+}
 .grid > p { grid-column: 1 / -1; }
 .row-scroll > p { flex: 0 0 100%; }
 .grid .card { flex: none; width: auto; }
