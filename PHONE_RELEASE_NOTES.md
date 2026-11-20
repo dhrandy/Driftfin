@@ -3,6 +3,11 @@
 The phone app has its own release line: `phone-build-N` prereleases, separate from the TV app's
 `build-N` releases. The phone's Check for updates reads these; the TV app never sees them.
 
+## phone-build-19
+
+Changes:
+- Fix: posters now fetch artwork at the size they're shown (Small, Medium or Large) instead of one size for all, so switching sizes always loads that size's own image - no cached image from another size can stick around. Large posters are sharper too.
+
 ## phone-build-18
 
 Changes:

@@ -71,7 +71,10 @@ fun ActorAvatar(url: String?, name: String, modifier: Modifier = Modifier) {
 @Composable
 fun PosterCard(item: BaseItemDto, modifier: Modifier = Modifier, titlePoster: Boolean = false, onClick: () -> Unit) {
     Box(modifier.aspectRatio(2f / 3f).clip(RoundedCornerShape(8.dp)).background(DriftfinColors.Surface).clickable(onClick = onClick)) {
-        Art(if (titlePoster) Graph.repo.titlePosterUrl(item, 400) else Graph.repo.posterUrl(item, 400), Modifier.matchParentSize())
+        // Artwork width follows the poster size, so switching sizes always fetches the right image
+        // instead of reusing whatever size is cached.
+        val artWidth = tv.jetflix.phone.data.PhoneSettings.posterSize.collectAsState().value.artWidth
+        Art(if (titlePoster) Graph.repo.titlePosterUrl(item, artWidth) else Graph.repo.posterUrl(item, artWidth), Modifier.matchParentSize())
         val data = item.UserData
         if (data?.Played == true) {
             Text("✓", Modifier.align(Alignment.TopEnd).padding(6.dp).clip(RoundedCornerShape(50)).background(DriftfinColors.Red).padding(horizontal = 6.dp), fontSize = 12.sp, fontWeight = FontWeight.Bold)

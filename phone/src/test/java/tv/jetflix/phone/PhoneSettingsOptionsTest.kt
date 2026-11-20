@@ -46,6 +46,8 @@ class PhoneSettingsOptionsTest {
         PhoneSettings.init(ctx) // a new process rereads the same preferences
         assertEquals(PosterSize.Large, PhoneSettings.posterSize.value)
         assertEquals(2, PhoneSettings.posterSize.value.gridColumns)
+        assertEquals(140, PhoneSettings.posterSize.value.rowCardWidth)
+        assertEquals(560, PhoneSettings.posterSize.value.artWidth)
         assertFalse(PhoneSettings.formatBadges.value)
         assertFalse(PhoneSettings.heroRatings.value)
         assertFalse(PhoneSettings.showNextUp.value)
@@ -56,6 +58,8 @@ class PhoneSettingsOptionsTest {
     @Test fun defaultsMatchTv() {
         assertEquals(PosterSize.Medium, PhoneSettings.posterSize.value)
         assertEquals(3, PhoneSettings.posterSize.value.gridColumns)
+        assertEquals(112, PhoneSettings.posterSize.value.rowCardWidth)
+        assertEquals(400, PhoneSettings.posterSize.value.artWidth)
         assertEquals(true, PhoneSettings.formatBadges.value)
         assertEquals(true, PhoneSettings.heroRatings.value)
         assertEquals(true, PhoneSettings.showNextUp.value)

@@ -5,9 +5,11 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 
 /** Poster density across Browse, Search and My Stuff grids and the Home/Search rows. Medium is the
- *  original three columns and 112 dp row cards; Small/Large use the TV app's 0.85/1.25 row scale. */
-enum class PosterSize(val label: String, val gridColumns: Int, val rowCardWidth: Int) {
-    Small("Small", 4, 95), Medium("Medium", 3, 112), Large("Large", 2, 140);
+ *  original three columns and 112 dp row cards; Small/Large use the TV app's 0.85/1.25 row scale.
+ *  artWidth is the image request width for that size: each size fetches its own artwork, so a
+ *  cached image from one size can never be served at another (and Large stays sharp). */
+enum class PosterSize(val label: String, val gridColumns: Int, val rowCardWidth: Int, val artWidth: Int) {
+    Small("Small", 4, 95, 300), Medium("Medium", 3, 112, 400), Large("Large", 2, 140, 560);
     fun next() = values()[(ordinal + 1) % values().size]
 }
 
