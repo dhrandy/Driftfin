@@ -1240,16 +1240,16 @@ fun UpNextCard(title: String, seconds: Int, progress: Float, modifier: Modifier 
     val shape = RoundedCornerShape(12.dp)
     Column(
         modifier = modifier
-            .width(if (imageUrl != null) 380.dp else 300.dp)
+            .width(if (imageUrl != null) 300.dp else 260.dp)
             .shadow(12.dp, shape, ambientColor = Color.Black, spotColor = Color.Black)
             .background(Color(0xF2080808), shape)
             // The early card is itself the focused element while it shows, so it wears the app's
             // white focus outline; the plain end-of-episode card keeps the dimmer border.
             .border(1.dp, if (imageUrl != null) Color(0x99FFFFFF) else Color(0x33FFFFFF), shape)
-            .padding(horizontal = 16.dp, vertical = 12.dp),
+            .padding(horizontal = 14.dp, vertical = 10.dp),
     ) {
         androidx.tv.material3.Text("UP NEXT", style = JetflixType.caption, color = JetflixColors.TextSecondary, letterSpacing = 2.sp)
-        Spacer(Modifier.height(4.dp))
+        Spacer(Modifier.height(3.dp))
         if (imageUrl == null) {
             androidx.tv.material3.Text(title, style = JetflixType.body, color = Color.White, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, maxLines = 2)
         } else {
@@ -1259,7 +1259,7 @@ fun UpNextCard(title: String, seconds: Int, progress: Float, modifier: Modifier 
                     contentDescription = null,
                     contentScale = androidx.compose.ui.layout.ContentScale.Crop,
                     modifier = Modifier
-                        .size(112.dp, 63.dp)
+                        .size(96.dp, 54.dp)
                         .clip(RoundedCornerShape(6.dp))
                         .background(JetflixColors.Surface),
                 )
@@ -1268,16 +1268,16 @@ fun UpNextCard(title: String, seconds: Int, progress: Float, modifier: Modifier 
             }
         }
         if (showCountdown) {
-            Spacer(Modifier.height(6.dp))
+            Spacer(Modifier.height(5.dp))
             Row(verticalAlignment = Alignment.Bottom) {
                 androidx.tv.material3.Text("Playing in ", style = JetflixType.body, color = JetflixColors.TextSecondary, modifier = Modifier.padding(bottom = 4.dp))
-                androidx.tv.material3.Text(upNextCountdownText(seconds), color = Color.White, fontSize = 30.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.ExtraBold, lineHeight = 34.sp)
+                androidx.tv.material3.Text(upNextCountdownText(seconds), color = Color.White, fontSize = 22.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.ExtraBold, lineHeight = 26.sp)
             }
         }
         Spacer(Modifier.height(4.dp))
         androidx.tv.material3.Text("OK plays now  \u00B7  Back cancels", style = JetflixType.caption, color = Color(0xFFD0D0D0))
         if (showCountdown) {
-            Spacer(Modifier.height(10.dp))
+            Spacer(Modifier.height(8.dp))
             Box(Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)).background(Color(0x33FFFFFF))) {
                 Box(Modifier.fillMaxWidth(progress.coerceIn(0f, 1f)).height(4.dp).background(Color.White))
             }

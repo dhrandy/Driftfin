@@ -4,6 +4,11 @@ Each build lists its real changes here. The CI release workflow copies the secti
 matching the build tag onto the GitHub release page and appends the standard
 automated-build footer.
 
+## build-65
+
+Changes:
+- Tweak: the Next Episode card is slimmer all around - narrower on screen, smaller countdown number and thumbnail, tighter spacing. Nothing about when it appears or how it works changes.
+
 ## build-64
 
 Changes:
