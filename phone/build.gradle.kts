@@ -81,6 +81,7 @@ dependencies {
     implementation("androidx.core:core-ktx:1.15.0")
     implementation("com.google.android.gms:play-services-cast-framework:22.1.0")
     implementation("androidx.mediarouter:mediarouter:1.8.1")
+    implementation("androidx.appcompat:appcompat:1.7.1")
     implementation("androidx.activity:activity-compose:1.9.3")
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.foundation:foundation")

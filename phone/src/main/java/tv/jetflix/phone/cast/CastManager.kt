@@ -63,7 +63,10 @@ object CastManager {
         }
     }
 
-    val available: Boolean get() = castContext != null
+    /** Set when building the cast button itself failed; hides it everywhere after that. */
+    var buttonBroken: Boolean = false
+
+    val available: Boolean get() = castContext != null && !buttonBroken
 
     fun currentSession(): CastSession? =
         castContext?.sessionManager?.currentCastSession

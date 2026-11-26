@@ -3,6 +3,11 @@
 The phone app has its own release line: `phone-build-N` prereleases, separate from the TV app's
 `build-N` releases. The phone's Check for updates reads these; the TV app never sees them.
 
+## phone-build-21
+
+Changes:
+- Fix: opening the player or pressing Play no longer crashes when no Chromecast is available. The cast button now loads safely and hides itself if the cast UI can't start, so playback always works with or without a Chromecast nearby.
+
 ## phone-build-20
 
 Changes:
