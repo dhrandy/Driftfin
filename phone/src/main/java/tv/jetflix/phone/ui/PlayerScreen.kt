@@ -36,6 +36,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
@@ -125,6 +126,12 @@ fun PlayerScreen(id: String, onExit: () -> Unit, onPlayNext: (String) -> Unit = 
     var positionMs by remember { mutableStateOf(0L) }
     var bufferedMs by remember { mutableStateOf(0L) }
     var durationMs by remember { mutableStateOf(0L) }
+    // Chromecast handoff: the receiver fetches the same stream URL itself; the phone
+    // pauses locally while a cast session is live and takes the position back on drop.
+    val castState by tv.jetflix.phone.cast.CastManager.state.collectAsState()
+    var castHandoff by remember { mutableStateOf(false) }
+    var playUrl by remember { mutableStateOf<String?>(null) }
+    var playMime by remember { mutableStateOf("video/mp4") }
     var ended by remember { mutableStateOf(false) }
     var upNext by remember { mutableStateOf<BaseItemDto?>(null) }
     var countdown by remember { mutableIntStateOf(5) }
@@ -205,6 +212,8 @@ fun PlayerScreen(id: String, onExit: () -> Unit, onPlayNext: (String) -> Unit = 
             is PlaybackChoice.Hls -> { sourceId = choice.mediaSourceId; method = "Transcode"; streamStartTicks = if (hlsSeeksServerSide) start else 0; PlaybackNegotiator.withAdaptiveBitrate(choice.url, serverVersion) to choice.subtitles }
             is PlaybackChoice.Unplayable -> { error = choice.reason; return@LaunchedEffect }
         }
+        playUrl = url
+        playMime = if (choice is PlaybackChoice.Hls) "application/x-mpegurl" else "video/mp4"
         val mediaItem = MediaItem.Builder().setUri(url)
             .setSubtitleConfigurations(subs.map {
                 MediaItem.SubtitleConfiguration.Builder(android.net.Uri.parse(it.url)).setMimeType(it.mimeType).setLanguage(it.language).setLabel(it.label).build()
@@ -212,6 +221,40 @@ fun PlayerScreen(id: String, onExit: () -> Unit, onPlayNext: (String) -> Unit = 
         player.setMediaItem(mediaItem, if (hlsSeeksServerSide) C.TIME_UNSET else start.ticksToMs())
         player.prepare(); player.playWhenReady = true
         try { api.reportPlaybackStart(PlaybackStartInfo(ItemId = id, MediaSourceId = sourceId, PlaySessionId = playSession, PositionTicks = start, PlayMethod = method)) } catch (_: Exception) {}
+    }
+    // Cast handoff. Session up: pause locally and load the same stream on the receiver at the
+    // absolute position. Session down: take the receiver's last position back, still paused.
+    LaunchedEffect(castState, playUrl) {
+        when (val cs = castState) {
+            is tv.jetflix.phone.cast.CastState.Connected -> {
+                if (!castHandoff) {
+                    val cur = item
+                    val url = playUrl
+                    if (cur != null && url != null) {
+                        player.pause()
+                        castHandoff = true
+                        tv.jetflix.phone.cast.CastManager.load(
+                            itemId = id, mediaSourceId = sourceId,
+                            title = cur.SeriesName?.let { "$it - ${cur.Name.orEmpty()}" } ?: cur.Name.orEmpty(),
+                            subtitle = cur.SeriesName?.let { cur.Name },
+                            imageUrl = Graph.repo.posterUrl(cur, 560),
+                            streamUrl = url, mimeType = playMime,
+                            positionMs = absoluteTicks(player.currentPosition, streamStartTicks) / 10_000,
+                        )
+                    }
+                }
+            }
+            is tv.jetflix.phone.cast.CastState.Disconnected -> {
+                if (castHandoff) {
+                    castHandoff = false
+                    tv.jetflix.phone.cast.CastManager.lastRemotePositionMs?.let { absMs ->
+                        val rel = absMs - streamStartTicks / 10_000
+                        player.seekTo(rel.coerceAtLeast(0L))
+                    }
+                }
+            }
+            else -> {}
+        }
     }
     // Natural end = watched. A movie, an episode with no next, and any autoplay-off path leave the
     // player only after the server has both writes (stop report + watched mark), so the page it lands
@@ -400,6 +443,7 @@ fun PlayerScreen(id: String, onExit: () -> Unit, onPlayNext: (String) -> Unit = 
             visible = controlsVisible || !playing || ended,
             fill = fill,
             onBack = leave,
+            castContent = { tv.jetflix.phone.cast.CastButton() },
             onAudioSubtitles = { picker = true },
             onToggleZoom = {
                 fill = !fill
@@ -407,8 +451,19 @@ fun PlayerScreen(id: String, onExit: () -> Unit, onPlayNext: (String) -> Unit = 
             },
             modifier = Modifier.fillMaxSize(),
         )
+        (castState as? tv.jetflix.phone.cast.CastState.Connected)?.let { cs ->
+            if (castHandoff) {
+                Column(Modifier.align(Alignment.Center).background(Color(0xCC000000)).padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("Casting to ${cs.deviceName}", color = Color.White, fontSize = 16.sp)
+                    Row(horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(12.dp), modifier = Modifier.padding(top = 12.dp)) {
+                        Button(onClick = { tv.jetflix.phone.cast.CastManager.pauseOrPlay() }, colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color.Black)) { Text("Play / Pause", fontSize = 16.sp) }
+                        OutlinedButton(onClick = { tv.jetflix.phone.cast.CastManager.stopCasting() }, colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White)) { Text("Stop casting", fontSize = 16.sp) }
+                    }
+                }
+            }
+        }
         PlayerCenterControls(
-            visible = controlsVisible || !playing || ended,
+            visible = (controlsVisible || !playing || ended) && !castHandoff,
             playing = playing,
             onTogglePlay = { if (player.isPlaying) player.pause() else player.play() },
             onSkipBack = { player.seekBack() },
@@ -416,7 +471,7 @@ fun PlayerScreen(id: String, onExit: () -> Unit, onPlayNext: (String) -> Unit = 
             modifier = Modifier.align(Alignment.Center),
         )
         PlayerProgressBar(
-            visible = controlsVisible || !playing || ended,
+            visible = (controlsVisible || !playing || ended) && !castHandoff,
             positionMs = positionMs,
             bufferedMs = bufferedMs,
             durationMs = durationMs,
@@ -612,6 +667,7 @@ fun PlayerChrome(
     onAudioSubtitles: () -> Unit,
     onToggleZoom: () -> Unit,
     modifier: Modifier = Modifier,
+    castContent: (@Composable () -> Unit)? = null,
 ) {
     if (!visible) return
     Box(modifier.fillMaxSize()) {
@@ -622,7 +678,8 @@ fun PlayerChrome(
             BackIconButton(onBack)
             OutlinedButton(onClick = onToggleZoom, colors = ButtonDefaults.outlinedButtonColors(containerColor = Color(0x66000000), contentColor = Color.White)) { Text(if (fill) "Fit" else "Fill") }
         }
-        Row(Modifier.align(Alignment.TopEnd).safeDrawingPadding().padding(8.dp)) {
+        Row(Modifier.align(Alignment.TopEnd).safeDrawingPadding().padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            castContent?.invoke()
             OutlinedButton(onClick = onAudioSubtitles, colors = ButtonDefaults.outlinedButtonColors(containerColor = Color(0x66000000), contentColor = Color.White)) { Text("Audio · Subtitles") }
         }
     }

@@ -3,6 +3,11 @@
 The phone app has its own release line: `phone-build-N` prereleases, separate from the TV app's
 `build-N` releases. The phone's Check for updates reads these; the TV app never sees them.
 
+## phone-build-20
+
+Changes:
+- New: Chromecast support. A cast button on the player and the details screen sends what you're watching to a Chromecast on your network. The handoff keeps your position: the phone pauses while the Chromecast plays, and when you stop casting the phone picks back up where the Chromecast left off. While casting, the phone shows Play / Pause and Stop casting controls.
+
 ## phone-build-19
 
 Changes:

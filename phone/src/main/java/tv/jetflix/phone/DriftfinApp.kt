@@ -7,6 +7,7 @@ class DriftfinApp : Application() {
         super.onCreate()
         CrashNote.install(this)
         Graph.init(this)
+        tv.jetflix.phone.cast.CastManager.init(this)
     }
 }
 

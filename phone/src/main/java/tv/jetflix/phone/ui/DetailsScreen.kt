@@ -130,6 +130,7 @@ fun DetailsScreen(id: String, onBack: () -> Unit, onPlay: (String) -> Unit, onOp
                 Art(Graph.repo.backdropUrl(it, 1000), Modifier.matchParentSize())
                 Box(Modifier.matchParentSize().background(Brush.verticalGradient(listOf(Color(0x66000000), DriftfinColors.Background))))
                 BackIconButton(onBack, Modifier.statusBarsPadding().padding(12.dp).align(androidx.compose.ui.Alignment.TopStart))
+                Box(Modifier.statusBarsPadding().padding(4.dp).align(androidx.compose.ui.Alignment.TopEnd)) { tv.jetflix.phone.cast.CastButton() }
             }
         }
         }
