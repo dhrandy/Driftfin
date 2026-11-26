@@ -88,13 +88,20 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          TAG="${GITHUB_REF_NAME}"
-          if [ "${GITHUB_REF_TYPE}" != "tag" ]; then TAG="phone-build-${BUILD_NUMBER}"; fi
+          # Same rule as the TV track: always publish under the phone-build-N pattern.
+          TAG="phone-build-${BUILD_NUMBER}"
           # Phone releases are marked prerelease on purpose: GitHub's releases/latest then keeps
           # pointing at a TV build-N release, so the TV updater never sees a phone tag.
           NOTES=$(awk -v tag="$TAG" '/^## /{if(found)exit; if(tolower($0) ~ tolower(tag))found=1; next} found' PHONE_RELEASE_NOTES.md)
           if [ -z "$NOTES" ]; then NOTES="See PHONE_RELEASE_NOTES.md for what changed in this build."; fi
-          NOTES="$NOTES
+          HEADER="**Latest build: ${TAG}**
+
+          **Phone APK:** [driftfin-phone-release.apk](https://github.com/dhrandy/Driftfin/releases/download/${TAG}/driftfin-phone-release.apk)
+
+          **TV APK:** driftfin-release.apk from the latest Driftfin build release
+
+          "
+          NOTES="${HEADER}${NOTES}
 
           Automated build. Unit tests ran in CI, but this build was not run on a phone by CI."
           gh release create "$TAG" driftfin-phone-release.apk driftfin-phone-release.apk.sha256 \
@@ -102,6 +109,10 @@ jobs:
             --target "${GITHUB_SHA}" \
             --title "Driftfin Phone $TAG" \
             --notes "$NOTES"
+          # Drop the phone-vN tag that triggered this run: releases and tags stay on the phone-build-N pattern.
+          if [ "${GITHUB_REF_TYPE}" = "tag" ] && [ "${GITHUB_REF_NAME}" != "$TAG" ]; then
+            git push origin --delete "refs/tags/${GITHUB_REF_NAME}" || true
+          fi
 
       - uses: actions/upload-artifact@v7
         with:
