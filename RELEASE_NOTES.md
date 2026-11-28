@@ -4,6 +4,11 @@ Each build lists its real changes here. The CI release workflow copies the secti
 matching the build tag onto the GitHub release page and appends the standard
 automated-build footer.
 
+## build-66
+
+Changes:
+- Fix: pressing Home during playback and then returning and pressing Play no longer freezes the picture while the audio keeps going. The player now lets go of the old screen surface when the app is backgrounded and grabs the fresh one on return.
+
 ## build-65
 
 Changes:

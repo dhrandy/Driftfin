@@ -208,9 +208,17 @@ fun PlayerScreen(
     // place fresh while backgrounded, and the existing resume path (controls + OK) picks back up.
     val lifecycleOwner = androidx.compose.ui.platform.LocalLifecycleOwner.current
     val backgroundScope = rememberCoroutineScope()
+    // The view the player renders into, tracked so backgrounding can release the video surface
+    // before it dies (see below).
+    var playerViewRef by remember { mutableStateOf<PlayerView?>(null) }
     DisposableEffect(lifecycleOwner, player) {
         val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
             if (pausesForBackground(event)) {
+                // Home destroys the SurfaceView's surface behind our back. If the player stays attached,
+                // the decoder can keep outputting to the dead surface after return: audio plays, video
+                // frozen. Detach now (while the surface is still valid) so the renderer releases it
+                // cleanly; ON_START reattaches and binds the fresh surface.
+                playerViewRef?.player = null
                 player.pause()
                 controlsVisible = true
                 lastInteraction = System.currentTimeMillis()
@@ -227,6 +235,10 @@ fun PlayerScreen(
                         )
                     } catch (_: Exception) { }
                 }
+            } else if (event == androidx.lifecycle.Lifecycle.Event.ON_START) {
+                // Back from background: reattach the player so it binds the surface that was
+                // recreated while we were gone (see the detach above).
+                playerViewRef?.player = player
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -659,6 +671,7 @@ fun PlayerScreen(
                         isFocusable = false
                         isFocusableInTouchMode = false
                         this.player = player
+                        playerViewRef = this
                     }
                 },
                 // Pause effects key off the SETTLED pause state (playWhenReady off + READY), not
